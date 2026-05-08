@@ -23,6 +23,12 @@ checkpoints/
 frontend/node_modules/
 frontend/dist/
 
+# Android build artifacts
+android-app/.gradle/
+android-app/.idea/
+android-app/app/build/
+android-app/local.properties
+
 # OS
 .DS_Store
 Thumbs.db
