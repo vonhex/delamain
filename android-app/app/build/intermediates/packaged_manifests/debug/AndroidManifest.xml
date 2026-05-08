@@ -5,17 +5,23 @@
     android:versionName="1.0" >
 
     <uses-sdk
-        android:minSdkVersion="23"
+        android:minSdkVersion="29"
         android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <uses-feature
         android:name="android.hardware.type.automotive"
         android:required="false" />
 
     <queries>
+        <intent>
+            <action android:name="android.car.template.host.RendererService" />
+        </intent>
+
         <provider
             android:name="androidx.car.app.connection.provider"
             android:authorities="androidx.car.app.connection" />
@@ -32,11 +38,16 @@
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
         android:extractNativeLibs="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.AppCompat" >
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
 
         <service
             android:name="com.vonhex.delamain.DelamainCarAppService"
@@ -48,11 +59,72 @@
             </intent-filter>
         </service>
 
+        <!-- Media session service — shows Delamain in AA media strip beside Maps -->
+        <service
+            android:name="com.vonhex.delamain.DelamainMediaService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback" >
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <!-- Primary AAOS entry point: native full-screen face UI -->
+        <activity
+            android:name="com.vonhex.delamain.DelamainActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.Delamain" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
+
+        <!-- Car App Library entry point (kept for phone Android Auto projection) -->
+        <activity
+            android:name="androidx.car.app.activity.CarAppActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" >
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
+
+        <!-- Phone companion activity: no launcher icon, started programmatically -->
+        <activity
+            android:name="com.vonhex.delamain.MainActivity"
+            android:exported="false" />
+
         <!-- Phone-side activity for voice capture -->
         <activity
             android:name="com.vonhex.delamain.VoiceActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name="androidx.car.app.CarAppMetadataHolderService"
+            android:enabled="false"
+            android:exported="false"
+            android:process="" >
+            <meta-data
+                android:name="androidx.car.app.CarAppMetadataHolderService.CAR_HARDWARE_MANAGER"
+                android:value="androidx.car.app.hardware.AutomotiveCarHardwareManager" />
+            <meta-data
+                android:name="androidx.car.app.CarAppMetadataHolderService.RESULT_MANAGER"
+                android:value="androidx.car.app.activity.ResultManagerAutomotive" />
+        </service>
+
         <activity
             android:name="androidx.car.app.CarAppPermissionActivity"
             android:exported="false"

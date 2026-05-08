@@ -34,6 +34,17 @@
     <string msgid="6107532579223922871" name="call_notification_incoming_text">"Incoming call"</string>
     <string msgid="8623827134497363134" name="call_notification_ongoing_text">"On-going call"</string>
     <string msgid="59049573811482460" name="call_notification_screening_text">"Screening an incoming call"</string>
+    <string msgid="7621130025103996211" name="error_action_finish">"Close application"</string>
+    <string msgid="985347670495166517" name="error_action_retry">"Retry"</string>
+    <string msgid="4802951804749609593" name="error_action_update_host">"Check for updates"</string>
+    <string msgid="3323186720368387787" name="error_message_client_side_error">"Application error. Please report this error to the app developer"</string>
+    <string msgid="5723205987837759151" name="error_message_host_connection_lost">"System temporarily unavailable"</string>
+    <string msgid="5484419926049675696" name="error_message_host_error">"System error"</string>
+    <string msgid="160406216155183851" name="error_message_host_incompatible">"System requires update"</string>
+    <string msgid="3241065067065670113" name="error_message_host_not_found">"System requires update"</string>
+    <string msgid="2591031904206928207" name="error_message_multiple_hosts">"Incompatible system"</string>
+    <string msgid="5866202078252905802" name="error_message_no_vending">"Please contact car services"</string>
+    <string msgid="1918523834689044166" name="error_message_unknown_error">"Unknown error"</string>
     <string msgid="6264217191555673260" name="search_menu_title">"Search"</string>
     <string msgid="6277540029070332960" name="status_bar_notification_info_overflow">"999+"</string>
 </resources>

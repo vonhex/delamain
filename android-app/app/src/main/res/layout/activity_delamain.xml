@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/cyber_dark">
+
+    <!-- Web frontend handles face animation, WebSocket, audio playback -->
+    <WebView
+        android:id="@+id/delamainWebView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Native voice button overlay at the bottom -->
+    <LinearLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="#CC000000">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/talkButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="TALK TO DELAMAIN"
+            android:textColor="@color/cyber_blue"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.15"
+            app:backgroundTint="@color/cyber_blue_dim"
+            app:strokeColor="@color/cyber_blue"
+            app:strokeWidth="1dp"
+            xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    </LinearLayout>
+
+</FrameLayout>

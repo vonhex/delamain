@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="#0a0a0f">
+
+    <ImageView
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@mipmap/ic_launcher"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DELAMAIN"
+        android:textColor="#00f3ff"
+        android:textSize="28sp"
+        android:letterSpacing="0.2"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Connect your phone to Android Auto\nto activate the in-vehicle interface."
+        android:textColor="#aaaacc"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginBottom="40dp" />
+
+    <Button
+        android:id="@+id/btnOpenAA"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Open Android Auto"
+        android:backgroundTint="#00f3ff"
+        android:textColor="#000000" />
+
+</LinearLayout>

@@ -1,6 +1,218 @@
 [
     {
-        "merged": "com.vonhex.delamain.app-merged_res-25:/xml_automotive_app_desc.xml.flat",
-        "source": "com.vonhex.delamain.app-main-27:/xml/automotive_app_desc.xml"
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_idle_2.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_idle_2.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/layout_activity_main.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/xml_automotive_app_desc.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/xml/automotive_app_desc.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_7.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_7.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_4.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_4.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_talking_2.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_talking_2.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-hdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-hdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/drawable_ic_pip_mic.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/drawable/ic_pip_mic.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_1.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_1.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_3.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_3.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turn_3.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turn_3.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_8.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_8.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_idle.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_idle.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_7.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_7.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turn_5.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turn_5.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_6.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_6.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turning_head.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turning_head.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxhdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxhdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_2.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_2.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turn_2.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turn_2.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_10.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_10.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_6.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_6.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turn_4.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turn_4.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_9.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_9.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_talking.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_talking.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-hdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_5.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_5.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/layout_activity_delamain.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/layout/activity_delamain.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_3.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_3.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_10.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_10.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_8.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_8.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_idle_3.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_idle_3.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_1.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_1.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_talking_1.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_talking_1.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_turn_1.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_turn_1.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_5.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_5.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-mdpi_ic_launcher_foreground.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-mdpi/ic_launcher_foreground.png"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_blink_4.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_blink_4.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_2.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_2.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/drawable_scanlines.xml.flat",
+        "source": "com.vonhex.delamain.app-main-36:/drawable/scanlines.xml"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/raw_delamain_random_9.mp4.flat",
+        "source": "com.vonhex.delamain.app-main-36:/raw/delamain_random_9.mp4"
+    },
+    {
+        "merged": "com.vonhex.delamain.app-merged_res-34:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.vonhex.delamain.app-main-36:/mipmap-mdpi/ic_launcher_round.png"
     }
 ]
