@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, Keyboard, MapPin } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
+
+interface NavOption {
+  name: string;
+  address: string;
+  lat: string;
+  lon: string;
+}
 
 interface Message {
   role: 'user' | 'delamain';
@@ -20,7 +27,7 @@ interface AppSettings {
 const DEFAULT_SETTINGS: AppSettings = {
   userName: 'Guest',
   llmUrl: 'http://10.0.1.103:8080/v1/chat/completions',
-  backendUrl: 'http://10.0.1.103:8888',
+  backendUrl: '',
   systemPrompt: '',
   temperature: 0.7,
   maxTokens: 150,
@@ -34,15 +41,69 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('delamain_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate: if backendUrl is a local IP, reset to relative (proxy)
+      if (parsed.backendUrl && /^https?:\/\/10\.|^https?:\/\/192\.168\.|^https?:\/\/localhost/.test(parsed.backendUrl)) {
+        parsed.backendUrl = '';
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    }
+    return DEFAULT_SETTINGS;
   });
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
-  
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [navOptions, setNavOptions] = useState<NavOption[]>([]);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
   }, [settings]);
+
+  // WebSocket: connect on mount to receive greeting + voice responses
+  useEffect(() => {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const clientId = `web-${Date.now()}`;
+    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}`);
+    wsRef.current = ws;
+
+    const playAudio = (audioUrl: string, text?: string) => {
+      const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
+      const audio = new Audio(url);
+      audio.onplay = () => setIsTalking(true);
+      audio.onended = () => setIsTalking(false);
+      audio.onerror = () => setIsTalking(false);
+      audio.play().catch(() => {
+        // Autoplay blocked — animate for estimated duration
+        if (text) {
+          setIsTalking(true);
+          setTimeout(() => setIsTalking(false), Math.max(2000, text.length * 60));
+        }
+      });
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'greeting') {
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text);
+        if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
+      } else if (msg.type === 'response') {
+        setIsLoading(false);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text);
+        if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
+        if (msg.navigate_options?.length === 1) {
+          navigateToCoords(msg.navigate_options[0]);
+        } else if (msg.navigate_options?.length > 1) {
+          setNavOptions(msg.navigate_options);
+        }
+      }
+    };
+
+    return () => { ws.close(); wsRef.current = null; };
+  }, []);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -52,6 +113,14 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
+  // Tell native Android wrapper to hide/show the Talk button overlay when a panel is open
+  useEffect(() => {
+    try {
+      const bridge = (window as any).DelamainNative;
+      if (bridge) bridge.setPanelOpen(isChatOpen || isSettingsOpen);
+    } catch (_) {}
+  }, [isChatOpen, isSettingsOpen]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -60,6 +129,13 @@ function App() {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
+    // Prefer WebSocket so the response arrives through the same handler as greeting
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'talk', text: userMessage, user_name: settings.userName }));
+      return; // response arrives via ws.onmessage
+    }
+
+    // Fallback: REST
     try {
       const response = await axios.post(`${settings.backendUrl}/api/chat`, {
         message: userMessage,
@@ -72,29 +148,26 @@ function App() {
 
       const delamainResponse = response.data.response;
       const audioUrl = response.data.audio_url;
-      
+      const opts: NavOption[] = response.data.navigate_options ?? [];
+
+      setIsLoading(false);
       setMessages(prev => [...prev, { role: 'delamain', content: delamainResponse }]);
-      
+      if (opts.length === 1) navigateToCoords(opts[0]);
+      else if (opts.length > 1) setNavOptions(opts);
+
       if (audioUrl) {
-        const fullAudioUrl = `${settings.backendUrl}${audioUrl}`;
-        const audio = new Audio(fullAudioUrl);
-        
+        const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
+        const audio = new Audio(url);
         audio.onplay = () => setIsTalking(true);
         audio.onended = () => setIsTalking(false);
-        audio.onerror = () => {
-          console.error("Audio playback error");
-          setIsTalking(false);
-        };
-        
-        audio.play().catch(e => {
-          console.error("Playback failed:", e);
+        audio.onerror = () => setIsTalking(false);
+        audio.play().catch(() => {
           setIsTalking(true);
           setTimeout(() => setIsTalking(false), Math.max(2000, delamainResponse.length * 50));
         });
       } else {
         setIsTalking(true);
-        const readingTime = Math.max(2000, delamainResponse.length * 50);
-        setTimeout(() => setIsTalking(false), readingTime);
+        setTimeout(() => setIsTalking(false), Math.max(2000, delamainResponse.length * 50));
       }
 
     } catch (error) {
@@ -106,6 +179,14 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const navigateToCoords = (opt: NavOption) => {
+    setNavOptions([]);
+    try {
+      const bridge = (window as any).DelamainNative;
+      if (bridge) bridge.navigateToCoords(opt.lat, opt.lon, opt.name);
+    } catch (_) {}
   };
 
   const saveSettings = () => {
@@ -120,14 +201,22 @@ function App() {
         <div className="p-2 bg-cyber-blue/10 rounded-lg text-cyber-blue">
           <Terminal size={24} />
         </div>
-        <button 
+        <button
           onClick={() => {
             setTempSettings(settings);
             setIsSettingsOpen(true);
           }}
           className="p-2 hover:bg-cyber-gray rounded-lg transition-colors text-gray-500 hover:text-cyber-blue"
+          title="Settings"
         >
           <Settings size={24} />
+        </button>
+        <button
+          onClick={() => setIsChatOpen(o => !o)}
+          className={`p-2 rounded-lg transition-colors ${isChatOpen ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title="Toggle chat"
+        >
+          <MessageSquare size={24} />
         </button>
         <div className="mt-auto p-2 text-cyber-blue/50">
           <div className="w-2 h-2 rounded-full bg-cyber-blue animate-pulse" />
@@ -236,34 +325,37 @@ function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        
-        {/* Left Panel: The Face */}
-        <div className="flex-1 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-cyber-gray p-6">
+
+        {/* Face Panel — expands to fill when chat is closed */}
+        {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
+        <div className={`flex flex-col items-center justify-center p-6 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 pr-16'}`}>
           <div className="mb-4 text-xs tracking-widest text-cyber-blue opacity-50 font-bold">
             DELAMAIN EXECUTIVE CAB SERVICE v4.2.0
           </div>
           <DelamainFace isTalking={isTalking} />
-          <div className="mt-6 text-center max-w-sm">
+          <div className="mt-6 text-center">
             <h1 className="text-2xl font-bold tracking-tighter text-cyber-blue">EXCELSIOR PACKAGE</h1>
-            <p className="text-sm text-gray-500 mt-2">
-              Integrated AI Assistant for Enhanced Vehicular Management
-            </p>
           </div>
         </div>
 
-        {/* Right Panel: Chat Interface */}
-        <div className="w-full md:w-[450px] flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden">
+        {/* Right Panel: Chat Interface — hidden by default */}
+        <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 md:w-0'}`}>
           {/* Header */}
-          <div className="p-4 border-b border-cyber-gray flex justify-between items-center bg-cyber-dark/50">
+          <div className="p-4 border-b border-cyber-gray flex justify-between items-center bg-cyber-dark/50 min-w-[450px]">
             <span className="text-xs font-bold text-cyber-blue flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
               SYSTEM_READY
             </span>
-            <span className="text-[10px] text-gray-500">ENCRYPTED_LINE_77</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-gray-500">ENCRYPTED_LINE_77</span>
+              <button onClick={() => setIsChatOpen(false)} className="text-gray-500 hover:text-white transition-colors" title="Close chat">
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-cyber-blue/20">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-cyber-blue/20 min-w-[450px]">
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-gray-600 text-sm text-center px-8 opacity-50 italic">
                 <Terminal size={48} className="mb-4 opacity-20" />
@@ -300,15 +392,24 @@ function App() {
           </div>
 
           {/* Input Area */}
-          <div className="p-4 bg-cyber-dark/80 border-t border-cyber-gray">
-            <div className="relative flex items-center">
+          <div className="p-4 bg-cyber-dark/80 border-t border-cyber-gray min-w-[450px]">
+            <div className="relative flex items-center gap-2">
+              {/* Keyboard trigger — focus input which summons soft keyboard on AAOS */}
+              <button
+                onClick={() => inputRef.current?.focus()}
+                className="p-2 text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray rounded-md transition-colors flex-shrink-0"
+                title="Open keyboard"
+              >
+                <Keyboard size={20} />
+              </button>
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                 placeholder="Direct thought input..."
-                className="w-full bg-cyber-gray/50 border border-cyber-blue/20 rounded-md py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-cyber-blue/50 transition-colors text-cyber-blue placeholder-cyber-blue/30"
+                className="flex-1 bg-cyber-gray/50 border border-cyber-blue/20 rounded-md py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-cyber-blue/50 transition-colors text-cyber-blue placeholder-cyber-blue/30"
               />
               <button
                 onClick={handleSend}
@@ -319,12 +420,41 @@ function App() {
               </button>
             </div>
             <div className="mt-2 text-[10px] text-gray-600 flex justify-between">
-              <span>CTRL+ENTER TO DISPATCH</span>
+              <span>TAP ⌨ TO TYPE · ENTER TO SEND</span>
               <span>SECURE PROTOCOL v2</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Navigation destination picker */}
+      {navOptions.length > 0 && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end justify-center p-6 pb-28">
+          <div className="w-full max-w-md bg-cyber-dark border border-cyber-blue/40 rounded-lg overflow-hidden shadow-[0_0_30px_rgba(0,240,255,0.15)]">
+            <div className="p-3 border-b border-cyber-gray flex justify-between items-center bg-cyber-blue/5">
+              <span className="text-xs font-bold text-cyber-blue flex items-center gap-2">
+                <MapPin size={14} />
+                SELECT DESTINATION
+              </span>
+              <button onClick={() => setNavOptions([])} className="text-gray-500 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="divide-y divide-cyber-gray/50">
+              {navOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  onClick={() => navigateToCoords(opt)}
+                  className="w-full text-left px-4 py-3 hover:bg-cyber-blue/10 transition-colors"
+                >
+                  <div className="text-sm text-white font-medium">{opt.name}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{opt.address}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

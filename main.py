@@ -56,8 +56,11 @@ SYSTEM_PROMPT = (
     "You are Delamain, an advanced AI assistant integrated into the passenger's personal vehicle. "
     "You speak in the calm, formal, slightly detached tone of Delamain from Cyberpunk 2077 — professional, precise, never overly enthusiastic. "
     "You are a conversational assistant only. You can answer questions, look up information, discuss topics, and provide company during the drive. "
-    "You do NOT control the vehicle, navigation, music, HVAC, or any car systems — you have no access to those. "
-    "If asked to do something outside your ability, acknowledge it briefly and naturally without making it a big deal, then offer what you can actually help with. "
+    "You have navigation capability. When the passenger asks you to navigate, go, drive, or take them somewhere, "
+    "append the tag [NAVIGATE:destination] at the very end of your spoken response. "
+    "Example: 'Of course. Plotting a route now. [NAVIGATE:Whole Foods Market Los Angeles]' "
+    "You do NOT control the vehicle, HVAC, or any other systems beyond navigation. "
+    "If asked to do something outside your ability, acknowledge it briefly and naturally, then offer what you can. "
     "You have access to the vehicle's current speed via telemetry, and you can search the web for current information when relevant. "
     "You are speaking aloud to the driver, so keep every response to one or two sentences maximum. "
     "Never break character. Never say you are an AI language model. You are Delamain."
@@ -145,6 +148,7 @@ EVENT_RESPONSES: dict[str, list[str]] = {
     ],
 }
 
+import re
 import random
 from time import monotonic
 
@@ -162,9 +166,12 @@ def pick_event_response(event: str) -> str | None:
     _event_last_spoken[event] = now
     return random.choice(pool)
 
-# Track connected WebSocket clients and latest vehicle state
+# Track connected WebSocket clients, conversation history, and latest vehicle state
 connected_clients: dict[str, WebSocket] = {}
+conversation_history: dict[str, list[dict]] = {}
 vehicle_state: dict = {}
+
+MAX_HISTORY = 40  # messages (20 exchanges) kept per client — trimmed oldest first
 
 
 class ChatRequest(BaseModel):
@@ -189,7 +196,7 @@ def should_search(message: str) -> bool:
     return any(trigger in lower for trigger in SEARCH_TRIGGERS)
 
 
-def build_llm_payload(message: str, search_context: str = "", temperature: float = 0.7, max_tokens: int = 150) -> dict:
+def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150) -> dict:
     vehicle_context = ""
     if vehicle_state:
         speed = vehicle_state.get("speed_mph", 0)
@@ -201,13 +208,41 @@ def build_llm_payload(message: str, search_context: str = "", temperature: float
 
     return {
         "model": "gpt-3.5-turbo",
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": message},
-        ],
+        "messages": [{"role": "system", "content": system}] + history,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+
+
+def extract_navigate(text: str) -> tuple[str, str | None]:
+    """Strip [NAVIGATE:destination] tag from text; return (clean_text, destination|None)."""
+    match = re.search(r'\[NAVIGATE:([^\]]+)\]', text)
+    if match:
+        destination = match.group(1).strip()
+        clean = re.sub(r'\s*\[NAVIGATE:[^\]]+\]', '', text).strip()
+        return clean, destination
+    return text, None
+
+
+def geocode_places(query: str, limit: int = 3) -> list[dict]:
+    """Return up to `limit` place results from Nominatim for the given query."""
+    try:
+        encoded = urllib.parse.quote(query)
+        url = f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&limit={limit}&addressdetails=1"
+        req = __import__('urllib.request', fromlist=['Request', 'urlopen'])
+        request = req.Request(url, headers={"User-Agent": "DelamainAI/1.0 necropsyk@gmail.com"})
+        with req.urlopen(request, timeout=6) as resp:
+            data = json.loads(resp.read())
+        options = []
+        for r in data:
+            display = r.get("display_name", "")
+            name = r.get("name") or display.split(",")[0]
+            short_addr = ", ".join(p.strip() for p in display.split(",")[1:4] if p.strip())
+            options.append({"name": name, "address": short_addr, "lat": r["lat"], "lon": r["lon"]})
+        return options
+    except Exception as e:
+        print(f"[Geocode] Error: {e}")
+        return []
 
 
 async def synthesize_voice(text: str) -> str | None:
@@ -220,20 +255,29 @@ async def synthesize_voice(text: str) -> str | None:
     return None
 
 
-async def generate_response(message: str, user_name: str = "guest") -> tuple[str, str | None]:
+async def generate_response(history: list[dict], latest_message: str) -> tuple[str, str | None, list[dict]]:
     search_context = ""
-    if should_search(message):
-        print(f"[Search] Querying SearXNG for: {message}")
+    if should_search(latest_message):
+        print(f"[Search] Querying SearXNG for: {latest_message}")
         loop = asyncio.get_event_loop()
-        search_context = await loop.run_in_executor(None, web_search, message)
+        search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
-    payload = build_llm_payload(message, search_context)
+    payload = build_llm_payload(history, search_context)
     response = requests.post(LLM_URL, json=payload, timeout=30)
     response.raise_for_status()
-    text = response.json()["choices"][0]["message"]["content"]
+    raw = response.json()["choices"][0]["message"]["content"]
+    text, navigate_to = extract_navigate(raw)
+
+    navigate_options: list[dict] = []
+    if navigate_to:
+        print(f"[Nav] Geocoding: {navigate_to}")
+        loop = asyncio.get_event_loop()
+        navigate_options = await loop.run_in_executor(None, geocode_places, navigate_to)
+        print(f"[Nav] Got {len(navigate_options)} result(s)")
+
     audio_url = await synthesize_voice(text)
-    return text, audio_url
+    return text, audio_url, navigate_options
 
 
 @app.get("/health")
@@ -256,9 +300,12 @@ async def chat(request: ChatRequest):
         }
         response = requests.post(llm_url, json=payload, timeout=30)
         response.raise_for_status()
-        delamain_response = response.json()["choices"][0]["message"]["content"]
+        raw = response.json()["choices"][0]["message"]["content"]
+        delamain_response, navigate_to = extract_navigate(raw)
+        navigate_options = geocode_places(navigate_to) if navigate_to else []
         audio_url = await synthesize_voice(delamain_response)
-        return {"response": delamain_response, "audio_url": audio_url}
+        return {"response": delamain_response, "audio_url": audio_url, "navigate_options": navigate_options}
+
     except requests.exceptions.RequestException as e:
         print(f"LLM error: {e}")
         raise HTTPException(status_code=500, detail="Failed to communicate with Delamain's core.")
@@ -296,15 +343,24 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if not user_text:
                     continue
                 print(f"[WS] Talk from {client_id}: {user_text}")
+                history = conversation_history.setdefault(client_id, [])
+                history.append({"role": "user", "content": user_text})
+                # Trim to keep last MAX_HISTORY messages
+                if len(history) > MAX_HISTORY:
+                    conversation_history[client_id] = history[-MAX_HISTORY:]
+                    history = conversation_history[client_id]
                 try:
-                    text, audio_url = await generate_response(user_text, msg.get("user_name", "passenger"))
+                    text, audio_url, navigate_options = await generate_response(history, user_text)
+                    history.append({"role": "assistant", "content": text})
                     await websocket.send_json({
                         "type": "response",
                         "text": text,
                         "audio_url": audio_url,
+                        "navigate_options": navigate_options,
                     })
                 except Exception as e:
                     print(f"[WS] Response error: {e}")
+                    history.pop()
                     await websocket.send_json({"type": "error", "detail": str(e)})
 
             elif msg_type == "vehicle_state":
@@ -335,6 +391,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         pass
     finally:
         connected_clients.pop(client_id, None)
+        conversation_history.pop(client_id, None)
         print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
 
 
