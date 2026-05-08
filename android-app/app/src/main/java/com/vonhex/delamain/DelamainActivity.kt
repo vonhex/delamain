@@ -33,14 +33,10 @@ class DelamainActivity : AppCompatActivity() {
     private lateinit var buttonContainer: LinearLayout
     private var recognizer: SpeechRecognizer? = null
 
-    private val pipMicReceiver = object : BroadcastReceiver() {
+    private val talkReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             onTalkPressed()
         }
-    }
-
-    companion object {
-        private const val ACTION_PIP_MIC = "com.vonhex.delamain.PIP_MIC"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -92,25 +88,31 @@ class DelamainActivity : AppCompatActivity() {
         talkButton.setOnClickListener { onTalkPressed() }
 
         ContextCompat.registerReceiver(
-            this, pipMicReceiver, IntentFilter(ACTION_PIP_MIC), ContextCompat.RECEIVER_NOT_EXPORTED
+            this, talkReceiver, IntentFilter(DelamainMediaService.ACTION_TALK),
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
+
+        // Start media session service so Delamain appears in AA media strip
+        startForegroundService(Intent(this, DelamainMediaService::class.java))
     }
 
-    // Auto-enter PiP whenever the user leaves the app (goes to Maps, home, etc.)
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        enterPipMode()
+    // onUserLeaveHint doesn't fire reliably on AAOS CarLauncher; use onPause instead
+    override fun onPause() {
+        super.onPause()
+        if (!isFinishing && !isInPictureInPictureMode) {
+            enterPipMode()
+        }
     }
 
     private fun enterPipMode() {
         try {
             val pendingIntent = PendingIntent.getBroadcast(
                 this, 0,
-                Intent(ACTION_PIP_MIC).setPackage(packageName),
+                Intent(DelamainMediaService.ACTION_TALK).setPackage(packageName),
                 PendingIntent.FLAG_IMMUTABLE
             )
             val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(3, 4))  // tall portrait — fills sidebar beside maps
+                .setAspectRatio(Rational(3, 4))
                 .setActions(listOf(
                     RemoteAction(
                         Icon.createWithResource(this, R.drawable.ic_pip_mic),
@@ -119,7 +121,8 @@ class DelamainActivity : AppCompatActivity() {
                     )
                 ))
                 .build()
-            enterPictureInPictureMode(params)
+            val entered = enterPictureInPictureMode(params)
+            android.util.Log.d("Delamain", "enterPictureInPictureMode returned: $entered")
         } catch (e: Exception) {
             android.util.Log.w("Delamain", "PiP enter failed: $e")
         }
@@ -241,7 +244,8 @@ class DelamainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(pipMicReceiver)
+        unregisterReceiver(talkReceiver)
+        stopService(Intent(this, DelamainMediaService::class.java))
         scope.cancel()
         recognizer?.destroy()
         webView.destroy()

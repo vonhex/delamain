@@ -34,6 +34,17 @@
     <string msgid="6107532579223922871" name="call_notification_incoming_text">"Chamada recebida"</string>
     <string msgid="8623827134497363134" name="call_notification_ongoing_text">"Chamada em andamento"</string>
     <string msgid="59049573811482460" name="call_notification_screening_text">"Filtrando uma ligação recebida"</string>
+    <string msgid="7621130025103996211" name="error_action_finish">"Fechar aplicativo"</string>
+    <string msgid="985347670495166517" name="error_action_retry">"Tentar novamente"</string>
+    <string msgid="4802951804749609593" name="error_action_update_host">"Verificar se há atualizações"</string>
+    <string msgid="3323186720368387787" name="error_message_client_side_error">"Erro do aplicativo. Informe esse problema para o desenvolvedor do app"</string>
+    <string msgid="5723205987837759151" name="error_message_host_connection_lost">"Sistema temporariamente indisponível"</string>
+    <string msgid="5484419926049675696" name="error_message_host_error">"Erro do sistema"</string>
+    <string msgid="160406216155183851" name="error_message_host_incompatible">"Atualize o sistema"</string>
+    <string msgid="3241065067065670113" name="error_message_host_not_found">"Atualize o sistema"</string>
+    <string msgid="2591031904206928207" name="error_message_multiple_hosts">"Sistema incompatível"</string>
+    <string msgid="5866202078252905802" name="error_message_no_vending">"Entre em contato com os serviços para carros"</string>
+    <string msgid="1918523834689044166" name="error_message_unknown_error">"Erro desconhecido"</string>
     <string msgid="6264217191555673260" name="search_menu_title">"Pesquisar"</string>
     <string msgid="6277540029070332960" name="status_bar_notification_info_overflow">"999+"</string>
 </resources>

@@ -5,7 +5,7 @@
 5    android:versionName="1.0" >
 6
 7    <uses-sdk
-8        android:minSdkVersion="23"
+8        android:minSdkVersion="29"
 9        android:targetSdkVersion="34" />
 10
 11    <uses-permission android:name="android.permission.INTERNET" />
@@ -14,162 +14,292 @@
 12    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 12-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:5:5-71
 12-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:5:22-68
-13
-14    <uses-feature
-14-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:7:5-94
-15        android:name="android.hardware.type.automotive"
-15-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:7:19-66
-16        android:required="false" />
-16-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:7:67-91
-17
-18    <queries>
-18-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:23:5-28:15
-19        <provider
-19-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:24:9-27:43
-20            android:name="androidx.car.app.connection.provider"
-20-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:25:13-64
-21            android:authorities="androidx.car.app.connection" />
-21-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:26:13-62
-22    </queries>
-23
-24    <permission
-24-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:22:5-24:47
-25        android:name="com.vonhex.delamain.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-25-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:23:9-81
-26        android:protectionLevel="signature" />
-26-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:24:9-44
-27
-28    <uses-permission android:name="com.vonhex.delamain.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-28-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:26:5-97
-28-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:26:22-94
+13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+13-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:6:5-77
+13-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:6:22-74
+14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+14-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:7:5-92
+14-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:7:22-89
+15
+16    <uses-feature
+16-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:9:5-94
+17        android:name="android.hardware.type.automotive"
+17-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:9:19-66
+18        android:required="false" />
+18-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:9:67-91
+19
+20    <queries>
+20-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:23:5-27:15
+21        <intent>
+21-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:24:9-26:18
+22            <action android:name="android.car.template.host.RendererService" />
+22-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:25:13-80
+22-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:25:21-77
+23        </intent>
+24
+25        <provider
+25-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:24:9-27:43
+26            android:name="androidx.car.app.connection.provider"
+26-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:25:13-64
+27            android:authorities="androidx.car.app.connection" />
+27-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:26:13-62
+28    </queries>
 29
-30    <application
-30-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:9:5-33:19
-31        android:allowBackup="true"
-31-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:10:9-35
-32        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-32-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:28:18-86
-33        android:debuggable="true"
-34        android:extractNativeLibs="false"
-35        android:label="@string/app_name"
-35-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:11:9-41
-36        android:theme="@style/Theme.AppCompat" >
-36-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:12:9-47
-37        <meta-data
-37-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:14:9-16:59
-38            android:name="com.google.android.gms.car.application"
-38-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:15:13-66
-39            android:resource="@xml/automotive_app_desc" />
-39-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:16:13-56
-40
-41        <service
-41-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:18:9-25:19
-42            android:name="com.vonhex.delamain.DelamainCarAppService"
-42-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:19:13-50
-43            android:exported="true" >
-43-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:20:13-36
-44            <intent-filter>
-44-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:21:13-24:29
-45                <action android:name="androidx.car.app.CarAppService" />
-45-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:22:17-73
-45-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:22:25-70
-46
-47                <category android:name="androidx.car.app.category.IOT" />
-47-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:23:17-74
-47-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:23:27-71
-48            </intent-filter>
-49        </service>
-50
-51        <!-- Phone-side activity for voice capture -->
-52        <activity
-52-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:28:9-31:75
-53            android:name="com.vonhex.delamain.VoiceActivity"
-53-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:29:13-42
-54            android:exported="false"
-54-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:30:13-37
-55            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-55-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:31:13-72
-56        <activity
-56-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:31:9-34:75
-57            android:name="androidx.car.app.CarAppPermissionActivity"
-57-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:32:13-69
-58            android:exported="false"
-58-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:33:13-37
-59            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-59-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:34:13-72
-60
-61        <receiver
-61-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:36:9-38:40
-62            android:name="androidx.car.app.notification.CarAppNotificationBroadcastReceiver"
-62-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:37:13-93
-63            android:exported="false" />
-63-->[androidx.car.app:app:1.4.0] /home/administrator/.gradle/caches/transforms-3/68425b174eee1f1bd5862ee5c878073c/transformed/jetified-app-1.4.0/AndroidManifest.xml:38:13-37
-64
-65        <provider
-65-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
-66            android:name="androidx.startup.InitializationProvider"
-66-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:25:13-67
-67            android:authorities="com.vonhex.delamain.androidx-startup"
-67-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:26:13-68
-68            android:exported="false" >
-68-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:27:13-37
-69            <meta-data
-69-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
-70                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-70-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
-71                android:value="androidx.startup" />
-71-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
-72            <meta-data
-72-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
-73                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-73-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
-74                android:value="androidx.startup" />
-74-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
-75            <meta-data
-75-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
-76                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-76-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
-77                android:value="androidx.startup" />
-77-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
-78        </provider>
-79
-80        <receiver
-80-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
-81            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-81-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
-82            android:directBootAware="false"
-82-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
-83            android:enabled="true"
-83-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
-84            android:exported="true"
-84-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
-85            android:permission="android.permission.DUMP" >
-85-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
-86            <intent-filter>
-86-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
-87                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-87-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
-87-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
-88            </intent-filter>
-89            <intent-filter>
-89-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
-90                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-90-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
-90-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
-91            </intent-filter>
-92            <intent-filter>
-92-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
-93                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-93-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
-93-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
-94            </intent-filter>
-95            <intent-filter>
-95-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
-96                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-96-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
-96-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
-97            </intent-filter>
-98        </receiver>
-99    </application>
-100
-101</manifest>
+30    <permission
+30-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:22:5-24:47
+31        android:name="com.vonhex.delamain.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+31-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:23:9-81
+32        android:protectionLevel="signature" />
+32-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:24:9-44
+33
+34    <uses-permission android:name="com.vonhex.delamain.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+34-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:26:5-97
+34-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:26:22-94
+35
+36    <application
+36-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:11:5-86:19
+37        android:allowBackup="true"
+37-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:12:9-35
+38        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+38-->[androidx.core:core:1.13.0] /home/administrator/.gradle/caches/transforms-3/e3ff5693347fdff47fd35f866dfde41b/transformed/core-1.13.0/AndroidManifest.xml:28:18-86
+39        android:debuggable="true"
+40        android:extractNativeLibs="false"
+41        android:icon="@mipmap/ic_launcher"
+41-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:14:9-43
+42        android:label="@string/app_name"
+42-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:13:9-41
+43        android:roundIcon="@mipmap/ic_launcher_round"
+43-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:15:9-54
+44        android:theme="@style/Theme.AppCompat" >
+44-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:16:9-47
+45        <meta-data
+45-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:18:9-20:59
+46            android:name="com.google.android.gms.car.application"
+46-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:19:13-66
+47            android:resource="@xml/automotive_app_desc" />
+47-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:20:13-56
+48        <meta-data
+48-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:22:9-24:33
+49            android:name="androidx.car.app.minCarApiLevel"
+49-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:23:13-59
+50            android:value="1" />
+50-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:24:13-30
+51
+52        <service
+52-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:26:9-33:19
+53            android:name="com.vonhex.delamain.DelamainCarAppService"
+53-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:27:13-50
+54            android:exported="true" >
+54-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:28:13-36
+55            <intent-filter>
+55-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:29:13-32:29
+56                <action android:name="androidx.car.app.CarAppService" />
+56-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:30:17-73
+56-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:30:25-70
+57
+58                <category android:name="androidx.car.app.category.IOT" />
+58-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:31:17-74
+58-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:31:27-71
+59            </intent-filter>
+60        </service>
+61
+62        <!-- Media session service — shows Delamain in AA media strip beside Maps -->
+63        <service
+63-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:36:9-43:19
+64            android:name="com.vonhex.delamain.DelamainMediaService"
+64-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:37:13-49
+65            android:exported="true"
+65-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:38:13-36
+66            android:foregroundServiceType="mediaPlayback" >
+66-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:39:13-58
+67            <intent-filter>
+67-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:40:13-42:29
+68                <action android:name="android.media.browse.MediaBrowserService" />
+68-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:41:17-83
+68-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:41:25-80
+69            </intent-filter>
+70        </service>
+71
+72        <!-- Primary AAOS entry point: native full-screen face UI -->
+73        <activity
+73-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:46:9-61:20
+74            android:name="com.vonhex.delamain.DelamainActivity"
+74-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:47:13-45
+75            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|density"
+75-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:53:13-99
+76            android:exported="true"
+76-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:48:13-36
+77            android:icon="@mipmap/ic_launcher"
+77-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:50:13-47
+78            android:label="@string/app_name"
+78-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:49:13-45
+79            android:supportsPictureInPicture="true"
+79-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:52:13-52
+80            android:theme="@style/Theme.Delamain" >
+80-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:51:13-50
+81            <intent-filter>
+81-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:54:13-57:29
+82                <action android:name="android.intent.action.MAIN" />
+82-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:55:17-69
+82-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:55:25-66
+83
+84                <category android:name="android.intent.category.LAUNCHER" />
+84-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:56:17-77
+84-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:56:27-74
+85            </intent-filter>
+86
+87            <meta-data
+87-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:58:13-60:40
+88                android:name="distractionOptimized"
+88-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:59:17-52
+89                android:value="true" />
+89-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:60:17-37
+90        </activity>
+91
+92        <!-- Car App Library entry point (kept for phone Android Auto projection) -->
+93        <activity
+93-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:64:9-73:20
+94            android:name="androidx.car.app.activity.CarAppActivity"
+94-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:65:13-68
+95            android:exported="true"
+95-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:66:13-36
+96            android:icon="@mipmap/ic_launcher"
+96-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:68:13-47
+97            android:label="@string/app_name"
+97-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:67:13-45
+98            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" >
+98-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:69:13-77
+99            <meta-data
+99-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:58:13-60:40
+100                android:name="distractionOptimized"
+100-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:59:17-52
+101                android:value="true" />
+101-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:60:17-37
+102        </activity>
+103
+104        <!-- Phone companion activity: no launcher icon, started programmatically -->
+105        <activity
+105-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:76:9-78:40
+106            android:name="com.vonhex.delamain.MainActivity"
+106-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:77:13-41
+107            android:exported="false" />
+107-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:78:13-37
+108
+109        <!-- Phone-side activity for voice capture -->
+110        <activity
+110-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:81:9-84:75
+111            android:name="com.vonhex.delamain.VoiceActivity"
+111-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:82:13-42
+112            android:exported="false"
+112-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:83:13-37
+113            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+113-->/home/administrator/delamain-ai/android-app/app/src/main/AndroidManifest.xml:84:13-72
+114
+115        <service
+115-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:34:9-47:19
+116            android:name="androidx.car.app.CarAppMetadataHolderService"
+116-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:35:13-72
+117            android:enabled="false"
+117-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:36:13-36
+118            android:exported="false"
+118-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:37:13-37
+119            android:process="" >
+119-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:38:13-31
+120            <meta-data
+120-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:41:13-43:90
+121                android:name="androidx.car.app.CarAppMetadataHolderService.CAR_HARDWARE_MANAGER"
+121-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:42:17-97
+122                android:value="androidx.car.app.hardware.AutomotiveCarHardwareManager" />
+122-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:43:17-87
+123            <meta-data
+123-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:44:13-46:85
+124                android:name="androidx.car.app.CarAppMetadataHolderService.RESULT_MANAGER"
+124-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:45:17-91
+125                android:value="androidx.car.app.activity.ResultManagerAutomotive" />
+125-->[androidx.car.app:app-automotive:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/4f20be0e447cb281dc11fff5ec2f1661/transformed/jetified-app-automotive-1.7.0-beta02/AndroidManifest.xml:46:17-82
+126        </service>
+127
+128        <activity
+128-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:31:9-34:75
+129            android:name="androidx.car.app.CarAppPermissionActivity"
+129-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:32:13-69
+130            android:exported="false"
+130-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:33:13-37
+131            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+131-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:34:13-72
+132
+133        <receiver
+133-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:36:9-38:40
+134            android:name="androidx.car.app.notification.CarAppNotificationBroadcastReceiver"
+134-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:37:13-93
+135            android:exported="false" />
+135-->[androidx.car.app:app:1.7.0-beta02] /home/administrator/.gradle/caches/transforms-3/b4f871b21e2644649112c06f8ca3cd7b/transformed/jetified-app-1.7.0-beta02/AndroidManifest.xml:38:13-37
+136
+137        <provider
+137-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+138            android:name="androidx.startup.InitializationProvider"
+138-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:25:13-67
+139            android:authorities="com.vonhex.delamain.androidx-startup"
+139-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:26:13-68
+140            android:exported="false" >
+140-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:27:13-37
+141            <meta-data
+141-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+142                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+142-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:30:17-75
+143                android:value="androidx.startup" />
+143-->[androidx.emoji2:emoji2:1.3.0] /home/administrator/.gradle/caches/transforms-3/bd6eb2cf8ae96262305e8acdb574fbbb/transformed/jetified-emoji2-1.3.0/AndroidManifest.xml:31:17-49
+144            <meta-data
+144-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:29:13-31:52
+145                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+145-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:30:17-78
+146                android:value="androidx.startup" />
+146-->[androidx.lifecycle:lifecycle-process:2.6.2] /home/administrator/.gradle/caches/transforms-3/60e7ed1a8b9ff14ace327bbb4831d7be/transformed/jetified-lifecycle-process-2.6.2/AndroidManifest.xml:31:17-49
+147            <meta-data
+147-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+148                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+148-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+149                android:value="androidx.startup" />
+149-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+150        </provider>
+151
+152        <receiver
+152-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+153            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+153-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+154            android:directBootAware="false"
+154-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+155            android:enabled="true"
+155-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+156            android:exported="true"
+156-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+157            android:permission="android.permission.DUMP" >
+157-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+158            <intent-filter>
+158-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+159                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+159-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+159-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+160            </intent-filter>
+161            <intent-filter>
+161-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+162                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+162-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+162-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+163            </intent-filter>
+164            <intent-filter>
+164-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+165                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+165-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+165-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+166            </intent-filter>
+167            <intent-filter>
+167-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+168                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+168-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+168-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/administrator/.gradle/caches/transforms-3/65ab42269bf6ab2cda1e399e7df63214/transformed/jetified-profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+169            </intent-filter>
+170        </receiver>
+171    </application>
+172
+173</manifest>

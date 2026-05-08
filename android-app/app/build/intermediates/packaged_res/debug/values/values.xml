@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="cyber_blue">#00F3FF</color>
+    <color name="cyber_blue_dim">#1A2A2E</color>
+    <color name="cyber_dark">#0A0A0F</color>
+    <color name="gray_dim">#888899</color>
+    <color name="white">#FFFFFF</color>
     <string name="app_name">Delamain</string>
+    <style name="Theme.Delamain" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowBackground">@color/cyber_dark</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">@color/cyber_dark</item>
+        <item name="android:navigationBarColor">@color/cyber_dark</item>
+    </style>
 </resources>
