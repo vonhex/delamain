@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Audio output (generated at runtime)
+audio_output/
+
+# Checkpoints / models (too large for git)
+checkpoints/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
