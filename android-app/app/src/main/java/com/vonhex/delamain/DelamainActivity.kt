@@ -1,17 +1,27 @@
 package com.vonhex.delamain
 
 import android.annotation.SuppressLint
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.net.Uri
+import android.util.Rational
 import android.view.View
 import android.webkit.*
 import android.widget.Button
 import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
 
 class DelamainActivity : AppCompatActivity() {
@@ -22,6 +32,16 @@ class DelamainActivity : AppCompatActivity() {
     private lateinit var talkButton: Button
     private lateinit var buttonContainer: LinearLayout
     private var recognizer: SpeechRecognizer? = null
+
+    private val pipMicReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            onTalkPressed()
+        }
+    }
+
+    companion object {
+        private const val ACTION_PIP_MIC = "com.vonhex.delamain.PIP_MIC"
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +90,50 @@ class DelamainActivity : AppCompatActivity() {
         webView.loadUrl(Config.BASE_URL)
 
         talkButton.setOnClickListener { onTalkPressed() }
+
+        ContextCompat.registerReceiver(
+            this, pipMicReceiver, IntentFilter(ACTION_PIP_MIC), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    // Auto-enter PiP whenever the user leaves the app (goes to Maps, home, etc.)
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        enterPipMode()
+    }
+
+    private fun enterPipMode() {
+        try {
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, 0,
+                Intent(ACTION_PIP_MIC).setPackage(packageName),
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(3, 4))  // tall portrait — fills sidebar beside maps
+                .setActions(listOf(
+                    RemoteAction(
+                        Icon.createWithResource(this, R.drawable.ic_pip_mic),
+                        "Talk", "Talk to Delamain",
+                        pendingIntent
+                    )
+                ))
+                .build()
+            enterPictureInPictureMode(params)
+        } catch (e: Exception) {
+            android.util.Log.w("Delamain", "PiP enter failed: $e")
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // Tell the WebView to switch to face-only PiP layout
+        val active = if (isInPictureInPictureMode) "true" else "false"
+        webView.evaluateJavascript(
+            "window.dispatchEvent(new CustomEvent('delamain-pip',{detail:{active:$active}}));", null
+        )
+        // Hide native button overlay in PiP (too small to use)
+        buttonContainer.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
     }
 
     private fun onTalkPressed() {
@@ -177,6 +241,7 @@ class DelamainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterReceiver(pipMicReceiver)
         scope.cancel()
         recognizer?.destroy()
         webView.destroy()

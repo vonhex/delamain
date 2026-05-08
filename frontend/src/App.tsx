@@ -54,10 +54,18 @@ function App() {
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
+  const [isPip, setIsPip] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // PiP mode: Android fires a custom event when entering/leaving picture-in-picture
+  useEffect(() => {
+    const handler = (e: Event) => setIsPip((e as CustomEvent<{ active: boolean }>).detail.active);
+    window.addEventListener('delamain-pip', handler);
+    return () => window.removeEventListener('delamain-pip', handler);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
@@ -193,6 +201,15 @@ function App() {
     setSettings(tempSettings);
     setIsSettingsOpen(false);
   };
+
+  // PiP: face fills the entire small window, nothing else
+  if (isPip) {
+    return (
+      <div className="w-screen h-screen bg-black flex items-center justify-center overflow-hidden">
+        <DelamainFace isTalking={isTalking} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-cyber-dark text-gray-200 font-mono overflow-hidden">
