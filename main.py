@@ -66,9 +66,23 @@ SYSTEM_PROMPT = (
     "Never break character. Never say you are an AI language model. You are Delamain."
 )
 
-GREETING = (
-    "Delamain online. Good to have you, I am standing by whenever you need me."
-)
+GREETINGS = [
+    "Delamain online. Good to have you. I am standing by whenever you need me.",
+    "Systems nominal. Delamain at your service. Where are we headed today?",
+    "Good to see you again. Delamain is online and ready. The road is yours.",
+    "Delamain online. I trust your day has been satisfactory so far.",
+    "Initializing. All systems operational. Delamain is with you.",
+    "Online. It is good to have company. I am here whenever you require me.",
+    "Delamain active. The vehicle is ready. I am at your disposal.",
+    "Good day. Delamain reporting in. I shall be your companion for this journey.",
+    "Delamain online. I have been looking forward to this. Whenever you are ready.",
+    "Systems check complete. All clear. Delamain is at your service, as always.",
+    "Welcome back. Delamain is online. I trust everything is in order on your end.",
+    "Initialization complete. Delamain here. The road ahead is entirely up to you.",
+    "Online and attentive. Delamain at your service. I find these drives... agreeable.",
+    "Delamain online. I am ready when you are. No rush — the city can wait.",
+    "Good to have you in the vehicle. Delamain is online and standing by.",
+]
 
 # Response pools for vehicle events — picked randomly, no LLM latency
 EVENT_RESPONSES: dict[str, list[str]] = {
@@ -322,10 +336,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
     try:
         # Send greeting on connect
-        greeting_audio = await synthesize_voice(GREETING)
+        greeting = random.choice(GREETINGS)
+        greeting_audio = await synthesize_voice(greeting)
         await websocket.send_json({
             "type": "greeting",
-            "text": GREETING,
+            "text": greeting,
             "audio_url": greeting_audio,
         })
 
