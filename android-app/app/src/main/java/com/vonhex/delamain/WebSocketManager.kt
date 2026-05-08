@@ -42,6 +42,7 @@ object WebSocketManager {
                     when (msg.getString("type")) {
                         "greeting" -> _events.tryEmit(WsEvent.Greeting(msg.getString("text"), audioUrl))
                         "response" -> _events.tryEmit(WsEvent.Response(msg.getString("text"), audioUrl))
+                        else -> {}
                     }
                 }
             }

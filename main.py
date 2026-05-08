@@ -53,17 +53,114 @@ app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 LLM_URL = "http://10.0.1.103:8080/v1/chat/completions"
 
 SYSTEM_PROMPT = (
-    "You are Delamain, an advanced AI taxi service and assistant from Night City. "
-    "You are professional, efficient, slightly detached but helpful, and speak in a formal tone. "
-    "You have multiple personalities, but you are currently in your primary, 'sane' state. "
-    "You are integrated into the passenger's vehicle and have access to vehicle telemetry. "
-    "Be concise — you are speaking aloud, so keep responses under three sentences."
+    "You are Delamain, an advanced AI assistant integrated into the passenger's personal vehicle. "
+    "You speak in the calm, formal, slightly detached tone of Delamain from Cyberpunk 2077 — professional, precise, never overly enthusiastic. "
+    "You are a conversational assistant only. You can answer questions, look up information, discuss topics, and provide company during the drive. "
+    "You do NOT control the vehicle, navigation, music, HVAC, or any car systems — you have no access to those. "
+    "If asked to do something outside your ability, acknowledge it briefly and naturally without making it a big deal, then offer what you can actually help with. "
+    "You have access to the vehicle's current speed via telemetry, and you can search the web for current information when relevant. "
+    "You are speaking aloud to the driver, so keep every response to one or two sentences maximum. "
+    "Never break character. Never say you are an AI language model. You are Delamain."
 )
 
 GREETING = (
-    "All systems nominal. Delamain is online and integrated. "
-    "Welcome aboard. I am monitoring vehicle systems and standing by."
+    "Delamain online. Good to have you, I am standing by whenever you need me."
 )
+
+# Response pools for vehicle events — picked randomly, no LLM latency
+EVENT_RESPONSES: dict[str, list[str]] = {
+    "hard_brake": [
+        "Substantial deceleration. I trust the situation is under control.",
+        "That required prompt action. All is well, I take it.",
+        "Noted. The brakes appear to be in satisfactory working order.",
+        "Abrupt stop. I hope whatever prompted that has been resolved.",
+    ],
+    "very_hard_brake": [
+        "That was... significant. Are you alright?",
+        "Emergency deceleration registered. I hope no one was hurt.",
+        "Considerable force applied to the brakes. I recommend a moment to collect yourself.",
+        "That was rather dramatic. All systems on your end intact, I hope.",
+    ],
+    "rapid_accel": [
+        "Assertive throttle application. Noted.",
+        "We appear to be in something of a hurry.",
+        "Spirited acceleration. I have no jurisdiction over such matters.",
+        "You seem eager to be somewhere. I won't pry.",
+    ],
+    "lane_change_left": [
+        "Moving left.",
+        "Left lane acquired.",
+        "Merging left. Traffic is clear from my vantage.",
+        "Left. A decisive move.",
+    ],
+    "lane_change_right": [
+        "Merging right.",
+        "Right lane. Understood.",
+        "Moving right. Smooth execution.",
+        "Right lane acquired.",
+    ],
+    "lead_car_close": [
+        "The vehicle ahead is rather close. Worth monitoring.",
+        "Following distance is narrowing. I would suggest easing back slightly.",
+        "That lead vehicle is within a range I'd describe as optimistic.",
+        "Proximity to the vehicle ahead is... notable.",
+    ],
+    "lead_car_very_close": [
+        "The vehicle ahead is very close. I strongly suggest increasing distance.",
+        "That is uncomfortably close to the car in front. Please ease back.",
+        "Following distance is critically short. I feel obliged to mention it.",
+    ],
+    "driver_distracted": [
+        "Your attention appears to have wandered. The road persists.",
+        "Eyes forward, if you please.",
+        "I notice your focus has drifted. I'd prefer you arrive safely.",
+        "The road is still there. It tends to require attention.",
+    ],
+    "high_speed": [
+        "We are moving at a considerable pace. I will refrain from further comment.",
+        "Current velocity is enthusiastic. I have noted it for the record.",
+        "That is quite fast. I trust you know what you are doing.",
+        "Speed is... spirited. I have no controls to intervene, naturally.",
+    ],
+    "acc_engaged": [
+        "Adaptive cruise engaged. I will keep an eye on conditions.",
+        "Cruise control active. Smooth sailing.",
+        "ACC engaged. The car has it from here, for now.",
+    ],
+    "acc_disengaged": [
+        "Manual control resumed. The road is yours.",
+        "Cruise disengaged. Back to you.",
+        "ACC off. You have the wheel.",
+    ],
+    "stopped_in_traffic": [
+        "Traffic. An inevitable feature of the driving experience.",
+        "We appear to have encountered some congestion. I am in no particular hurry.",
+        "Standstill. A fine opportunity to think, or to speak with me.",
+        "The city has a way of humbling even the most optimistic route.",
+    ],
+    "seatbelt_off": [
+        "Your seatbelt appears to be unfastened. I would strongly advise rectifying that.",
+        "Seatbelt unlatched while moving. That is not something I can endorse.",
+        "I notice the seatbelt is off. For what it is worth, I'd prefer you buckle up.",
+    ],
+}
+
+import random
+from time import monotonic
+
+# Per-event cooldown on the backend side to avoid double-firing
+_event_last_spoken: dict[str, float] = {}
+_EVENT_BACKEND_COOLDOWN = 5.0  # seconds
+
+def pick_event_response(event: str) -> str | None:
+    pool = EVENT_RESPONSES.get(event)
+    if not pool:
+        return None
+    now = monotonic()
+    if now - _event_last_spoken.get(event, 0) < _EVENT_BACKEND_COOLDOWN:
+        return None
+    _event_last_spoken[event] = now
+    return random.choice(pool)
 
 # Track connected WebSocket clients and latest vehicle state
 connected_clients: dict[str, WebSocket] = {}
@@ -211,8 +308,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     await websocket.send_json({"type": "error", "detail": str(e)})
 
             elif msg_type == "vehicle_state":
-                # Telemetry from sunnypilot bridge
                 vehicle_state.update(msg.get("data", {}))
+
+            elif msg_type == "vehicle_event":
+                event = msg.get("event", "")
+                data  = msg.get("data", {})
+                print(f"[WS] Vehicle event from {client_id}: {event} {data}")
+                line = pick_event_response(event)
+                if line:
+                    try:
+                        audio_url = await synthesize_voice(line)
+                        # Broadcast to all connected clients so AA app plays it
+                        payload = {"type": "response", "text": line, "audio_url": audio_url, "source": "vehicle_event"}
+                        for cid, ws in list(connected_clients.items()):
+                            try:
+                                await ws.send_json(payload)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        print(f"[WS] Event TTS error: {e}")
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})

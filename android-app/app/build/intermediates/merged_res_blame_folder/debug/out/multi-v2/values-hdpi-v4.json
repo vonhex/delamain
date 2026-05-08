@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.vonhex.delamain.app-mergeDebugResources-23:/values-hdpi-v4/values-hdpi-v4.xml",
+            "map": [
+                {
+                    "source": "/home/administrator/.gradle/caches/transforms-3/65b02c6b52e6ba63c4344c7255eaa5c4/transformed/appcompat-1.7.1/res/values-hdpi-v4/values-hdpi-v4.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "6",
+                        "endColumns": "13",
+                        "endOffsets": "327"
+                    }
+                }
+            ]
+        }
+    ]
+}
