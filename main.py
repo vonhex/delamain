@@ -8,7 +8,32 @@ import json
 import os
 import uuid
 import traceback
+import urllib.parse
 from tts_engine import get_tts_engine
+
+SEARXNG_URL = "http://10.0.1.106:8887/search"
+
+
+def web_search(query: str, max_results: int = 5) -> str:
+    """Query SearXNG and return a compact text summary for the LLM."""
+    try:
+        params = {"q": query, "format": "json", "language": "en"}
+        resp = requests.get(SEARXNG_URL, params=params, timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("results", [])[:max_results]
+        if not results:
+            return "No results found."
+        lines = []
+        for r in results:
+            title = r.get("title", "").strip()
+            content = r.get("content", "").strip()
+            if title or content:
+                lines.append(f"- {title}: {content}")
+        return "\n".join(lines) if lines else "No results found."
+    except Exception as e:
+        print(f"[Search] Error: {e}")
+        return "Search unavailable."
 
 app = FastAPI(title="Delamain AI Backend")
 
@@ -54,15 +79,33 @@ class ChatRequest(BaseModel):
     max_tokens: int = 150
 
 
-def build_llm_payload(message: str, user_name: str = "guest", temperature: float = 0.7, max_tokens: int = 150) -> dict:
-    context = ""
+SEARCH_TRIGGERS = (
+    "weather", "traffic", "news", "latest", "current", "today", "tonight",
+    "tomorrow", "score", "price", "hours", "open", "closed", "near", "nearby",
+    "directions", "route", "gas", "fuel", "restaurant", "food", "coffee",
+    "construction", "accident", "road", "highway", "speed limit",
+)
+
+
+def should_search(message: str) -> bool:
+    lower = message.lower()
+    return any(trigger in lower for trigger in SEARCH_TRIGGERS)
+
+
+def build_llm_payload(message: str, search_context: str = "", temperature: float = 0.7, max_tokens: int = 150) -> dict:
+    vehicle_context = ""
     if vehicle_state:
         speed = vehicle_state.get("speed_mph", 0)
-        context = f" Current vehicle speed: {speed:.0f} mph."
+        vehicle_context = f" Current vehicle speed: {speed:.0f} mph."
+
+    system = SYSTEM_PROMPT + vehicle_context
+    if search_context:
+        system += f"\n\nCurrent web search results for context:\n{search_context}"
+
     return {
         "model": "gpt-3.5-turbo",
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT + context},
+            {"role": "system", "content": system},
             {"role": "user", "content": message},
         ],
         "temperature": temperature,
@@ -81,7 +124,14 @@ async def synthesize_voice(text: str) -> str | None:
 
 
 async def generate_response(message: str, user_name: str = "guest") -> tuple[str, str | None]:
-    payload = build_llm_payload(message, user_name)
+    search_context = ""
+    if should_search(message):
+        print(f"[Search] Querying SearXNG for: {message}")
+        loop = asyncio.get_event_loop()
+        search_context = await loop.run_in_executor(None, web_search, message)
+        print(f"[Search] Got context ({len(search_context)} chars)")
+
+    payload = build_llm_payload(message, search_context)
     response = requests.post(LLM_URL, json=payload, timeout=30)
     response.raise_for_status()
     text = response.json()["choices"][0]["message"]["content"]
