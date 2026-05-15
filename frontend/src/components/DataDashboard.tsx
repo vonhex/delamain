@@ -79,7 +79,7 @@ const EVENT_COLOR_DEFAULT = '#00F3FF';
 const scoreColor = (s: number) =>
   s >= 85 ? '#22c55e' : s >= 65 ? '#f59e0b' : '#ef4444';
 
-export function DataDashboard({ token, onClose }: { token: string; onClose: () => void }) {
+export function DataDashboard({ token, liveVehicleState = {}, onClose }: { token: string; liveVehicleState?: Record<string, any>; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('summary');
   const [telemetry, setTelemetry] = useState<TelemetryRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -194,7 +194,7 @@ export function DataDashboard({ token, onClose }: { token: string; onClose: () =
           />
         )}
         {tab === 'trips' && <TripsTab trips={trips} />}
-        {tab === 'telemetry' && <TelemetryTab data={telChartData} raw={telemetry} />}
+        {tab === 'telemetry' && <TelemetryTab data={telChartData} raw={telemetry} live={liveVehicleState} />}
         {tab === 'events' && <EventsTab events={events} />}
         {tab === 'conversations' && <ConversationsTab conversations={conversations} />}
       </div>
@@ -411,10 +411,57 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
 
 // ── Telemetry ─────────────────────────────────────────────────────────────────
 
-function TelemetryTab({ data, raw }: { data: ReturnType<typeof Array.prototype.map>; raw: TelemetryRow[] }) {
-  if (!data.length) return <Empty msg="No telemetry data in this time range." />;
+function LivePanel({ live }: { live: Record<string, any> }) {
+  if (!Object.keys(live).length) return null;
+  const speed     = live.speed_mph != null ? Math.round(live.speed_mph) : null;
+  const limit     = live.speed_limit_mph ? Math.round(live.speed_limit_mph) : null;
+  const cruise    = live.acc_enabled && live.cruise_speed_mph ? Math.round(live.cruise_speed_mph) : null;
+  const lead      = live.lead_distance_m != null ? Math.round(live.lead_distance_m) : null;
+  const acc       = !!live.acc_enabled;
+  const speeding  = speed != null && limit != null && speed > limit;
+
+  return (
+    <div className="border border-cyber-blue/30 rounded p-3 bg-cyber-blue/5 mb-4">
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
+        <span className="text-[10px] font-mono font-bold text-green-400 tracking-widest">LIVE</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        <div className="text-center">
+          <div className={`text-2xl font-mono font-bold ${speeding ? 'text-red-400' : 'text-cyber-blue'}`}>
+            {speed ?? '—'}
+          </div>
+          <div className="text-[9px] text-gray-500 font-mono">MPH</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-mono font-bold text-orange-400">{limit ?? '—'}</div>
+          <div className="text-[9px] text-gray-500 font-mono">LIMIT</div>
+        </div>
+        <div className="text-center">
+          <div className={`text-2xl font-mono font-bold ${acc ? 'text-green-400' : 'text-gray-600'}`}>
+            {cruise ?? '—'}
+          </div>
+          <div className="text-[9px] text-gray-500 font-mono">CRUISE</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-mono font-bold text-amber-400">{lead != null ? `${lead}m` : '—'}</div>
+          <div className="text-[9px] text-gray-500 font-mono">LEAD</div>
+        </div>
+      </div>
+      {acc && (
+        <div className="mt-2 flex justify-center">
+          <span className="text-[9px] font-mono px-2 py-0.5 rounded border border-green-400/40 text-green-400">ACC ACTIVE</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TelemetryTab({ data, raw, live }: { data: ReturnType<typeof Array.prototype.map>; raw: TelemetryRow[]; live: Record<string, any> }) {
   return (
     <div className="space-y-4">
+      <LivePanel live={live} />
+      {!data.length ? <Empty msg="No telemetry history in this time range." /> : <>
       <div>
         <div className="text-gray-400 mb-1 font-mono">SPEED (mph)</div>
         <ResponsiveContainer width="100%" height={160}>
@@ -470,6 +517,7 @@ function TelemetryTab({ data, raw }: { data: ReturnType<typeof Array.prototype.m
           </tbody>
         </table>
       </div>
+      </>}
     </div>
   );
 }
