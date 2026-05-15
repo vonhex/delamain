@@ -69,6 +69,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
   const [spConnected, setSpConnected] = useState(false);
+  const [liveVehicleState, setLiveVehicleState] = useState<Record<string, any>>({});
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
   const [isListening, setIsListening] = useState(false);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,7 +133,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'sp_status') {
+      if (msg.type === 'vehicle_state') {
+        setLiveVehicleState(msg.data);
+      } else if (msg.type === 'sp_status') {
         setSpConnected(msg.connected);
       } else if (msg.type === 'greeting') {
         playConnectChime();
@@ -485,7 +488,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {/* Data Explorer Panel */}
         {isDataOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 w-full md:w-[560px]">
-            <DataDashboard token={token} onClose={() => setIsDataOpen(false)} />
+            <DataDashboard token={token} liveVehicleState={liveVehicleState} onClose={() => setIsDataOpen(false)} />
           </div>
         )}
 

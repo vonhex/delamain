@@ -645,6 +645,25 @@ def geocode_places(query: str, limit: int = 3) -> list[dict]:
 _last_telemetry_log: float = 0.0
 _TELEMETRY_LOG_INTERVAL = 5.0  # seconds between DB writes
 
+_last_telemetry_broadcast: float = 0.0
+_TELEMETRY_BROADCAST_INTERVAL = 1.0  # seconds between live pushes to browser clients
+
+async def _maybe_broadcast_telemetry() -> None:
+    global _last_telemetry_broadcast
+    now = time.monotonic()
+    if now - _last_telemetry_broadcast < _TELEMETRY_BROADCAST_INTERVAL:
+        return
+    _last_telemetry_broadcast = now
+    if not vehicle_state:
+        return
+    payload = {"type": "vehicle_state", "data": dict(vehicle_state)}
+    for cid, ws in list(connected_clients.items()):
+        if cid != "sunnypilot-bridge":
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                pass
+
 def _maybe_log_telemetry() -> None:
     global _last_telemetry_log
     now = time.monotonic()
@@ -890,6 +909,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
             elif msg_type == "vehicle_state":
                 vehicle_state.update(msg.get("data", {}))
                 _maybe_log_telemetry()
+                await _maybe_broadcast_telemetry()
 
             elif msg_type == "car_identity":
                 car_info.update(msg.get("data", {}))
