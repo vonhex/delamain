@@ -34,7 +34,8 @@ checkpoints/
 *.png
 Screenshot_*
 "AA test*"
-# but track the Screenshots/ folder
+# but track the app logo and Screenshots/ folder
+!logo.png
 !Screenshots/
 !Screenshots/*.png
 
