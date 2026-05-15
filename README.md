@@ -5,7 +5,7 @@
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
 
-An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard — all through a cyber-themed web interface.
+An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard. Access it from your phone or via Android Auto's web browser — no app installation required.
 
 ---
 
@@ -147,23 +147,6 @@ docker compose up -d
 Pre-built image: `ghcr.io/vonhex/delamain:latest`
 
 > F5-TTS model weights and reference audio are not included in the image. Mount them via volumes as shown in `docker-compose.yml`.
-
----
-
-## Running on the Comma center console
-
-Delamain is a web app — you access it from any browser on your network. Getting it onto the Comma 4's own display is a separate challenge.
-
-**Android Auto / Android Automotive OS is extremely restrictive about what apps can run on the center console.** Google enforces strict policies preventing third-party apps from playing arbitrary video, running unrestricted WebViews, or rendering custom UIs while driving. An AAOS app built around Delamain will be blocked from the Play Store and will not function correctly on a standard AA head unit.
-
-**Options that do work:**
-
-- **Phone browser** — open Delamain on your phone while the Comma device is mounted. Voice input and audio work fine.
-- **Screen sharing** — mirror your phone or laptop to a screen in the car.
-- **Head unit with a real browser** — some aftermarket Android head units run a full Android environment (not AAOS) and can load Delamain in Chrome or Firefox without Play Store restrictions.
-- **Comma 4 SSH + browser** — the Comma 4 runs a full Linux environment; it is possible to run a framebuffer browser, though this is not officially supported.
-
-The recommended and tested setup is simply a phone or tablet in the car running the web UI.
 
 ---
 
