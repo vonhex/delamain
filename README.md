@@ -183,7 +183,7 @@ Delamain connects to sunnypilot via a bridge daemon that runs on the Comma devic
 
 ## License
 
-MIT
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free for personal use; commercial use requires a separate agreement.
 
 ---
 

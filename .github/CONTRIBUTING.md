@@ -64,4 +64,4 @@ Use the **Feature Request** issue template. Explain the use case, not just the s
 
 ## License note
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](../LICENSE) as the rest of the project.
+By contributing, you agree that your contributions will be licensed under the same [noncommercial license](../LICENSE) as the rest of the project.

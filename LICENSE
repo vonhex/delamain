@@ -1,16 +1,28 @@
-MIT License
+PolyForm Noncommercial License 1.0.0
 
-Copyright (c) 2026 vonhex
+Copyright (c) 2026 Luke Jantzen
+<https://github.com/vonhex/delamain>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and associated documentation files (the "Software") may be used
+for noncommercial purposes only. You may copy, modify, merge, publish, and
+distribute the Software, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. **Noncommercial use only.** You may not use the Software or any modified
+   version of it for any commercial purpose. A "commercial purpose" means any
+   use primarily intended for, or directed toward, commercial advantage or
+   monetary compensation. This includes, but is not limited to:
+   - Selling the Software or a product or service that includes or is built on
+     the Software as a significant component.
+   - Offering the Software as a paid hosted or SaaS service.
+   - Using the Software to provide consulting, support, or managed services for
+     a fee.
+
+2. **Attribution.** All copies or substantial portions of the Software, whether
+   modified or unmodified, must retain this license notice and the above
+   copyright notice.
+
+3. **Share-alike for modifications.** If you distribute a modified version of
+   the Software, you must do so under the same license terms as this one.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -19,3 +31,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+For commercial licensing enquiries, contact: necropsyk@gmail.com
