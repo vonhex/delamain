@@ -12,12 +12,11 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 - **Real-time vehicle events** — hard braking, ACC engagement, lead car proximity, speeding alerts, lane changes, thermal warnings, and more — all with Delamain-voiced responses.
 - **Static phrase pre-cache** — alert phrases are synthesized at startup and served instantly. No latency on common events.
 - **Proactive commentary** — Delamain speaks unprompted after 30 minutes of driver silence while moving.
-- **Navigation** — ask Delamain to navigate anywhere; geocoded via Nominatim and handed off to Android Auto / CarPlay.
+- **Navigation** — ask Delamain to navigate anywhere; geocoded via Nominatim.
 - **Web search** — live weather, traffic, news, fuel prices via SearXNG integration.
 - **Road camera vision** — ask what's ahead; the sunnypilot bridge captures a road frame and Delamain describes it.
 - **Data dashboard** — web GUI with telemetry charts, event log, conversation history, trip summaries with GPS route maps and drive scores.
 - **JWT authentication** — single shared password, rate-limited login, 30-day tokens.
-- **Android Automotive app** — full native app for Comma 4 / AAOS head units.
 
 ---
 
@@ -25,12 +24,12 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 
 ```
 ┌─────────────────────┐     WebSocket      ┌──────────────────────┐
-│  Comma 4 / AAOS     │◄──────────────────►│  Delamain Backend    │
+│  Comma 4            │◄──────────────────►│  Delamain Backend    │
 │  sunnypilot bridge  │  vehicle telemetry  │  (FastAPI + F5-TTS)  │
 └─────────────────────┘  events / snapshots └──────────┬───────────┘
                                                         │ REST / WS
                                             ┌───────────▼──────────┐
-                                            │  Web UI / Android    │
+                                            │  Web UI              │
                                             │  (React + Vite)      │
                                             └──────────────────────┘
 ```
