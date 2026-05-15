@@ -433,12 +433,17 @@ async def _proactive_loop() -> None:
         for cid, ws in list(connected_clients.items()):
             if cid == "sunnypilot-bridge":
                 continue
-            last_msg      = _client_last_msg.get(cid, now)
+            freq = _client_dialogue_freq.get(cid, 'standard')
+            thresholds = _FREQ_PROACTIVE.get(freq)
+            if thresholds is None:
+                continue  # proactive disabled for this frequency level
+            silence_threshold, min_interval = thresholds
+            last_msg       = _client_last_msg.get(cid, now)
             last_proactive = _client_proactive_last.get(cid, 0)
             silence = now - last_msg
             speed = vehicle_state.get("speed_mph", 0) or 0
-            driving = speed > 5  # only speak unprompted while actually moving
-            if driving and silence > PROACTIVE_SILENCE_THRESHOLD and now - last_proactive > PROACTIVE_MIN_INTERVAL:
+            driving = speed > 5
+            if driving and silence > silence_threshold and now - last_proactive > min_interval:
                 line = random.choice(PROACTIVE_LINES)
                 try:
                     audio_url = await synthesize_voice(line)
@@ -463,6 +468,34 @@ car_info: dict = {}
 # Cooldown for SP connect/disconnect voice announcements (30 s)
 _last_sp_voice_time: float = 0.0
 _SP_VOICE_COOLDOWN = 30.0
+
+# Per-client dialogue frequency: 'quiet' | 'standard' | 'full'
+_client_dialogue_freq: dict[str, str] = {}
+
+_FREQ_EVENTS: dict[str, set[str] | None] = {
+    'quiet': {
+        'very_hard_brake', 'sp_alert_critical', 'seatbelt_off', 'thermal_warning', 'lead_car_very_close',
+    },
+    'standard': {
+        'very_hard_brake', 'sp_alert_critical', 'seatbelt_off', 'thermal_warning', 'lead_car_very_close',
+        'hard_brake', 'lead_car_close', 'high_speed', 'speeding', 'acc_engaged', 'acc_disengaged',
+        'stopped_in_traffic', 'personality_change', 'steer_override', 'sp_alert_user',
+        'session_start_morning', 'session_start_day', 'session_start_evening', 'session_start_night',
+        'drive_20min', 'drive_45min', 'drive_90min',
+    },
+    'full': None,  # all events
+}
+
+# Proactive (silence_threshold_s, min_interval_s); None = proactive disabled
+_FREQ_PROACTIVE: dict[str, tuple[int, int] | None] = {
+    'quiet':    None,
+    'standard': (1800, 600),
+    'full':     (900, 420),
+}
+
+def _event_allowed(event: str, freq: str) -> bool:
+    allowed = _FREQ_EVENTS.get(freq)
+    return allowed is None or event in allowed
 
 MAX_HISTORY = 40  # messages (20 exchanges) kept per client — trimmed oldest first
 
@@ -921,26 +954,36 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 print(f"[WS] Vehicle event from {client_id}: {event} {data}")
                 bypass = event == "sp_alert_critical"
                 if bypass and data.get("text"):
-                    # Speak the actual SP alert text directly
                     alert_text = data["text"]
                     line = f"Sunnypilot alert: {alert_text}"
                     _event_last_spoken[event] = monotonic()
                 else:
                     line = pick_event_response(event, data, bypass_cooldown=bypass)
                 if line:
-                    try:
-                        audio_url = await synthesize_voice(line)
-                        loop = asyncio.get_event_loop()
-                        loop.run_in_executor(None, _db.log_event, event, data, line)
-                        # Broadcast to all connected clients so AA app plays it
-                        payload = {"type": "response", "text": line, "audio_url": audio_url, "source": "vehicle_event"}
-                        for cid, ws in list(connected_clients.items()):
-                            try:
-                                await ws.send_json(payload)
-                            except Exception:
-                                pass
-                    except Exception as e:
-                        print(f"[WS] Event TTS error: {e}")
+                    targets = [
+                        (cid2, ws2) for cid2, ws2 in connected_clients.items()
+                        if cid2 != "sunnypilot-bridge"
+                        and _event_allowed(event, _client_dialogue_freq.get(cid2, 'standard'))
+                    ]
+                    if targets:
+                        try:
+                            audio_url = await synthesize_voice(line)
+                            loop = asyncio.get_event_loop()
+                            loop.run_in_executor(None, _db.log_event, event, data, line)
+                            payload = {"type": "response", "text": line, "audio_url": audio_url, "source": "vehicle_event", "event": event}
+                            for _, ws2 in targets:
+                                try:
+                                    await ws2.send_json(payload)
+                                except Exception:
+                                    pass
+                        except Exception as e:
+                            print(f"[WS] Event TTS error: {e}")
+
+            elif msg_type == "dialogue_frequency":
+                level = msg.get("level", "standard")
+                if level in _FREQ_EVENTS:
+                    _client_dialogue_freq[client_id] = level
+                    print(f"[WS] Dialogue frequency for {client_id}: {level}")
 
             elif msg_type == "snapshot_data":
                 # Bridge fulfilled a snapshot request — resolve the pending Future
@@ -955,6 +998,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         pass
     finally:
         connected_clients.pop(client_id, None)
+        _client_dialogue_freq.pop(client_id, None)
         if is_sp_bridge:
             vehicle_state.clear()
             try:

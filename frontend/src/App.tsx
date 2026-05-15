@@ -25,6 +25,7 @@ interface AppSettings {
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
+  dialogueFrequency: 'quiet' | 'standard' | 'full';
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: '',
   temperature: 0.7,
   maxTokens: 150,
+  dialogueFrequency: 'standard',
 };
 
 function App() {
@@ -74,6 +76,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isListening, setIsListening] = useState(false);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
+  const dialogueFreqRef = useRef(settings.dialogueFrequency);
 
   // Audio queue — prevents vehicle event voices from overlapping
   const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
@@ -86,6 +89,16 @@ function MainApp({ token, onLogout }: MainAppProps) {
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    dialogueFreqRef.current = settings.dialogueFrequency;
+  }, [settings.dialogueFrequency]);
+
+  useEffect(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'dialogue_frequency', level: settings.dialogueFrequency }));
+    }
+  }, [settings.dialogueFrequency]);
 
   // Handle 401s from data API — if token is rejected, log out
   useEffect(() => {
@@ -157,6 +170,10 @@ function MainApp({ token, onLogout }: MainAppProps) {
           setNavOptions(msg.navigate_options);
         }
       }
+    };
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'dialogue_frequency', level: dialogueFreqRef.current }));
     };
 
     ws.onclose = (e) => {
@@ -396,8 +413,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Entropy (Temp)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     step="0.1"
                     min="0"
                     max="2"
@@ -408,13 +425,37 @@ function MainApp({ token, onLogout }: MainAppProps) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Max Tokens</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={tempSettings.maxTokens}
                     onChange={e => setTempSettings({...tempSettings, maxTokens: parseInt(e.target.value)})}
                     className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Dialogue Frequency</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['quiet', 'standard', 'full'] as const).map(level => (
+                    <button
+                      key={level}
+                      onClick={() => setTempSettings({...tempSettings, dialogueFrequency: level})}
+                      className={`py-2 px-3 rounded border text-xs font-bold uppercase tracking-wider transition-colors ${
+                        tempSettings.dialogueFrequency === level
+                          ? 'bg-cyber-blue/20 border-cyber-blue text-cyber-blue'
+                          : 'bg-cyber-gray/30 border-cyber-blue/10 text-gray-500 hover:border-cyber-blue/30 hover:text-gray-300'
+                      }`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-gray-500 leading-relaxed">
+                  {tempSettings.dialogueFrequency === 'quiet' && 'Safety alerts only — hard brakes, critical warnings, seatbelt.'}
+                  {tempSettings.dialogueFrequency === 'standard' && 'Key events — ACC, speeding, proximity alerts, drive milestones.'}
+                  {tempSettings.dialogueFrequency === 'full' && 'All events — lane changes, acceleration, proactive remarks.'}
+                </p>
               </div>
             </div>
 
@@ -444,17 +485,17 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
         <div className={`relative flex flex-col items-center justify-center px-6 pt-4 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 pr-16'}`}>
           {/* Wordmark */}
-          <div className="mb-3 flex flex-col items-center gap-1">
+          <div className="mb-3 flex flex-col items-center gap-1 min-w-0 w-full">
             <h1
-              className="font-rajdhani font-bold uppercase leading-none tracking-[0.55em] text-cyber-blue text-5xl"
+              className="font-rajdhani font-bold uppercase leading-none tracking-[0.3em] sm:tracking-[0.55em] text-cyber-blue text-3xl sm:text-5xl"
               style={{ textShadow: '0 0 18px rgba(0,243,255,0.65), 0 0 50px rgba(0,243,255,0.2)' }}
             >
               DELAMAIN
             </h1>
-            <div className="flex items-center gap-3">
-              <div className="h-px w-16 bg-gradient-to-r from-transparent to-cyber-blue/35" />
-              <span className="text-[8px] tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
-              <div className="h-px w-16 bg-gradient-to-l from-transparent to-cyber-blue/35" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="h-px w-10 sm:w-16 bg-gradient-to-r from-transparent to-cyber-blue/35" />
+              <span className="text-[7px] sm:text-[8px] tracking-[0.3em] sm:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
+              <div className="h-px w-10 sm:w-16 bg-gradient-to-l from-transparent to-cyber-blue/35" />
             </div>
           </div>
 
