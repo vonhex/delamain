@@ -27,9 +27,9 @@
                               └────────────────┬─────────────────┘
                                                │ REST / WS
                               ┌────────────────▼─────────────────┐
-                              │  Client (your browser / AAOS)    │
+                              │  Client (your browser)           │
                               │                                   │
-                              │  React web app  /  Android app   │
+                              │  React web app                   │
                               └──────────────────────────────────┘
 ```
 
@@ -55,12 +55,6 @@
 - Streams telemetry at 2 Hz
 - Captures road camera frames via VisionIPC on demand
 
-### Android App (`android-app/`)
-- AAOS (Android Automotive OS) native app
-- Runs on Comma 4 display
-- Hosts the React web UI in a WebView
-- Bridges native audio playback, voice input (STT), and navigation handoff
-
 ## Data flow: voice alert
 
 1. Vehicle event fires (e.g. hard brake detected by bridge)
@@ -69,11 +63,11 @@
 4. Backend checks static cache — if the phrase was pre-synthesized at startup, returns instantly
 5. If not cached, calls F5-TTS (1–3 seconds)
 6. Backend sends `{"type": "response", "text": "...", "audio_url": "..."}` to all connected clients
-7. Web app / Android app plays the audio URL
+7. Web app plays the audio URL
 
 ## Data flow: LLM conversation
 
-1. User speaks → STT (Web Speech API / Android STT) → transcribed text
+1. User speaks → STT (Web Speech API) → transcribed text
 2. Client sends `{"type": "talk", "text": "..."}` over WebSocket
 3. Backend checks for visual question trigger → requests road camera snapshot if needed
 4. Backend checks for search trigger → queries SearXNG if needed
