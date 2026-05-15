@@ -1,0 +1,9 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+slowapi>=0.1.9
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+requests>=2.31.0
+f5-tts>=0.9.0
+websocket-client>=1.8.0

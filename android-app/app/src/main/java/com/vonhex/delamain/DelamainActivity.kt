@@ -1,26 +1,19 @@
 package com.vonhex.delamain
 
 import android.annotation.SuppressLint
-import android.app.PendingIntent
-import android.app.PictureInPictureParams
-import android.app.RemoteAction
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.res.Configuration
-import android.graphics.drawable.Icon
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.net.Uri
-import android.util.Rational
 import android.view.View
 import android.webkit.*
 import android.widget.Button
 import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.*
 
@@ -32,12 +25,6 @@ class DelamainActivity : AppCompatActivity() {
     private lateinit var talkButton: Button
     private lateinit var buttonContainer: LinearLayout
     private var recognizer: SpeechRecognizer? = null
-
-    private val talkReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            onTalkPressed()
-        }
-    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,7 +38,7 @@ class DelamainActivity : AppCompatActivity() {
         webView.settings.apply {
             javaScriptEnabled                = true
             domStorageEnabled                = true
-            mediaPlaybackRequiresUserGesture = false   // allow video autoplay
+            mediaPlaybackRequiresUserGesture = false
             allowContentAccess               = true
             allowFileAccess                  = true
             mixedContentMode                 = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
@@ -60,86 +47,22 @@ class DelamainActivity : AppCompatActivity() {
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
-                // Grant microphone + camera to the WebView
                 request.grant(request.resources)
             }
         }
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) {
-                // Kick all video elements to start (bypass browser autoplay gate)
-                webView.evaluateJavascript("""
-                    (function() {
-                        document.querySelectorAll('video').forEach(function(v) {
-                            v.muted = true;
-                            v.play().catch(function(){});
-                        });
-                    })();
-                """.trimIndent(), null)
-            }
-
-        }
-
-        // Add JavaScript interface so web page can call back to native (future use)
         webView.addJavascriptInterface(DelamainJsBridge(), "DelamainNative")
-
         webView.loadUrl(Config.BASE_URL)
 
         talkButton.setOnClickListener { onTalkPressed() }
-
-        ContextCompat.registerReceiver(
-            this, talkReceiver, IntentFilter(DelamainMediaService.ACTION_TALK),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-
-        // Start media session service so Delamain appears in AA media strip
-        startForegroundService(Intent(this, DelamainMediaService::class.java))
-    }
-
-    // onUserLeaveHint doesn't fire reliably on AAOS CarLauncher; use onPause instead
-    override fun onPause() {
-        super.onPause()
-        if (!isFinishing && !isInPictureInPictureMode) {
-            enterPipMode()
-        }
-    }
-
-    private fun enterPipMode() {
-        try {
-            val pendingIntent = PendingIntent.getBroadcast(
-                this, 0,
-                Intent(DelamainMediaService.ACTION_TALK).setPackage(packageName),
-                PendingIntent.FLAG_IMMUTABLE
-            )
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(3, 4))
-                .setActions(listOf(
-                    RemoteAction(
-                        Icon.createWithResource(this, R.drawable.ic_pip_mic),
-                        "Talk", "Talk to Delamain",
-                        pendingIntent
-                    )
-                ))
-                .build()
-            val entered = enterPictureInPictureMode(params)
-            android.util.Log.d("Delamain", "enterPictureInPictureMode returned: $entered")
-        } catch (e: Exception) {
-            android.util.Log.w("Delamain", "PiP enter failed: $e")
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // Tell the WebView to switch to face-only PiP layout
-        val active = if (isInPictureInPictureMode) "true" else "false"
-        webView.evaluateJavascript(
-            "window.dispatchEvent(new CustomEvent('delamain-pip',{detail:{active:$active}}));", null
-        )
-        // Hide native button overlay in PiP (too small to use)
-        buttonContainer.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
     }
 
     private fun onTalkPressed() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1)
+            return
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             talkButton.text = "MIC UNAVAILABLE"
             return
@@ -154,26 +77,10 @@ class DelamainActivity : AppCompatActivity() {
                     val text = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                     if (!text.isNullOrBlank()) {
                         talkButton.text = "PROCESSING..."
-                        // Inject the voice input into the web app's text field and submit
-                        val escaped = text.replace("'", "\\'")
-                        webView.evaluateJavascript("""
-                            (function() {
-                                var input = document.querySelector('input[type=text]');
-                                if (input) {
-                                    var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                                        window.HTMLInputElement.prototype, 'value').set;
-                                    nativeInputValueSetter.call(input, '$escaped');
-                                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    setTimeout(function() {
-                                        var btn = document.querySelector('button[disabled=""], button:not([disabled])');
-                                        var sendBtn = Array.from(document.querySelectorAll('button')).find(
-                                            b => b.querySelector('svg') && !b.disabled
-                                        );
-                                        if (sendBtn) sendBtn.click();
-                                    }, 100);
-                                }
-                            })();
-                        """.trimIndent(), null)
+                        val escaped = text.replace("\\", "\\\\").replace("'", "\\'")
+                        webView.evaluateJavascript(
+                            "if(window.delamainVoiceInput) window.delamainVoiceInput('$escaped');", null
+                        )
                     }
                     talkButton.isEnabled = true
                     talkButton.text = "TALK TO DELAMAIN"
@@ -204,8 +111,18 @@ class DelamainActivity : AppCompatActivity() {
 
     inner class DelamainJsBridge {
         @JavascriptInterface
-        fun onResponse(text: String) {
-            // Called from JS when Delamain responds (future hook)
+        fun getBackendUrl(): String = Config.BASE_URL
+
+        @JavascriptInterface
+        fun onResponse(text: String) {}
+
+        @JavascriptInterface
+        fun playAudio(audioUrl: String) {
+            AudioPlayer.play(audioUrl) {
+                runOnUiThread {
+                    webView.evaluateJavascript("window.delamainAudioEnded && window.delamainAudioEnded();", null)
+                }
+            }
         }
 
         @JavascriptInterface
@@ -213,6 +130,11 @@ class DelamainActivity : AppCompatActivity() {
             runOnUiThread {
                 buttonContainer.visibility = if (open) View.GONE else View.VISIBLE
             }
+        }
+
+        @JavascriptInterface
+        fun startVoiceInput() {
+            runOnUiThread { onTalkPressed() }
         }
 
         @JavascriptInterface
@@ -238,14 +160,19 @@ class DelamainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            onTalkPressed()
+        }
+    }
+
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(talkReceiver)
-        stopService(Intent(this, DelamainMediaService::class.java))
         scope.cancel()
         recognizer?.destroy()
         webView.destroy()

@@ -13,6 +13,10 @@ export default {
           gray: "#1a1a1e",
         }
       },
+      fontFamily: {
+        rajdhani: ['Rajdhani', 'sans-serif'],
+        mono: ['Share Tech Mono', 'monospace'],
+      },
       animation: {
         'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       }

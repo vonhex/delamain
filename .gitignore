@@ -6,10 +6,14 @@ __pycache__/
 *.pyd
 .Python
 
+# Database
+*.db
+*.db-journal
+
 # Audio output (generated at runtime)
 audio_output/
 
-# Checkpoints / models (too large for git)
+# F5-TTS model weights (download separately — too large for git)
 checkpoints/
 
 # Logs
@@ -17,7 +21,19 @@ checkpoints/
 
 # Environment
 .env
-.env.*
+.env.local
+.env.*.local
+# but track the example template
+!.env.example
+
+# Reference audio (user-supplied — not redistributed)
+*.wav
+*.mp3
+
+# Personal screenshots / test images
+*.png
+Screenshot_*
+"AA test*"
 
 # Node
 frontend/node_modules/
@@ -28,6 +44,16 @@ android-app/.gradle/
 android-app/.idea/
 android-app/app/build/
 android-app/local.properties
+
+# Android signing — never commit these
+android-app/delamain.jks
+android-app/keystore.properties
+
+# Unused / experimental
+dramabox_tts.py
+DramaBox/
+dramabox_env/
+chatterbox/
 
 # OS
 .DS_Store
