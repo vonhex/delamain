@@ -42,11 +42,8 @@ Screenshot_*
 frontend/node_modules/
 frontend/dist/
 
-# Android build artifacts
-android-app/.gradle/
-android-app/.idea/
-android-app/app/build/
-android-app/local.properties
+# Android app (removed — web-only now)
+android-app/
 
 # Android signing — never commit these
 android-app/delamain.jks

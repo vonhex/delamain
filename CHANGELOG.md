@@ -4,6 +4,20 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.1.0] — 2026-05-15
+
+### Changed
+- **Web-only interface** — Android app removed; Delamain is now a pure web application.
+- **License** — switched from MIT to PolyForm Noncommercial 1.0.0.
+
+### Added
+- **Community standards** — CODE_OF_CONDUCT, CONTRIBUTING guide, PR template, bug/feature issue templates, SECURITY policy.
+- **GitHub Actions** — CI workflow builds and pushes Docker image to GHCR on every push to `main`; release workflow builds frontend, creates archives, and publishes a GitHub Release on version tags.
+- **Screenshots** — login, main interface, data explorer, and settings panels shown in README.
+- **CHANGELOG** — this file.
+
+---
+
 ## [1.0.0] — 2026-05-15
 
 ### Added
