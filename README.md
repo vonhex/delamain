@@ -2,6 +2,9 @@
 
 > *"Delamain online. I trust your day has been satisfactory so far."*
 
+> [!WARNING]
+> **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
+
 An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard — all through a cyber-themed web interface.
 
 ---
