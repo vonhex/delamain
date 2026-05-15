@@ -2,7 +2,22 @@
 
 > *"Delamain online. I trust your day has been satisfactory so far."*
 
-An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard — all through a cyber-themed web interface and Android Automotive app.
+An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard — all through a cyber-themed web interface.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="Screenshots/main.png" alt="Main interface — Delamain face and chat panel" /></td>
+    <td><img src="Screenshots/login.png" alt="Login page" /></td>
+  </tr>
+  <tr>
+    <td><img src="Screenshots/data-explorer.png" alt="Data explorer dashboard" /></td>
+    <td><img src="Screenshots/settings.png" alt="System configuration panel" /></td>
+  </tr>
+</table>
 
 ---
 
