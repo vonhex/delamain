@@ -1,0 +1,41 @@
+services:
+  backend:
+    build: .
+    image: ghcr.io/vonhex/delamain:latest
+    container_name: delamain-backend
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      # F5-TTS model weights — download separately, see README
+      - ./checkpoints:/app/checkpoints
+      # Persistent data: database, audio cache, reference audio
+      - delamain-data:/app/data
+    environment:
+      - LLM_URL=${LLM_URL:-http://host.docker.internal:8080/v1/chat/completions}
+      - SEARXNG_URL=${SEARXNG_URL:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
+    # GPU passthrough — uncomment if using NVIDIA GPU for F5-TTS
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  frontend:
+    image: node:20-alpine
+    container_name: delamain-frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - VITE_BACKEND_URL=http://localhost:8888
+
+volumes:
+  delamain-data:

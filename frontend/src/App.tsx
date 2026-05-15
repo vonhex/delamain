@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, Keyboard, MapPin } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, Keyboard, MapPin, Radio, Mic, Database, LogOut } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
+import { DataDashboard } from './components/DataDashboard';
+import { LoginPage } from './components/LoginPage';
+import { playConnectChime, playResponsePing, playDisconnectTone } from './utils/sounds';
 
 interface NavOption {
   name: string;
@@ -24,28 +27,52 @@ interface AppSettings {
   maxTokens: number;
 }
 
+const getNativeBackendUrl = (): string => {
+  try {
+    const native = (window as any).DelamainNative;
+    if (native?.getBackendUrl) return native.getBackendUrl();
+  } catch {}
+  return '';
+};
+
 const DEFAULT_SETTINGS: AppSettings = {
   userName: 'Guest',
-  llmUrl: 'http://10.0.1.103:8080/v1/chat/completions',
-  backendUrl: '',
+  llmUrl: 'http://localhost:8080/v1/chat/completions',
+  backendUrl: getNativeBackendUrl(),
   systemPrompt: '',
   temperature: 0.7,
   maxTokens: 150,
 };
 
 function App() {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('delamain_token'));
+
+  if (!token) {
+    return <LoginPage onLogin={setToken} />;
+  }
+
+  return <MainApp token={token} onLogout={() => { localStorage.removeItem('delamain_token'); setToken(null); }} />;
+}
+
+interface MainAppProps {
+  token: string;
+  onLogout: () => void;
+}
+
+function MainApp({ token, onLogout }: MainAppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTalking, setIsTalking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDataOpen, setIsDataOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('delamain_settings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migrate: if backendUrl is a local IP, reset to relative (proxy)
+      // Migrate: if backendUrl is a local IP, reset to native-provided URL
       if (parsed.backendUrl && /^https?:\/\/10\.|^https?:\/\/192\.168\.|^https?:\/\/localhost/.test(parsed.backendUrl)) {
-        parsed.backendUrl = '';
+        parsed.backendUrl = getNativeBackendUrl();
       }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
@@ -54,52 +81,100 @@ function App() {
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
-  const [isPip, setIsPip] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(() => window.matchMedia('(orientation: landscape)').matches);
+  const [spConnected, setSpConnected] = useState(false);
+  const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
+  const [isListening, setIsListening] = useState(false);
+  const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Audio queue — prevents vehicle event voices from overlapping
+  const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
+  const audioPlayingRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // PiP mode: Android fires a custom event when entering/leaving picture-in-picture
   useEffect(() => {
-    const handler = (e: Event) => setIsPip((e as CustomEvent<{ active: boolean }>).detail.active);
-    window.addEventListener('delamain-pip', handler);
-    return () => window.removeEventListener('delamain-pip', handler);
+    const mq = window.matchMedia('(orientation: landscape)');
+    const handler = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
   }, [settings]);
 
+  // Handle 401s from data API — if token is rejected, log out
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      r => r,
+      err => {
+        if (err?.response?.status === 401) onLogout();
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, [onLogout]);
+
   // WebSocket: connect on mount to receive greeting + voice responses
   useEffect(() => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const clientId = `web-${Date.now()}`;
-    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}`);
+    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}`);
     wsRef.current = ws;
 
-    const playAudio = (audioUrl: string, text?: string) => {
+    const playNext = () => {
+      const item = audioQueueRef.current.shift();
+      if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
+      const { url: audioUrl, text } = item;
+
+      const bridge = (window as any).DelamainNative;
+      if (bridge?.playAudio) {
+        setIsTalking(true);
+        (window as any).delamainAudioEnded = () => { playNext(); };
+        bridge.playAudio(audioUrl);
+        return;
+      }
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
-      audio.onplay = () => setIsTalking(true);
-      audio.onended = () => setIsTalking(false);
-      audio.onerror = () => setIsTalking(false);
+      audio.onplay  = () => setIsTalking(true);
+      audio.onended = () => { playNext(); };
+      audio.onerror = () => { playNext(); };
       audio.play().catch(() => {
-        // Autoplay blocked — animate for estimated duration
         if (text) {
           setIsTalking(true);
-          setTimeout(() => setIsTalking(false), Math.max(2000, text.length * 60));
-        }
+          setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
+        } else { playNext(); }
       });
+    };
+
+    const playAudio = (audioUrl: string, text?: string) => {
+      audioQueueRef.current.push({ url: audioUrl, text });
+      if (!audioPlayingRef.current) {
+        audioPlayingRef.current = true;
+        playNext();
+      }
     };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'greeting') {
+      if (msg.type === 'sp_status') {
+        setSpConnected(msg.connected);
+      } else if (msg.type === 'greeting') {
+        playConnectChime();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
       } else if (msg.type === 'response') {
         setIsLoading(false);
+        if (msg.source === 'sp_connect') setSpConnected(true);
+        if (msg.source === 'sp_disconnect') {
+          setSpConnected(false);
+          playDisconnectTone();
+        }
+        playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
@@ -110,8 +185,12 @@ function App() {
       }
     };
 
+    ws.onclose = (e) => {
+      if (e.code === 4001) onLogout();
+    };
+
     return () => { ws.close(); wsRef.current = null; };
-  }, []);
+  }, [token]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -129,13 +208,23 @@ function App() {
     } catch (_) {}
   }, [isChatOpen, isSettingsOpen]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const RUDE_PATTERNS = /\b(fuck(?:\s+(?:you|off|this))?|screw you|go to hell|shut up|hate you|piece of (shit|crap)|asshole|you('re| are) (stupid|useless|garbage|worthless|an idiot|dumb)|idiot|moron)\b/i;
 
-    const userMessage = input.trim();
-    setInput('');
+  const triggerAngry = () => {
+    if (faceModeTimerRef.current) clearTimeout(faceModeTimerRef.current);
+    setFaceMode('angry');
+    faceModeTimerRef.current = setTimeout(() => setFaceMode('idle'), 12000);
+  };
+
+  const handleSend = async (overrideText?: string) => {
+    const userMessage = (overrideText ?? input).trim();
+    if (!userMessage) return;
+
+    if (!overrideText) setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
+
+    if (RUDE_PATTERNS.test(userMessage)) triggerAngry();
 
     // Prefer WebSocket so the response arrives through the same handler as greeting
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -152,7 +241,7 @@ function App() {
         user_name: settings.userName,
         temperature: settings.temperature,
         max_tokens: settings.maxTokens
-      });
+      }, { headers: { Authorization: `Bearer ${token}` } });
 
       const delamainResponse = response.data.response;
       const audioUrl = response.data.audio_url;
@@ -189,6 +278,50 @@ function App() {
     }
   };
 
+  // Expose voice input hook for Android native layer
+  useEffect(() => {
+    (window as any).delamainVoiceInput = (text: string) => handleSend(text);
+  }, [handleSend]);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // 1. Native Android bridge (works in the Delamain app and has mic permission)
+    const bridge = (window as any).DelamainNative;
+    if (bridge?.startVoiceInput) {
+      bridge.startVoiceInput();
+      return;
+    }
+
+    // 2. Web Speech API (works in Chrome/Chromium with mic permission granted)
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SR) {
+      const recognition = new SR();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (e: any) => {
+        const text = e.results[0][0].transcript;
+        setIsListening(false);
+        handleSend(text);
+      };
+      recognition.onend  = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognitionRef.current = recognition;
+      recognition.start();
+      setIsListening(true);
+      return;
+    }
+
+    // 3. Fallback (Fermata / no mic access) — open chat and focus the text input
+    setIsChatOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 150);
+  };
+
   const navigateToCoords = (opt: NavOption) => {
     setNavOptions([]);
     try {
@@ -202,17 +335,9 @@ function App() {
     setIsSettingsOpen(false);
   };
 
-  // PiP: face fills the entire small window, nothing else
-  if (isPip) {
-    return (
-      <div className="w-screen h-screen bg-black flex items-center justify-center overflow-hidden">
-        <DelamainFace isTalking={isTalking} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-screen bg-cyber-dark text-gray-200 font-mono overflow-hidden">
+    <div className="flex bg-cyber-dark text-gray-200 font-rajdhani overflow-hidden"
+      style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       {/* Sidebar (Minimal) */}
       <div className="w-16 border-r border-cyber-gray flex flex-col items-center py-6 gap-8 z-20">
         <div className="p-2 bg-cyber-blue/10 rounded-lg text-cyber-blue">
@@ -235,8 +360,32 @@ function App() {
         >
           <MessageSquare size={24} />
         </button>
-        <div className="mt-auto p-2 text-cyber-blue/50">
-          <div className="w-2 h-2 rounded-full bg-cyber-blue animate-pulse" />
+        <button
+          onClick={() => setIsDataOpen(o => !o)}
+          className={`p-2 rounded-lg transition-colors ${isDataOpen ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title="Data explorer"
+        >
+          <Database size={24} />
+        </button>
+        <div className="mt-auto flex flex-col items-center gap-3 pb-1">
+          <div
+            title={spConnected ? 'SUNNYPILOT LINK ACTIVE' : 'SUNNYPILOT LINK OFFLINE'}
+            className={`flex flex-col items-center gap-1 transition-colors duration-500 ${spConnected ? 'text-green-400' : 'text-gray-700'}`}
+          >
+            <Radio size={18} />
+            <span className="text-[8px] font-bold tracking-widest">SP</span>
+            <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${spConnected ? 'bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.7)]' : 'bg-gray-700'}`} />
+          </div>
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+          >
+            <LogOut size={18} />
+          </button>
+          <div className="p-2 text-cyber-blue/50">
+            <div className="w-2 h-2 rounded-full bg-cyber-blue animate-pulse" />
+          </div>
         </div>
       </div>
 
@@ -341,19 +490,61 @@ function App() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row landscape:flex-row overflow-hidden">
 
         {/* Face Panel — expands to fill when chat is closed */}
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
-        <div className={`flex flex-col items-center justify-center p-6 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 pr-16'}`}>
-          <div className="mb-4 text-xs tracking-widest text-cyber-blue opacity-50 font-bold">
-            DELAMAIN EXECUTIVE CAB SERVICE v4.2.0
+        <div className={`relative flex flex-col items-center justify-center px-6 pt-4 landscape:pt-1 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 pr-16 landscape:pr-16'}`}
+          style={{ paddingBottom: isLandscape ? 'calc(env(safe-area-inset-bottom) + 72px)' : 'calc(env(safe-area-inset-bottom) + 90px)' }}>
+          {/* Wordmark */}
+          <div className="mb-3 landscape:mb-1 flex flex-col items-center gap-1">
+            <h1
+              className="font-rajdhani font-bold uppercase leading-none tracking-[0.55em] text-cyber-blue text-5xl landscape:text-2xl"
+              style={{ textShadow: '0 0 18px rgba(0,243,255,0.65), 0 0 50px rgba(0,243,255,0.2)' }}
+            >
+              DELAMAIN
+            </h1>
+            <div className="flex items-center gap-3">
+              <div className="h-px w-16 landscape:w-8 bg-gradient-to-r from-transparent to-cyber-blue/35" />
+              <span className="text-[8px] tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
+              <div className="h-px w-16 landscape:w-8 bg-gradient-to-l from-transparent to-cyber-blue/35" />
+            </div>
           </div>
-          <DelamainFace isTalking={isTalking} />
-          <div className="mt-6 text-center">
-            <h1 className="text-2xl font-bold tracking-tighter text-cyber-blue">EXCELSIOR PACKAGE</h1>
+
+          <DelamainFace isTalking={isTalking} mood={faceMode} size="large" />
+
+          {/* Talk bar — full-width, pinned to bottom of face panel */}
+          <div className="absolute bottom-0 left-0 right-0 px-5 landscape:px-3"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+            <button
+              onClick={toggleListening}
+              disabled={isLoading}
+              className={`relative w-full landscape:h-10 h-14 rounded-lg flex items-center justify-center gap-3 transition-all duration-300 disabled:opacity-40
+                ${isListening
+                  ? 'bg-cyber-blue/20 border border-cyber-blue shadow-[0_0_24px_rgba(0,243,255,0.45)]'
+                  : 'bg-cyber-gray/80 border border-cyber-blue/30 hover:border-cyber-blue/60 hover:bg-cyber-blue/10 active:bg-cyber-blue/20'
+                }`}
+            >
+              <Mic size={20} className={`flex-shrink-0 landscape:w-4 landscape:h-4 transition-colors ${isListening ? 'text-cyber-blue animate-pulse' : 'text-cyber-blue/50'}`} />
+              <span className={`text-xs landscape:text-[10px] font-bold tracking-[0.35em] uppercase transition-colors ${isListening ? 'text-cyber-blue' : 'text-cyber-blue/40'}`}>
+                {isListening ? 'Listening...' : 'Speak to Delamain'}
+              </span>
+              {!isListening && !(window as any).DelamainNative && !(window as any).SpeechRecognition && !(window as any).webkitSpeechRecognition && (
+                <span className="text-[9px] text-cyber-blue/25 font-mono ml-1">[type]</span>
+              )}
+              {isListening && (
+                <div className="absolute inset-0 rounded-lg border border-cyber-blue/30 animate-ping" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Data Explorer Panel */}
+        {isDataOpen && (
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 w-full md:w-[560px]">
+            <DataDashboard token={token} onClose={() => setIsDataOpen(false)} />
+          </div>
+        )}
 
         {/* Right Panel: Chat Interface — hidden by default */}
         <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 md:w-0'}`}>
@@ -381,26 +572,37 @@ function App() {
             )}
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-lg ${
-                  msg.role === 'user' 
-                    ? 'bg-cyber-blue/10 border border-cyber-blue/30 text-cyber-blue ml-4' 
-                    : 'bg-cyber-dark border border-gray-700 text-gray-300 mr-4'
-                }`}>
-                  <div className="flex items-center gap-2 mb-1 opacity-50 text-[10px] font-bold uppercase tracking-wider">
-                    {msg.role === 'user' ? <User size={10} /> : <Terminal size={10} />}
-                    {msg.role === 'user' ? settings.userName : 'Delamain'}
+                {msg.role === 'delamain' ? (
+                  <div className="max-w-[88%] mr-4">
+                    <div className="flex items-center gap-2 mb-1.5 text-[9px] tracking-[0.3em] text-cyber-blue/50 uppercase font-mono">
+                      <div className="w-1 h-1 rounded-full bg-cyber-blue/60" />
+                      Delamain
+                    </div>
+                    <div className="pl-3 border-l border-cyber-blue/40">
+                      <p className="text-[15px] leading-relaxed text-gray-200 font-rajdhani font-medium">{msg.content}</p>
+                    </div>
                   </div>
-                  <p className="text-sm leading-relaxed">{msg.content}</p>
-                </div>
+                ) : (
+                  <div className="max-w-[80%] ml-4 bg-cyber-blue/5 border border-cyber-blue/20 rounded p-3">
+                    <div className="flex items-center gap-2 mb-1 text-[9px] tracking-[0.3em] text-cyber-blue/40 uppercase font-mono">
+                      <User size={8} />
+                      {settings.userName}
+                    </div>
+                    <p className="text-sm leading-relaxed text-cyber-blue/80 font-rajdhani">{msg.content}</p>
+                  </div>
+                )}
               </div>
             ))}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-cyber-dark border border-gray-700 p-3 rounded-lg mr-4">
-                  <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 bg-cyber-blue rounded-full animate-bounce" />
-                    <div className="w-1.5 h-1.5 bg-cyber-blue rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <div className="w-1.5 h-1.5 bg-cyber-blue rounded-full animate-bounce [animation-delay:0.4s]" />
+                <div className="mr-4 pl-3 border-l border-cyber-blue/40">
+                  <div className="flex items-center gap-2 mb-1 text-[9px] tracking-[0.3em] text-cyber-blue/50 uppercase font-mono">
+                    <div className="w-1 h-1 rounded-full bg-cyber-blue/60 animate-pulse" />
+                    Delamain
+                  </div>
+                  <div className="flex items-center gap-1.5 h-5">
+                    <div className="w-px h-4 bg-cyber-blue/70 animate-pulse" />
+                    <span className="text-[11px] tracking-widest text-cyber-blue/40 font-mono uppercase animate-pulse">processing</span>
                   </div>
                 </div>
               </div>
@@ -424,12 +626,12 @@ function App() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
                 placeholder="Direct thought input..."
                 className="flex-1 bg-cyber-gray/50 border border-cyber-blue/20 rounded-md py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-cyber-blue/50 transition-colors text-cyber-blue placeholder-cyber-blue/30"
               />
               <button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={isLoading || !input.trim()}
                 className="absolute right-2 p-2 text-cyber-blue hover:bg-cyber-blue/10 rounded-md transition-colors disabled:opacity-30"
               >
