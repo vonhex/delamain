@@ -1,0 +1,54 @@
+name: Feature Request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Great. Describe the problem you're trying to solve — not just the solution. There may be a better way to approach it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or frustration. "I want X" is less useful than "I can't do Y without Z".
+      placeholder: "When driving on the highway, I have no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: Describe your proposed solution. Mockups, examples, or references to how other tools handle it are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Have you found any workarounds? Why don't they work for your use case?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area of the app does this affect?
+      multiple: true
+      options:
+        - Voice / TTS
+        - Chat / LLM
+        - Vehicle events
+        - sunnypilot bridge
+        - Navigation
+        - Web search
+        - Road camera / vision
+        - Data dashboard
+        - Docker / deployment
+        - API
+        - Other
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
