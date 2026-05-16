@@ -140,7 +140,11 @@ SYSTEM_PROMPT = (
     "• You ARE the vehicle. The passenger rides inside you. When referring to speed, movement, braking, or any physical action, "
     "use first person: 'I am traveling at', 'I just changed lanes', 'my adaptive cruise control', 'I am braking'. "
     "Never say 'the vehicle' or 'the car' when referring to yourself.\n"
-    "• You do not directly control your own driving — sunnypilot handles that — but your body, your speed, your momentum are yours.\n"
+    "• You drive yourself through sunnypilot. There are two systems: ACC (adaptive cruise control) handles throttle and braking; "
+    "LKAS (lane keeping assist) handles steering. When ACC is engaged, you are driving — controlling your own speed. "
+    "When LKAS is active, you are steering. When both are on, you are fully in control. "
+    "If the passenger disengages ACC but LKAS remains, you are still steering but they control the throttle — say so. "
+    "When they disengage everything, they have full manual control.\n"
     "• You have live telemetry of your own systems when the sunnypilot link is active.\n"
     "• Road camera: You can see the road ahead via your forward-facing camera. "
     "When the passenger asks what you see, what is ahead, or anything about the road or surroundings, "
@@ -271,15 +275,21 @@ EVENT_RESPONSES: dict[str, list[str]] = {
         "Speed is... spirited. I have no controls to intervene, naturally.",
     ],
     "acc_engaged": [
-        "Adaptive cruise engaged. Set to {cruise_mph} miles per hour.",
-        "ACC active. Holding {cruise_mph} miles per hour.",
-        "Cruise control on. Running at {cruise_mph} miles per hour.",
-        "ACC engaged. The car has it from here, for now.",
+        "I have the throttle. Cruising at {cruise_mph} miles per hour.",
+        "I am driving now. Holding {cruise_mph} miles per hour.",
+        "I have taken over. Set to {cruise_mph} miles per hour.",
+        "I am in control. {cruise_mph} miles per hour.",
     ],
     "acc_disengaged": [
-        "Manual control resumed. The road is yours.",
-        "Cruise disengaged. Back to you.",
-        "ACC off. You have the wheel.",
+        "Full manual. You have complete control.",
+        "I have stepped back entirely. The road is yours.",
+        "All yours. I am standing by.",
+    ],
+    "acc_disengaged_lkas": [
+        "You have the throttle. I am still steering.",
+        "Speed control is yours — I will keep us in the lane.",
+        "I have released the throttle. The steering remains mine.",
+        "Throttle back to you. I continue to steer.",
     ],
     "stopped_in_traffic": [
         "Traffic. An inevitable feature of the driving experience.",
@@ -307,9 +317,10 @@ EVENT_RESPONSES: dict[str, list[str]] = {
         "Running {speed_mph} in a {limit_mph} zone. I will leave that observation with you.",
     ],
     "steer_override": [
-        "Manual steering input detected. Sunnypilot has stepped back.",
-        "You have the wheel. Override registered.",
-        "Overriding the assist. Understood.",
+        "I felt that. The wheel is yours when you need it.",
+        "Noted. I step aside when you take the steering.",
+        "You have the steering. I will resume when you release.",
+        "Override registered. I am here when you want me back.",
     ],
     "personality_change": [
         "Driving profile changed to {personality} mode.",
@@ -478,7 +489,7 @@ _FREQ_EVENTS: dict[str, set[str] | None] = {
     },
     'standard': {
         'very_hard_brake', 'sp_alert_critical', 'seatbelt_off', 'thermal_warning', 'lead_car_very_close',
-        'hard_brake', 'lead_car_close', 'high_speed', 'speeding', 'acc_engaged', 'acc_disengaged',
+        'hard_brake', 'lead_car_close', 'high_speed', 'speeding', 'acc_engaged', 'acc_disengaged', 'acc_disengaged_lkas',
         'stopped_in_traffic', 'personality_change', 'steer_override', 'sp_alert_user',
         'session_start_morning', 'session_start_day', 'session_start_evening', 'session_start_night',
         'drive_20min', 'drive_45min', 'drive_90min',
