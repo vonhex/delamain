@@ -122,6 +122,19 @@ export function DataDashboard({ token, liveVehicleState = {}, onClose }: { token
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Auto-refresh telemetry chart data while on the telemetry tab
+  useEffect(() => {
+    if (tab !== 'telemetry') return;
+    const id = setInterval(async () => {
+      try {
+        const s = Date.now() / 1000 - sinceHours * 3600;
+        const tel = await authFetch(`/api/data/telemetry?since=${s}&limit=2000`);
+        setTelemetry(tel);
+      } catch {}
+    }, 15000);
+    return () => clearInterval(id);
+  }, [tab, sinceHours, authFetch]);
+
   const telChartData = telemetry.map(r => ({
     time: fmt(r.ts),
     speed: Math.round(r.speed_mph),
