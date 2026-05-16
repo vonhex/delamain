@@ -487,15 +487,15 @@ function MainApp({ token, onLogout }: MainAppProps) {
           {/* Wordmark */}
           <div className="mb-3 flex flex-col items-center gap-1 min-w-0 w-full">
             <h1
-              className="font-rajdhani font-bold uppercase leading-none tracking-[0.3em] sm:tracking-[0.55em] text-cyber-blue text-3xl sm:text-5xl"
+              className="font-rajdhani font-bold uppercase leading-none tracking-[0.25em] xl:tracking-[0.55em] text-cyber-blue text-4xl xl:text-5xl"
               style={{ textShadow: '0 0 18px rgba(0,243,255,0.65), 0 0 50px rgba(0,243,255,0.2)' }}
             >
               DELAMAIN
             </h1>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="h-px w-10 sm:w-16 bg-gradient-to-r from-transparent to-cyber-blue/35" />
-              <span className="text-[7px] sm:text-[8px] tracking-[0.3em] sm:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
-              <div className="h-px w-10 sm:w-16 bg-gradient-to-l from-transparent to-cyber-blue/35" />
+            <div className="flex items-center gap-2 xl:gap-3">
+              <div className="h-px w-10 xl:w-16 bg-gradient-to-r from-transparent to-cyber-blue/35" />
+              <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
+              <div className="h-px w-10 xl:w-16 bg-gradient-to-l from-transparent to-cyber-blue/35" />
             </div>
           </div>
 
