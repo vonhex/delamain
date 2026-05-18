@@ -122,26 +122,23 @@ export function DataDashboard({ token, liveVehicleState = {}, onClose }: { token
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Auto-refresh telemetry chart data while on the telemetry tab
+  // Auto-refresh all data every 20s while the dashboard is open
   useEffect(() => {
-    if (tab !== 'telemetry') return;
-    const id = setInterval(async () => {
-      try {
-        const s = Date.now() / 1000 - sinceHours * 3600;
-        const tel = await authFetch(`/api/data/telemetry?since=${s}&limit=2000`);
-        setTelemetry(tel);
-      } catch {}
-    }, 15000);
+    const id = setInterval(refresh, 20000);
     return () => clearInterval(id);
-  }, [tab, sinceHours, authFetch]);
+  }, [refresh]);
 
-  const telChartData = telemetry.map(r => ({
-    time: fmt(r.ts),
-    speed: Math.round(r.speed_mph),
-    cruise: r.acc_active ? Math.round(r.cruise_mph) : null,
-    lead: r.lead_dist_m != null ? Math.round(r.lead_dist_m) : null,
-    limit: r.speed_limit_mph ? Math.round(r.speed_limit_mph) : null,
-  }));
+  const MAX_CHART_POINTS = 400;
+  const _step = Math.max(1, Math.ceil(telemetry.length / MAX_CHART_POINTS));
+  const telChartData = telemetry
+    .filter((_, i) => i % _step === 0)
+    .map(r => ({
+      time: fmt(r.ts),
+      speed: Math.round(r.speed_mph),
+      cruise: r.acc_active ? Math.round(r.cruise_mph) : null,
+      lead: r.lead_dist_m != null ? Math.round(r.lead_dist_m) : null,
+      limit: r.speed_limit_mph ? Math.round(r.speed_limit_mph) : null,
+    }));
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'summary', label: 'Summary', icon: <BarChart2 size={14} /> },

@@ -479,6 +479,7 @@ car_info: dict = {}
 # Cooldown for SP connect/disconnect voice announcements (30 s)
 _last_sp_voice_time: float = 0.0
 _SP_VOICE_COOLDOWN = 30.0
+_tts_lock = asyncio.Lock()  # F5-TTS is not thread-safe; serialize all synthesis calls
 
 # Per-client dialogue frequency: 'quiet' | 'standard' | 'full'
 _client_dialogue_freq: dict[str, str] = {}
@@ -714,28 +715,28 @@ def _maybe_log_telemetry() -> None:
     if now - _last_telemetry_log < _TELEMETRY_LOG_INTERVAL:
         return
     _last_telemetry_log = now
-    try:
-        _db.log_telemetry(
-            speed_mph=vehicle_state.get("speed_mph", 0.0),
-            cruise_mph=vehicle_state.get("cruise_speed_mph", 0.0),
-            acc_active=bool(vehicle_state.get("acc_enabled", False)),
-            lead_dist_m=vehicle_state.get("lead_distance_m"),
-            speed_limit_mph=vehicle_state.get("speed_limit_mph"),
-            lat=vehicle_state.get("lat"),
-            lon=vehicle_state.get("lon"),
-        )
-    except Exception as e:
-        print(f"[DB] Telemetry log error: {e}")
+    snap = dict(vehicle_state)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, lambda: _db.log_telemetry(
+        speed_mph=snap.get("speed_mph", 0.0),
+        cruise_mph=snap.get("cruise_speed_mph", 0.0),
+        acc_active=bool(snap.get("acc_enabled", False)),
+        lead_dist_m=snap.get("lead_distance_m"),
+        speed_limit_mph=snap.get("speed_limit_mph"),
+        lat=snap.get("lat"),
+        lon=snap.get("lon"),
+    ))
 
 
 async def synthesize_voice(text: str) -> str | None:
-    try:
-        loop = asyncio.get_event_loop()
-        engine = get_tts_engine()
-        return await loop.run_in_executor(None, engine.synthesize, text)
-    except Exception as e:
-        print(f"Voice synthesis error (resetting engine): {e}")
-        reset_engine()
+    async with _tts_lock:
+        try:
+            loop = asyncio.get_event_loop()
+            engine = get_tts_engine()
+            return await loop.run_in_executor(None, engine.synthesize, text)
+        except Exception as e:
+            print(f"Voice synthesis error (resetting engine): {e}")
+            reset_engine()
     return None
 
 
@@ -793,27 +794,32 @@ async def health():
 
 @app.get("/api/data/telemetry")
 async def data_telemetry(since: float = 0, limit: int = 2000, _=Depends(require_auth)):
-    return _db.query_telemetry(since=since, limit=limit)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db.query_telemetry(since=since, limit=limit))
 
 
 @app.get("/api/data/events")
 async def data_events(since: float = 0, limit: int = 500, event: str | None = None, _=Depends(require_auth)):
-    return _db.query_events(since=since, limit=limit, event=event)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db.query_events(since=since, limit=limit, event=event))
 
 
 @app.get("/api/data/conversations")
 async def data_conversations(since: float = 0, limit: int = 200, _=Depends(require_auth)):
-    return _db.query_conversations(since=since, limit=limit)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db.query_conversations(since=since, limit=limit))
 
 
 @app.get("/api/data/event-counts")
 async def data_event_counts(since: float = 0, _=Depends(require_auth)):
-    return _db.query_event_counts(since=since)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db.query_event_counts(since=since))
 
 
 @app.get("/api/data/trips")
 async def data_trips(limit: int = 20, _=Depends(require_auth)):
-    return _db.query_trips(limit=limit)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db.query_trips(limit=limit))
 
 
 @app.post("/api/chat")

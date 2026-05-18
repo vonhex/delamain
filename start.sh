@@ -5,5 +5,6 @@ set +a
 exec "$(dirname "$0")/venv/bin/uvicorn" main:app \
   --host 0.0.0.0 \
   --port 8888 \
-  --ws-ping-interval 0 \
+  --ws-ping-interval 60 \
+  --ws-ping-timeout 30 \
   --log-level warning
