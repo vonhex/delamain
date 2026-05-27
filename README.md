@@ -11,7 +11,7 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 
 ## Demo
 
-<video src="https://raw.githubusercontent.com/vonhex/delamain/main/delamain-demo.mp4" controls width="100%"></video>
+[![Watch the demo](demo-thumb.jpg)](https://github.com/vonhex/delamain/releases/download/v1.1.0/delamain-demo.mp4)
 
 ---
 
