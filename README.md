@@ -9,6 +9,12 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 
 ---
 
+## Demo
+
+[![Delamain Demo](https://img.shields.io/badge/▶_Watch_Demo-20260526__154215.mp4-blue?style=for-the-badge)](https://github.com/vonhex/delamain/releases/download/v1.1.0/20260526_154215.mp4)
+
+---
+
 ## Screenshots
 
 <table>
