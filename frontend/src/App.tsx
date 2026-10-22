@@ -9,8 +9,22 @@ import { playConnectChime, playResponsePing, playDisconnectTone } from './utils/
 interface NavOption {
   name: string;
   address: string;
-  lat: string;
-  lon: string;
+  lat?: string;
+  lon?: string;
+  query?: string;  // set when the place could not be geocoded; the map app searches it
+}
+
+// Comma / sunnypilot UI (link indicator). Build with VITE_COMMA_ENABLED=true to show it.
+const COMMA_ENABLED = import.meta.env.VITE_COMMA_ENABLED === 'true';
+
+// Last known browser position, sent with each message for "near me" questions.
+let lastLocation: { lat: number; lon: number } | null = null;
+if (typeof navigator !== 'undefined' && navigator.geolocation) {
+  navigator.geolocation.watchPosition(
+    pos => { lastLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude }; },
+    () => { /* permission denied or unavailable: answer without location */ },
+    { enableHighAccuracy: false, maximumAge: 60000 },
+  );
 }
 
 interface Message {
@@ -155,7 +169,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
       } else if (msg.type === 'response') {
-        setIsLoading(false);
+        // "One moment" while tools run: speak it but keep the thinking indicator on.
+        if (msg.source !== 'working') setIsLoading(false);
         if (msg.source === 'sp_connect') setSpConnected(true);
         if (msg.source === 'sp_disconnect') {
           setSpConnected(false);
@@ -211,7 +226,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
     // Prefer WebSocket so the response arrives through the same handler as greeting
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'talk', text: userMessage, user_name: settings.userName }));
+      wsRef.current.send(JSON.stringify({ type: 'talk', text: userMessage, user_name: settings.userName, location: lastLocation }));
       return; // response arrives via ws.onmessage
     }
 
@@ -292,8 +307,11 @@ function MainApp({ token, onLogout }: MainAppProps) {
     setTimeout(() => inputRef.current?.focus(), 150);
   };
 
-  const navigateToCoords = (_opt: NavOption) => {
+  const navigateToCoords = (opt: NavOption) => {
     setNavOptions([]);
+    // Google Maps directions URL: Android hands it to the Maps app (and Android Auto).
+    const destination = opt.lat && opt.lon ? `${opt.lat},${opt.lon}` : (opt.query ?? `${opt.name} ${opt.address}`);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`, '_blank');
   };
 
   const saveSettings = () => {
@@ -333,14 +351,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
           <Database size={24} />
         </button>
         <div className="mt-auto flex flex-col items-center gap-3 pb-1">
-          <div
+          {COMMA_ENABLED && <div
             title={spConnected ? 'SUNNYPILOT LINK ACTIVE' : 'SUNNYPILOT LINK OFFLINE'}
             className={`flex flex-col items-center gap-1 transition-colors duration-500 ${spConnected ? 'text-green-400' : 'text-gray-700'}`}
           >
             <Radio size={18} />
             <span className="text-[8px] font-bold tracking-widest">SP</span>
             <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${spConnected ? 'bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.7)]' : 'bg-gray-700'}`} />
-          </div>
+          </div>}
           <button
             onClick={onLogout}
             title="Sign out"

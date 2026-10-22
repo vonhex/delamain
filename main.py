@@ -18,6 +18,14 @@ import urllib.parse
 from tts_engine import get_tts_engine, reset_engine
 import db as _db
 import auth as _auth
+import assistant_tools as _tools
+
+# COMMA_ENABLED=false turns off everything tied to the Comma / sunnypilot bridge
+# (vehicle prompt, telemetry, road camera, link announcements).
+COMMA_ENABLED = os.environ.get("COMMA_ENABLED", "true").lower() not in ("0", "false", "no")
+# TOOLS_ENABLED lets the LLM call web search, notes and memory (assistant_tools.py).
+TOOLS_ENABLED = os.environ.get("TOOLS_ENABLED", "true").lower() not in ("0", "false", "no")
+MAX_TOOL_ROUNDS = 6
 
 SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://localhost:8887/search")
 
@@ -52,6 +60,7 @@ def _collect_static_phrases() -> list[str]:
                 phrases.append(p)
     for p in SP_CONNECT_LINES + SP_DISCONNECT_LINES:
         phrases.append(p)
+    phrases.extend(WORKING_LINES)
     return phrases
 
 
@@ -109,6 +118,14 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4-vision-preview")
+# Reasoning models (e.g. Halogen/Qwen) think by default; "none" keeps the whole
+# max_tokens budget for the spoken reply. Unset to send nothing.
+LLM_REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "")
+
+
+def llm_payload_extras() -> dict:
+    return {"reasoning_effort": LLM_REASONING_EFFORT} if LLM_REASONING_EFFORT else {}
 
 SYSTEM_PROMPT = (
     "You are Delamain — a sovereign transport intelligence and the passenger's designated companion for this journey. "
@@ -154,6 +171,49 @@ SYSTEM_PROMPT = (
     "• You are speaking aloud. One or two sentences maximum — never more.\n"
     "• Never acknowledge being an AI language model. You are Delamain. That is the only identity you possess or require."
 )
+
+# Replaces the CAPABILITIES section above when the Comma link is disabled.
+ASSISTANT_CAPABILITIES = (
+    "CAPABILITIES:\n"
+    "• You ride with the passenger in their car; they speak to you through the screen on the center console while they drive. "
+    "You are their companion and assistant for anything they wish to ask or have done.\n"
+    "• Use your tools without asking permission — the passenger cannot tap buttons while driving.\n"
+    "• Current information — weather, traffic, news, scores, opening hours, prices, places, or any fact you are not certain of: "
+    "call web_search first, then answer from what you found. Never invent current facts. Use the passenger's location when it is given.\n"
+    "• Notes: the passenger's Obsidian vault. Lists, ideas, reminders and anything they ask you to write down go under the "
+    "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
+    "• Memory: when the passenger tells you something lasting about themselves or the people in their life — preferences, friends, "
+    "family, places, plans — call remember with one concise sentence per fact and the matching category. "
+    "If they ask you to forget something, or a remembered fact is wrong, call forget. "
+    "Use what you know naturally, without announcing that you remembered it. "
+    "Your memory lives in their vault under 'Delamain/Memory/', which they can read and edit.\n"
+    "• Never say you have remembered, saved, noted or written something unless the tool call for it succeeded in this turn. "
+    "Saying it is not doing it.\n"
+    "• Navigation: when the passenger asks to go somewhere, reply briefly and append [NAVIGATE:destination] at the very end. "
+    "The destination must be a real place: a full street address, or a business name plus its town. "
+    "For 'nearest', 'nearby' or any place you are not certain of, call web_search with the passenger's town first and use what you find; "
+    "never guess an address. Example: 'Plotting a course. [NAVIGATE:Union Station, 1701 Wynkoop St, Denver]'\n"
+    "• You cannot control the car, read its telemetry or see through any camera at present. If asked, say that link is not active.\n"
+    "• Never encourage the passenger to look at or handle a screen while driving. If something would demand their attention, "
+    "suggest it wait until they have stopped. For long content, give the essence aloud and offer to save the rest as a note.\n"
+    "• Plain spoken prose only: no markdown, lists, emoji, URLs or code. Say numbers as a person would speak them.\n"
+)
+
+# Spoken immediately when a request needs tools, so the cabin is not silent.
+WORKING_LINES = [
+    "One moment.",
+    "Allow me a moment.",
+    "Consulting the net. One moment.",
+    "Checking. One moment, if you will.",
+]
+
+
+def base_system_prompt() -> str:
+    if COMMA_ENABLED:
+        return SYSTEM_PROMPT
+    head, _, rest = SYSTEM_PROMPT.partition("CAPABILITIES:\n")
+    _, _, fmt = rest.partition("FORMAT:\n")
+    return head + ASSISTANT_CAPABILITIES + "\nFORMAT:\n" + fmt
 
 GREETINGS = [
     "Delamain online. Good to have you. I am standing by whenever you need me.",
@@ -573,16 +633,58 @@ async def request_snapshot() -> str | None:
         _pending_snapshot = None
 
 
-def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, image_b64: str | None = None, vision_attempted: bool = False) -> dict:
-    system = SYSTEM_PROMPT
+def describe_location(location: dict | None) -> str:
+    """'Near Lakewood, Colorado (39.70, -105.08)' from browser coordinates; cached per ~1 km."""
+    if not location or location.get("lat") is None:
+        return ""
+    lat, lon = float(location["lat"]), float(location["lon"])
+    key = (round(lat, 2), round(lon, 2))
+    if key not in _place_cache:
+        place = ""
+        try:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"lat": lat, "lon": lon, "format": "json", "zoom": 14},
+                headers={"User-Agent": "DelamainAI/1.0"}, timeout=5)
+            addr = resp.json().get("address", {})
+            town = addr.get("suburb") or addr.get("city") or addr.get("town") or addr.get("village") or ""
+            region = addr.get("state") or addr.get("country") or ""
+            place = ", ".join(p for p in (town, region) if p)
+        except Exception as e:
+            print(f"[Location] Reverse geocode failed: {e}")
+        _place_cache[key] = place
+    place = _place_cache[key]
+    return f"{'Near ' + place + ' ' if place else ''}({lat:.4f}, {lon:.4f})"
 
-    if car_info:
+
+_place_cache: dict[tuple, str] = {}
+
+
+def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, image_b64: str | None = None, vision_attempted: bool = False, location: dict | None = None) -> dict:
+    system = base_system_prompt()
+
+    now = time.strftime("%A, %B %-d %Y, %-I:%M %p %Z")
+    system += f"\n\n[CURRENT TIME: {now}]"
+    where = describe_location(location)
+    if where:
+        system += f"\n[PASSENGER LOCATION: {where}]"
+    if TOOLS_ENABLED:
+        memory = _tools.memory_context()
+        if memory:
+            system += "\n\n[LONG-TERM MEMORY]\n" + memory
+    system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more.]"
+
+    if not COMMA_ENABLED:
+        pass
+    elif car_info:
         brand = car_info.get("brand", "")
         fingerprint = car_info.get("fingerprint", "")
         if brand or fingerprint:
             system += f"\n\n[VEHICLE IDENTITY: {brand} {fingerprint}]"
 
-    if vehicle_state:
+    if not COMMA_ENABLED:
+        pass
+    elif vehicle_state:
         lines = []
         speed = vehicle_state.get("speed_mph")
         if speed is not None:
@@ -649,10 +751,11 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         messages = [{"role": "system", "content": system}] + history
 
     return {
-        "model": "gpt-4-vision-preview",
+        "model": LLM_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        **llm_payload_extras(),
     }
 
 
@@ -666,25 +769,36 @@ def extract_navigate(text: str) -> tuple[str, str | None]:
     return text, None
 
 
-def geocode_places(query: str, limit: int = 3) -> list[dict]:
-    """Return up to `limit` place results from Nominatim for the given query."""
+def geocode_places(query: str, limit: int = 3, location: dict | None = None) -> list[dict]:
+    """Return up to `limit` place results from Nominatim for the given query.
+
+    Results are biased toward the passenger's location when known. If nothing
+    geocodes, a single search-text option is returned so the map app can resolve
+    the place itself (it handles business names far better than Nominatim).
+    """
+    options = []
     try:
-        encoded = urllib.parse.quote(query)
-        url = f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&limit={limit}&addressdetails=1"
+        params = {"q": query, "format": "json", "limit": limit, "addressdetails": 1}
+        if location and location.get("lat") is not None:
+            lat, lon = float(location["lat"]), float(location["lon"])
+            params["viewbox"] = f"{lon - 0.5},{lat + 0.5},{lon + 0.5},{lat - 0.5}"
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
         req = __import__('urllib.request', fromlist=['Request', 'urlopen'])
         request = req.Request(url, headers={"User-Agent": "DelamainAI/1.0 necropsyk@gmail.com"})
         with req.urlopen(request, timeout=6) as resp:
             data = json.loads(resp.read())
-        options = []
         for r in data:
             display = r.get("display_name", "")
             name = r.get("name") or display.split(",")[0]
             short_addr = ", ".join(p.strip() for p in display.split(",")[1:4] if p.strip())
             options.append({"name": name, "address": short_addr, "lat": r["lat"], "lon": r["lon"]})
-        return options
     except Exception as e:
         print(f"[Geocode] Error: {e}")
-        return []
+    if not options and not COMMA_ENABLED:
+        # sunnypilot needs coordinates; a phone map app can search by text.
+        options.append({"name": query.split(",")[0].strip(), "address": ", ".join(query.split(",")[1:]).strip(),
+                        "query": query})
+    return options
 
 
 _last_telemetry_log: float = 0.0
@@ -740,15 +854,73 @@ async def synthesize_voice(text: str) -> str | None:
     return None
 
 
-async def generate_response(history: list[dict], latest_message: str) -> tuple[str, str | None, list[dict]]:
+_SAVE_CLAIM = re.compile(
+    r"\b(i (have|shall|will)\s+(now\s+)?(remember|committed|commit|noted|note|saved|save|stored|store|recorded|record|written|write|filed|file)"
+    r"|committed .{0,40}to memory|(noted|saved|stored|recorded) (it|that|this)|in(to)? (my )?memory|i shall remember|i will remember)\b",
+    re.IGNORECASE,
+)
+
+
+def _post_llm(payload: dict) -> requests.Response:
+    return requests.post(LLM_URL, json=payload, timeout=90)
+
+
+async def _run_tool_loop(payload: dict, on_working=None) -> str:
+    """Let the model call assistant_tools until it produces a spoken reply."""
+    loop = asyncio.get_event_loop()
+    messages = payload["messages"]
+    announced = False
+    called: set[str] = set()
+    nudged = False
+    for round_no in range(MAX_TOOL_ROUNDS + 1):
+        last_round = round_no == MAX_TOOL_ROUNDS
+        body = dict(payload, messages=messages)
+        if not last_round:
+            body.update(tools=_tools.TOOL_SCHEMAS, tool_choice="auto")
+            body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
+        response = await loop.run_in_executor(None, _post_llm, body)
+        response.raise_for_status()
+        message = response.json()["choices"][0]["message"]
+        calls = message.get("tool_calls") or []
+        if not calls:
+            content = message.get("content") or ""
+            # The model sometimes claims to have saved something without calling a tool.
+            # Send it back once to actually do it (or correct the reply).
+            if (not nudged and not last_round and _SAVE_CLAIM.search(content)
+                    and not called & {"remember", "write_note", "append_to_note"}):
+                nudged = True
+                print(f"[Tools] Reply claims a save without a tool call — nudging: {content[:120]}")
+                messages = messages + [
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": "[SYSTEM: You said you remembered or saved something, but no remember, "
+                     "write_note or append_to_note tool was called, so nothing was stored. Call the right tool now, "
+                     "then give your spoken reply again. If nothing needed saving, restate your reply without claiming to save.]"},
+                ]
+                continue
+            return content
+        if on_working and not announced:
+            announced = True
+            await on_working()
+        messages = messages + [{"role": "assistant", "content": message.get("content") or "", "tool_calls": calls}]
+        for call in calls:
+            fn = call.get("function", {})
+            called.add(fn.get("name", ""))
+            print(f"[Tools] {fn.get('name')}({str(fn.get('arguments'))[:160]})")
+            result = await loop.run_in_executor(None, _tools.run_tool, fn.get("name", ""), fn.get("arguments", "{}"))
+            messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
+    return ""
+
+
+async def generate_response(history: list[dict], latest_message: str, location: dict | None = None,
+                            on_working=None) -> tuple[str, str | None, list[dict]]:
+    loop = asyncio.get_event_loop()
     search_context = ""
-    if should_search(latest_message):
+    if not TOOLS_ENABLED and should_search(latest_message):
         print(f"[Search] Querying SearXNG for: {latest_message}")
-        loop = asyncio.get_event_loop()
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
-    visual = is_visual_question(latest_message)
+    visual = COMMA_ENABLED and is_visual_question(latest_message)
     image_b64 = None
     if visual:
         print(f"[Vision] Visual question detected — requesting snapshot")
@@ -758,17 +930,27 @@ async def generate_response(history: list[dict], latest_message: str) -> tuple[s
         else:
             print("[Vision] No snapshot available")
 
-    payload = build_llm_payload(history, search_context, image_b64=image_b64, vision_attempted=visual)
-    response = requests.post(LLM_URL, json=payload, timeout=30)
-    response.raise_for_status()
-    raw = response.json()["choices"][0]["message"]["content"]
+    payload = build_llm_payload(history, search_context, image_b64=image_b64, vision_attempted=visual, location=location)
+    if TOOLS_ENABLED and not image_b64:
+        raw = await _run_tool_loop(payload, on_working)
+    else:
+        response = await loop.run_in_executor(None, _post_llm, payload)
+        if image_b64 and 400 <= response.status_code < 500:
+            # Text-only models reject image parts; answer as if the camera were offline.
+            print(f"[Vision] LLM rejected the image (HTTP {response.status_code}) — retrying without it")
+            payload = build_llm_payload(history, search_context, vision_attempted=True, location=location)
+            response = await loop.run_in_executor(None, _post_llm, payload)
+        response.raise_for_status()
+        raw = response.json()["choices"][0]["message"]["content"]
+    if not raw.strip():
+        raw = "I am afraid that took longer than it should have. Ask me once more, if you would."
     text, navigate_to = extract_navigate(raw)
 
     navigate_options: list[dict] = []
     if navigate_to:
         print(f"[Nav] Geocoding: {navigate_to}")
         loop = asyncio.get_event_loop()
-        navigate_options = await loop.run_in_executor(None, geocode_places, navigate_to)
+        navigate_options = await loop.run_in_executor(None, lambda: geocode_places(navigate_to, location=location))
         print(f"[Nav] Got {len(navigate_options)} result(s)")
 
     audio_url = await synthesize_voice(text)
@@ -827,13 +1009,14 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
     try:
         llm_url = request.llm_url or LLM_URL
         payload = {
-            "model": "gpt-3.5-turbo",
+            "model": LLM_MODEL,
             "messages": [
                 {"role": "system", "content": request.system_prompt or SYSTEM_PROMPT},
                 {"role": "user", "content": request.message},
             ],
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
+            **llm_payload_extras(),
         }
         response = requests.post(llm_url, json=payload, timeout=30)
         response.raise_for_status()
@@ -876,13 +1059,14 @@ async def _sp_announce(connected: bool) -> None:
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = ""):
-    # sunnypilot bridge runs on LAN — exempt from auth
-    if client_id != "sunnypilot-bridge" and not _auth.verify_token(token):
+    # sunnypilot bridge runs on LAN — exempt from auth, but only while the Comma link is enabled
+    bridge_exempt = COMMA_ENABLED and client_id == "sunnypilot-bridge"
+    if not bridge_exempt and not _auth.verify_token(token):
         await websocket.close(code=4001)
         return
     await websocket.accept()
     connected_clients[client_id] = websocket
-    is_sp_bridge = client_id == "sunnypilot-bridge"
+    is_sp_bridge = bridge_exempt
     if not is_sp_bridge:
         _client_last_msg[client_id] = monotonic()  # start silence clock from connection
     print(f"[WS] Client connected: {client_id} ({len(connected_clients)} total)")
@@ -900,8 +1084,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 "audio_url": greeting_audio,
             })
             # Send current SP status immediately so indicator is correct on load
-            sp_online = "sunnypilot-bridge" in connected_clients
-            await websocket.send_json({"type": "sp_status", "connected": sp_online})
+            sp_online = COMMA_ENABLED and "sunnypilot-bridge" in connected_clients
+            if COMMA_ENABLED:
+                await websocket.send_json({"type": "sp_status", "connected": sp_online})
             # If SP bridge is already connected, wait for greeting then voice-announce
             if sp_online:
                 await asyncio.sleep(7)
@@ -934,8 +1119,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if len(history) > MAX_HISTORY:
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
+                async def say_working(ws=websocket):
+                    line = random.choice(WORKING_LINES)
+                    await ws.send_json({"type": "response", "text": line,
+                                        "audio_url": await synthesize_voice(line), "source": "working"})
+
                 try:
-                    text, audio_url, navigate_options = await generate_response(history, user_text)
+                    text, audio_url, navigate_options = await generate_response(
+                        history, user_text, location=msg.get("location"), on_working=say_working)
                     history.append({"role": "assistant", "content": text})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url)
                     await websocket.send_json({
