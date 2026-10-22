@@ -70,12 +70,12 @@ export function LoginPage({ onLogin }: Props) {
               onChange={e => setPassword(e.target.value)}
               placeholder="Enter access code..."
               autoFocus
-              className="w-full bg-cyber-dark border border-cyber-blue/20 rounded pl-9 pr-4 py-3 text-sm text-cyber-blue placeholder-cyber-blue/25 focus:outline-none focus:border-cyber-blue/60 transition-colors"
+              className="w-full bg-cyber-dark border border-cyber-blue/20 rounded-sm pl-9 pr-4 py-3 text-sm text-cyber-blue placeholder-cyber-blue/25 focus:outline-hidden focus:border-cyber-blue/60 transition-colors"
             />
           </div>
 
           {error && (
-            <div className="mb-4 text-xs text-red-400 font-mono border border-red-400/20 rounded px-3 py-2 bg-red-400/5">
+            <div className="mb-4 text-xs text-red-400 font-mono border border-red-400/20 rounded-sm px-3 py-2 bg-red-400/5">
               {error}
             </div>
           )}
@@ -83,7 +83,7 @@ export function LoginPage({ onLogin }: Props) {
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full py-3 bg-cyber-blue/20 border border-cyber-blue/50 text-cyber-blue font-bold tracking-widest uppercase text-sm rounded transition-all hover:bg-cyber-blue/30 hover:shadow-[0_0_16px_rgba(0,243,255,0.25)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-3 bg-cyber-blue/20 border border-cyber-blue/50 text-cyber-blue font-bold tracking-widest uppercase text-sm rounded-sm transition-all hover:bg-cyber-blue/30 hover:shadow-[0_0_16px_rgba(0,243,255,0.25)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? 'Authenticating...' : 'Authenticate'}
           </button>

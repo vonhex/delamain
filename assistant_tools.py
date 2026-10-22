@@ -189,7 +189,18 @@ def append_to_note(path: str, text: str) -> str:
 
 # ── Delamain's long-term memory: <vault>/Delamain/Memory/<Topic>.md ──────────
 
-_BULLET = re.compile(r"^\s*[-*]\s+(.*?)(?:\s+\((\d{4}-\d{2}-\d{2})\))?\s*$")
+_DATE_SUFFIX = re.compile(r" \(\d{4}-\d{2}-\d{2}\)$")
+
+
+def _bullet_text(line: str) -> str | None:
+    """Text of a '- fact (YYYY-MM-DD)' bullet without its date; None if not a bullet.
+
+    String operations plus an anchored, fixed-width regex: linear time on any line.
+    """
+    s = line.strip()
+    if len(s) < 3 or s[0] not in "-*" or not s[1].isspace():
+        return None
+    return _DATE_SUFFIX.sub("", s[2:].strip()).strip() or None
 
 
 def _memory_lock():
@@ -211,9 +222,9 @@ def _facts(path: Path) -> list[str]:
         return []
     out = []
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = _BULLET.match(line)
-        if m and m.group(1).strip():
-            out.append(m.group(1).strip())
+        fact = _bullet_text(line)
+        if fact:
+            out.append(fact)
     return out
 
 
@@ -257,9 +268,9 @@ def forget(text: str) -> str:
             lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
             keep = []
             for line in lines:
-                m = _BULLET.match(line)
-                if m and needle in m.group(1).lower():
-                    removed.append(m.group(1).strip())
+                fact = _bullet_text(line)
+                if fact and needle in fact.lower():
+                    removed.append(fact)
                 else:
                     keep.append(line)
             if len(keep) != len(lines):

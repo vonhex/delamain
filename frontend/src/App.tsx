@@ -393,7 +393,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   type="text" 
                   value={tempSettings.userName}
                   onChange={e => setTempSettings({...tempSettings, userName: e.target.value})}
-                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
+                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                   placeholder="e.g. V, Guest, Major"
                 />
               </div>
@@ -404,7 +404,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   type="text" 
                   value={tempSettings.backendUrl}
                   onChange={e => setTempSettings({...tempSettings, backendUrl: e.target.value})}
-                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
+                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                 />
               </div>
 
@@ -414,7 +414,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   type="text" 
                   value={tempSettings.llmUrl}
                   onChange={e => setTempSettings({...tempSettings, llmUrl: e.target.value})}
-                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
+                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                 />
               </div>
 
@@ -423,7 +423,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                 <textarea 
                   value={tempSettings.systemPrompt}
                   onChange={e => setTempSettings({...tempSettings, systemPrompt: e.target.value})}
-                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50 h-24 resize-none"
+                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50 h-24 resize-none"
                   placeholder="Leave empty for default Delamain persona..."
                 />
               </div>
@@ -438,7 +438,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                     max="2"
                     value={tempSettings.temperature}
                     onChange={e => setTempSettings({...tempSettings, temperature: parseFloat(e.target.value)})}
-                    className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
+                    className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                   />
                 </div>
                 <div className="space-y-2">
@@ -447,7 +447,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                     type="number"
                     value={tempSettings.maxTokens}
                     onChange={e => setTempSettings({...tempSettings, maxTokens: parseInt(e.target.value)})}
-                    className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded p-2 text-sm focus:outline-none focus:border-cyber-blue/50"
+                    className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                   />
                 </div>
               </div>
@@ -486,7 +486,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
               </button>
               <button 
                 onClick={saveSettings}
-                className="px-4 py-2 bg-cyber-blue/20 border border-cyber-blue/50 text-cyber-blue text-xs font-bold rounded flex items-center gap-2 hover:bg-cyber-blue/30 transition-colors"
+                className="px-4 py-2 bg-cyber-blue/20 border border-cyber-blue/50 text-cyber-blue text-xs font-bold rounded-sm flex items-center gap-2 hover:bg-cyber-blue/30 transition-colors"
               >
                 <Save size={14} />
                 APPLY_CHANGES
@@ -511,9 +511,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
               DELAMAIN
             </h1>
             <div className="flex items-center gap-2 xl:gap-3">
-              <div className="h-px w-10 xl:w-16 bg-gradient-to-r from-transparent to-cyber-blue/35" />
+              <div className="h-px w-10 xl:w-16 bg-linear-to-r from-transparent to-cyber-blue/35" />
               <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
-              <div className="h-px w-10 xl:w-16 bg-gradient-to-l from-transparent to-cyber-blue/35" />
+              <div className="h-px w-10 xl:w-16 bg-linear-to-l from-transparent to-cyber-blue/35" />
             </div>
           </div>
 
@@ -530,7 +530,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   : 'bg-cyber-gray/80 border border-cyber-blue/30 hover:border-cyber-blue/60 hover:bg-cyber-blue/10 active:bg-cyber-blue/20'
                 }`}
             >
-              <Mic size={20} className={`flex-shrink-0 transition-colors ${isListening ? 'text-cyber-blue animate-pulse' : 'text-cyber-blue/50'}`} />
+              <Mic size={20} className={`shrink-0 transition-colors ${isListening ? 'text-cyber-blue animate-pulse' : 'text-cyber-blue/50'}`} />
               <span className={`text-xs font-bold tracking-[0.35em] uppercase transition-colors ${isListening ? 'text-cyber-blue' : 'text-cyber-blue/40'}`}>
                 {isListening ? 'Listening...' : 'Speak to Delamain'}
               </span>
@@ -546,13 +546,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
         {/* Data Explorer Panel */}
         {isDataOpen && (
-          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 w-full md:w-[560px]">
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 w-full md:w-[560px]">
             <DataDashboard token={token} liveVehicleState={liveVehicleState} onClose={() => setIsDataOpen(false)} />
           </div>
         )}
 
         {/* Right Panel: Chat Interface — hidden by default */}
-        <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-sm overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 md:w-0'}`}>
+        <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 md:w-0'}`}>
           {/* Header */}
           <div className="p-4 border-b border-cyber-gray flex justify-between items-center bg-cyber-dark/50 min-w-[450px]">
             <span className="text-xs font-bold text-cyber-blue flex items-center gap-2">
@@ -588,7 +588,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="max-w-[80%] ml-4 bg-cyber-blue/5 border border-cyber-blue/20 rounded p-3">
+                  <div className="max-w-[80%] ml-4 bg-cyber-blue/5 border border-cyber-blue/20 rounded-sm p-3">
                     <div className="flex items-center gap-2 mb-1 text-[9px] tracking-[0.3em] text-cyber-blue/40 uppercase font-mono">
                       <User size={8} />
                       {settings.userName}
@@ -625,7 +625,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
                 placeholder="Direct thought input..."
-                className="flex-1 bg-cyber-gray/50 border border-cyber-blue/20 rounded-md py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-cyber-blue/50 transition-colors text-cyber-blue placeholder-cyber-blue/30"
+                className="flex-1 bg-cyber-gray/50 border border-cyber-blue/20 rounded-md py-3 pl-4 pr-12 text-sm focus:outline-hidden focus:border-cyber-blue/50 transition-colors text-cyber-blue placeholder-cyber-blue/30"
               />
               <button
                 onClick={() => handleSend()}
@@ -645,7 +645,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
       {/* Navigation destination picker */}
       {navOptions.length > 0 && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end justify-center p-6 pb-28">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-end justify-center p-6 pb-28">
           <div className="w-full max-w-md bg-cyber-dark border border-cyber-blue/40 rounded-lg overflow-hidden shadow-[0_0_30px_rgba(0,240,255,0.15)]">
             <div className="p-3 border-b border-cyber-gray flex justify-between items-center bg-cyber-blue/5">
               <span className="text-xs font-bold text-cyber-blue flex items-center gap-2">

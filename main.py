@@ -760,13 +760,26 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
 
 
 def extract_navigate(text: str) -> tuple[str, str | None]:
-    """Strip [NAVIGATE:destination] tag from text; return (clean_text, destination|None)."""
-    match = re.search(r'\[NAVIGATE:([^\]]+)\]', text)
-    if match:
-        destination = match.group(1).strip()
-        clean = re.sub(r'\s*\[NAVIGATE:[^\]]+\]', '', text).strip()
-        return clean, destination
-    return text, None
+    """Strip [NAVIGATE:destination] tags from text; return (clean_text, first destination|None).
+
+    Plain string scanning rather than regexes: linear time on any input (no ReDoS).
+    """
+    destination = None
+    parts = []
+    pos = 0
+    while True:
+        start = text.find("[NAVIGATE:", pos)
+        end = text.find("]", start + 10) if start != -1 else -1
+        if start == -1 or end == -1:
+            parts.append(text[pos:])
+            break
+        if destination is None and text[start + 10:end].strip():
+            destination = text[start + 10:end].strip()
+        parts.append(text[pos:start].rstrip())
+        pos = end + 1
+    if destination is None:
+        return text, None
+    return " ".join(p.strip() for p in parts if p.strip()), destination
 
 
 def geocode_places(query: str, limit: int = 3, location: dict | None = None) -> list[dict]:
@@ -1007,15 +1020,17 @@ async def data_trips(limit: int = 20, _=Depends(require_auth)):
 @app.post("/api/chat")
 async def chat(request: ChatRequest, _=Depends(require_auth)):
     try:
-        llm_url = request.llm_url or LLM_URL
+        # Always use the configured endpoint: a caller-supplied llm_url would let any
+        # client make the server POST to arbitrary internal addresses (SSRF).
+        llm_url = LLM_URL
         payload = {
             "model": LLM_MODEL,
             "messages": [
                 {"role": "system", "content": request.system_prompt or SYSTEM_PROMPT},
                 {"role": "user", "content": request.message},
             ],
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
+            "temperature": min(max(request.temperature, 0.0), 2.0),
+            "max_tokens": min(max(request.max_tokens, 1), 1024),
             **llm_payload_extras(),
         }
         response = requests.post(llm_url, json=payload, timeout=30)

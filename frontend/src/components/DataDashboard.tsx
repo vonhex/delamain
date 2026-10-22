@@ -157,7 +157,7 @@ export function DataDashboard({ token, liveVehicleState = {}, onClose }: { token
           <select
             value={sinceHours}
             onChange={e => setSinceHours(Number(e.target.value))}
-            className="bg-cyber-gray/40 border border-cyber-blue/20 text-cyber-blue rounded px-1 py-0.5 text-xs"
+            className="bg-cyber-gray/40 border border-cyber-blue/20 text-cyber-blue rounded-sm px-1 py-0.5 text-xs"
           >
             <option value={1}>Last 1h</option>
             <option value={6}>Last 6h</option>
@@ -166,11 +166,11 @@ export function DataDashboard({ token, liveVehicleState = {}, onClose }: { token
           </select>
           <button
             onClick={refresh}
-            className={`p-1 rounded text-cyber-blue hover:bg-cyber-blue/10 ${loading ? 'animate-spin' : ''}`}
+            className={`p-1 rounded-sm text-cyber-blue hover:bg-cyber-blue/10 ${loading ? 'animate-spin' : ''}`}
           >
             <RefreshCw size={14} />
           </button>
-          <button onClick={onClose} className="p-1 rounded text-gray-500 hover:text-white hover:bg-cyber-gray/40">
+          <button onClick={onClose} className="p-1 rounded-sm text-gray-500 hover:text-white hover:bg-cyber-gray/40">
             <X size={14} />
           </button>
         </div>
@@ -243,7 +243,7 @@ function SummaryTab({ telemetry, eventCounts, events, conversations }: {
           { label: 'Data Points', value: telemetry.length },
           { label: 'Event Types', value: eventCounts.length },
         ].map(s => (
-          <div key={s.label} className="bg-cyber-gray/20 border border-cyber-blue/10 rounded p-2 text-center">
+          <div key={s.label} className="bg-cyber-gray/20 border border-cyber-blue/10 rounded-sm p-2 text-center">
             <div className="text-cyber-blue font-mono font-bold text-sm">{s.value}</div>
             <div className="text-gray-500 text-xs mt-0.5">{s.label}</div>
           </div>
@@ -283,7 +283,7 @@ function SummaryTab({ telemetry, eventCounts, events, conversations }: {
               <div key={i} className="flex items-start gap-2 text-xs">
                 <span className="text-gray-500 shrink-0 font-mono">{fmt(e.ts)}</span>
                 <span
-                  className="shrink-0 px-1 rounded text-xs font-mono"
+                  className="shrink-0 px-1 rounded-sm text-xs font-mono"
                   style={{ color: EVENT_COLORS[e.event] || EVENT_COLOR_DEFAULT, border: `1px solid ${EVENT_COLORS[e.event] || EVENT_COLOR_DEFAULT}40` }}
                 >
                   {e.event.replace(/_/g, ' ')}
@@ -340,7 +340,7 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
               { label: 'Start', value: new Date(selected.start_ts * 1000).toLocaleTimeString() },
               { label: 'End', value: new Date(selected.end_ts * 1000).toLocaleTimeString() },
             ].map(s => (
-              <div key={s.label} className="bg-cyber-gray/20 border border-cyber-blue/10 rounded p-1.5 text-center">
+              <div key={s.label} className="bg-cyber-gray/20 border border-cyber-blue/10 rounded-sm p-1.5 text-center">
                 <div className="text-cyber-blue font-mono text-xs font-bold">{s.value}</div>
                 <div className="text-gray-500 text-[10px]">{s.label}</div>
               </div>
@@ -350,7 +350,7 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
 
         {/* Route map */}
         {hasRoute ? (
-          <div className="rounded overflow-hidden border border-cyber-blue/20" style={{ height: 260 }}>
+          <div className="rounded-sm overflow-hidden border border-cyber-blue/20" style={{ height: 260 }}>
             <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }} zoomControl={false}>
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -362,7 +362,7 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
             </MapContainer>
           </div>
         ) : (
-          <div className="h-24 flex items-center justify-center text-gray-600 font-mono text-xs border border-cyber-blue/10 rounded">
+          <div className="h-24 flex items-center justify-center text-gray-600 font-mono text-xs border border-cyber-blue/10 rounded-sm">
             No GPS route data for this trip.
           </div>
         )}
@@ -375,7 +375,7 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
               {Object.entries(selected.events).sort((a, b) => b[1] - a[1]).map(([ev, n]) => (
                 <span
                   key={ev}
-                  className="px-2 py-0.5 rounded text-xs font-mono"
+                  className="px-2 py-0.5 rounded-sm text-xs font-mono"
                   style={{ color: EVENT_COLORS[ev] || EVENT_COLOR_DEFAULT, border: `1px solid ${EVENT_COLORS[ev] || EVENT_COLOR_DEFAULT}50` }}
                 >
                   {ev.replace(/_/g, ' ')} ×{n}
@@ -394,7 +394,7 @@ function TripsTab({ trips }: { trips: TripRow[] }) {
         <button
           key={i}
           onClick={() => setSelected(trip)}
-          className="w-full text-left border border-cyber-gray/20 rounded p-3 hover:border-cyber-blue/30 bg-cyber-gray/10 hover:bg-cyber-blue/5 transition-colors"
+          className="w-full text-left border border-cyber-gray/20 rounded-sm p-3 hover:border-cyber-blue/30 bg-cyber-gray/10 hover:bg-cyber-blue/5 transition-colors"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -431,7 +431,7 @@ function LivePanel({ live }: { live: Record<string, any> }) {
   const speeding  = speed != null && limit != null && speed > limit;
 
   return (
-    <div className="border border-cyber-blue/30 rounded p-3 bg-cyber-blue/5 mb-4">
+    <div className="border border-cyber-blue/30 rounded-sm p-3 bg-cyber-blue/5 mb-4">
       <div className="flex items-center gap-1.5 mb-2">
         <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
         <span className="text-[10px] font-mono font-bold text-green-400 tracking-widest">LIVE</span>
@@ -460,7 +460,7 @@ function LivePanel({ live }: { live: Record<string, any> }) {
       </div>
       {acc && (
         <div className="mt-2 flex justify-center">
-          <span className="text-[9px] font-mono px-2 py-0.5 rounded border border-green-400/40 text-green-400">ACC ACTIVE</span>
+          <span className="text-[9px] font-mono px-2 py-0.5 rounded-sm border border-green-400/40 text-green-400">ACC ACTIVE</span>
         </div>
       )}
     </div>
@@ -545,7 +545,7 @@ function EventsTab({ events }: { events: EventRow[] }) {
         <select
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          className="bg-cyber-gray/40 border border-cyber-blue/20 text-cyber-blue rounded px-2 py-1 text-xs"
+          className="bg-cyber-gray/40 border border-cyber-blue/20 text-cyber-blue rounded-sm px-2 py-1 text-xs"
         >
           <option value="">All events</option>
           {types.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
@@ -555,11 +555,11 @@ function EventsTab({ events }: { events: EventRow[] }) {
 
       <div className="space-y-1 max-h-[60vh] overflow-auto">
         {[...filtered].reverse().map((e, i) => (
-          <div key={i} className="border border-cyber-gray/20 rounded p-2 hover:border-cyber-blue/30 bg-cyber-gray/10">
+          <div key={i} className="border border-cyber-gray/20 rounded-sm p-2 hover:border-cyber-blue/30 bg-cyber-gray/10">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-gray-500 font-mono text-xs">{fmtDate(e.ts)}</span>
               <span
-                className="px-1.5 py-0.5 rounded text-xs font-mono"
+                className="px-1.5 py-0.5 rounded-sm text-xs font-mono"
                 style={{ color: EVENT_COLORS[e.event] || EVENT_COLOR_DEFAULT, border: `1px solid ${EVENT_COLORS[e.event] || EVENT_COLOR_DEFAULT}50` }}
               >
                 {e.event.replace(/_/g, ' ')}
