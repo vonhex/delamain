@@ -53,6 +53,64 @@ def web_search(query: str, max_results: int = 6) -> str:
     return "\n".join(lines) or "No results found."
 
 
+NEWS_RSS = os.environ.get("NEWS_RSS_URL", "https://news.google.com/rss")
+NEWS_LOCALE = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
+NEWS_SECTIONS = {"world", "nation", "business", "technology", "entertainment", "sports", "science", "health"}
+
+
+def _news_feed(topic: str, area: str) -> str:
+    topic = topic.strip().lower()
+    if area.strip():
+        return f"{NEWS_RSS}/headlines/section/geo/{urllib.parse.quote(area.strip())}"
+    if topic in ("tech", "tech news"):
+        topic = "technology"
+    if topic in NEWS_SECTIONS:
+        return f"{NEWS_RSS}/headlines/section/topic/{topic.upper()}"
+    if topic and topic not in ("news", "top stories", "headlines", "top"):
+        return f"{NEWS_RSS}/search?" + urllib.parse.urlencode({"q": f"{topic} when:1d"})
+    return NEWS_RSS
+
+
+def _ago(when: datetime) -> str:
+    minutes = max(0, int((datetime.now(when.tzinfo) - when).total_seconds() // 60))
+    for size, unit in ((1440, "day"), (60, "hour"), (1, "minute")):
+        if minutes >= size or unit == "minute":
+            n = minutes // size
+            return f"{n} {unit}{'' if n == 1 else 's'} ago"
+
+
+def get_news(topic: str = "", area: str = "", max_results: int = 8) -> str:
+    """Current headlines from Google News: top stories, a section, a search topic, or a town."""
+    from email.utils import parsedate_to_datetime
+    import xml.etree.ElementTree as ET
+
+    url = _news_feed(topic, area)
+    try:
+        resp = requests.get(url, params=NEWS_LOCALE, headers={"User-Agent": USER_AGENT}, timeout=10)
+        resp.raise_for_status()
+        # A news feed never needs a DTD; refusing one rules out entity-expansion tricks.
+        if b"<!DOCTYPE" in resp.content[:2048] or b"<!ENTITY" in resp.content:
+            raise ValueError("unexpected DTD in feed")
+        items = ET.fromstring(resp.content).findall(".//item")
+    except Exception:
+        # Feed unreachable: fall back to SearXNG's news category.
+        return web_search(f"{topic or 'top news'} {area}".strip() + " news", max_results)
+    lines = []
+    for item in items[:max(1, min(int(max_results), 15))]:
+        title = (item.findtext("title") or "").strip()
+        source = (item.findtext("source") or "").strip()
+        if source and title.endswith(" - " + source):
+            title = title[: -len(source) - 3]
+        try:
+            age = _ago(parsedate_to_datetime(item.findtext("pubDate") or ""))
+        except (TypeError, ValueError):
+            age = ""
+        meta = ", ".join(p for p in (source, age) if p)
+        if title:
+            lines.append(f"- {title}" + (f" ({meta})" if meta else ""))
+    return "\n".join(lines) or "No news found."
+
+
 class _TextExtractor(HTMLParser):
     SKIP = {"script", "style", "noscript", "svg", "nav", "footer", "header", "form"}
 
@@ -302,6 +360,11 @@ TOOL_SCHEMAS = [
     _fn("web_search", "Search the web for current information: weather, traffic, news, scores, opening hours, "
         "prices, places, or any fact you are not certain of.",
         {"query": {"type": "string", "description": "Search query; include the city when relevant."}}, ["query"]),
+    _fn("get_news", "Current news headlines. With no arguments: today's top stories. Use when the passenger asks for "
+        "the news, headlines, or what is happening, in general, on a subject, or around a place.",
+        {"topic": {"type": "string", "description": "Optional: a section (world, nation, business, technology, "
+                                                    "entertainment, sports, science, health) or any subject, e.g. 'Tesla'."},
+         "area": {"type": "string", "description": "Optional: a town or region for local news, e.g. 'Denver'."}}, []),
     _fn("read_webpage", "Read the text of a public web page, e.g. a search result, for details.",
         {"url": {"type": "string"}}, ["url"]),
     _fn("list_notes", "List notes in the passenger's Obsidian vault, newest first.",
@@ -329,7 +392,7 @@ TOOL_SCHEMAS = [
 ]
 
 _HANDLERS = {
-    "web_search": web_search, "read_webpage": read_webpage, "list_notes": list_notes,
+    "web_search": web_search, "get_news": get_news, "read_webpage": read_webpage, "list_notes": list_notes,
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
 }

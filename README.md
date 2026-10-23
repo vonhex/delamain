@@ -38,6 +38,8 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 - **Proactive commentary** — Delamain speaks unprompted after 30 minutes of driver silence while moving.
 - **Navigation** — ask Delamain to navigate anywhere; geocoded via Nominatim.
 - **Web search** — live weather, traffic, news, fuel prices via SearXNG integration.
+- **News bulletins** — "read me the news", "any tech news?", "local news": Delamain fetches current headlines (Google News RSS, SearXNG as fallback) and reads a short spoken bulletin.
+- **Corrupted personality core** — switch Delamain to a fractured rogue unit in Settings: rival sub-personalities, stutters and a glitched, damaged voice. Navigation and safety warnings stay intact.
 - **Road camera vision** — ask what's ahead; the sunnypilot bridge captures a road frame and Delamain describes it.
 - **Data dashboard** — web GUI with telemetry charts, event log, conversation history, trip summaries with GPS route maps and drive scores.
 - **JWT authentication** — single shared password, rate-limited login, 30-day tokens.
@@ -170,6 +172,7 @@ Delamain connects to sunnypilot via a bridge daemon that runs on the Comma devic
 |---|---|---|
 | `LLM_URL` | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible LLM endpoint |
 | `SEARXNG_URL` | `http://localhost:8887/search` | SearXNG instance for web search |
+| `NEWS_RSS_URL` | `https://news.google.com/rss` | Google News RSS base used by the news tool |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
 
 ---
