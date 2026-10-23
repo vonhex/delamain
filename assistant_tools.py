@@ -13,7 +13,7 @@ import re
 import socket
 import tempfile
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -109,6 +109,192 @@ def get_news(topic: str = "", area: str = "", max_results: int = 8) -> str:
         if title:
             lines.append(f"- {title}" + (f" ({meta})" if meta else ""))
     return "\n".join(lines) or "No news found."
+
+
+# ── places, weather and driving routes ───────────────────────────────────────
+
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
+# imperial (°F, mph, miles) or metric (°C, km/h, km)
+UNITS = os.environ.get("DELAMAIN_UNITS", "imperial").lower()
+
+# WMO weather interpretation codes, as Open-Meteo reports them
+_WMO = {
+    0: "clear", 1: "mostly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "freezing fog",
+    51: "light drizzle", 53: "drizzle", 55: "heavy drizzle", 56: "freezing drizzle", 57: "freezing drizzle",
+    61: "light rain", 63: "rain", 65: "heavy rain", 66: "freezing rain", 67: "freezing rain",
+    71: "light snow", 73: "snow", 75: "heavy snow", 77: "snow grains",
+    80: "rain showers", 81: "rain showers", 82: "violent rain showers", 85: "snow showers", 86: "heavy snow showers",
+    95: "thunderstorms", 96: "thunderstorms with hail", 99: "thunderstorms with hail",
+}
+
+
+def _geocode(place: str, near: dict | None = None) -> tuple[float, float, str] | None:
+    """(lat, lon, short name) for a place, preferring results near the passenger."""
+    params = {"q": place, "format": "json", "limit": 1, "addressdetails": 1}
+    if near and near.get("lat") is not None:
+        lat, lon = float(near["lat"]), float(near["lon"])
+        params["viewbox"] = f"{lon - 1},{lat + 1},{lon + 1},{lat - 1}"
+    resp = requests.get(NOMINATIM_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=8)
+    resp.raise_for_status()
+    hits = resp.json()
+    if not hits:
+        return None
+    h = hits[0]
+    addr = h.get("address", {})
+    town = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("suburb") or ""
+    name = h.get("name") or h.get("display_name", "").split(",")[0]
+    label = ", ".join(dict.fromkeys(p for p in (name, town, addr.get("state", "")) if p))
+    return float(h["lat"]), float(h["lon"]), label
+
+
+def _here(location: dict | None) -> tuple[float, float] | None:
+    if location and location.get("lat") is not None:
+        return float(location["lat"]), float(location["lon"])
+    return None
+
+
+def get_weather(place: str = "", location: dict | None = None) -> str:
+    """Current conditions plus the next hours and three days for a place or the passenger's position."""
+    if place.strip():
+        hit = _geocode(place, near=location)
+        if not hit:
+            return f"Could not find a place called {place}."
+        lat, lon, label = hit
+    elif (here := _here(location)):
+        lat, lon = here
+        label = "the passenger's location"
+    else:
+        return "The passenger's location is unknown; ask which town they mean."
+    imperial = UNITS != "metric"
+    params = {
+        "latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 3,
+        "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,precipitation",
+        "hourly": "temperature_2m,precipitation_probability,weather_code",
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunset",
+        "temperature_unit": "fahrenheit" if imperial else "celsius",
+        "wind_speed_unit": "mph" if imperial else "kmh",
+    }
+    resp = requests.get(OPEN_METEO_URL, params=params, timeout=8)
+    resp.raise_for_status()
+    d = resp.json()
+    deg, wind = ("°F", "mph") if imperial else ("°C", "km/h")
+    cur = d["current"]
+    lines = [f"Weather for {label}:",
+             f"Now: {round(cur['temperature_2m'])}{deg} (feels {round(cur['apparent_temperature'])}{deg}), "
+             f"{_WMO.get(cur['weather_code'], 'unknown')}, wind {round(cur['wind_speed_10m'])} {wind} "
+             f"gusting {round(cur['wind_gusts_10m'])}."]
+    # Next six hours from the current hour onwards
+    hourly = d["hourly"]
+    start = next((i for i, t in enumerate(hourly["time"]) if t >= cur["time"][:13]), 0)
+    nxt = [f"{hourly['time'][i][11:16]} {round(hourly['temperature_2m'][i])}{deg} "
+           f"{_WMO.get(hourly['weather_code'][i], '')} {hourly['precipitation_probability'][i]}% rain"
+           for i in range(start, min(start + 6, len(hourly["time"])))]
+    lines.append("Next hours: " + "; ".join(nxt) + ".")
+    daily = d["daily"]
+    for i, day in enumerate(("Today", "Tomorrow", "Day after")):
+        if i < len(daily["time"]):
+            lines.append(f"{day}: high {round(daily['temperature_2m_max'][i])}{deg}, low "
+                         f"{round(daily['temperature_2m_min'][i])}{deg}, {_WMO.get(daily['weather_code'][i], '')}, "
+                         f"{daily['precipitation_probability_max'][i]}% chance of rain"
+                         + (f", sunset {daily['sunset'][i][11:16]}" if i == 0 else "") + ".")
+    return "\n".join(lines)
+
+
+def get_route(destination: str, origin: str = "", location: dict | None = None) -> str:
+    """Driving distance and time (no live traffic) from the passenger or a named origin."""
+    dest = _geocode(destination, near=location)
+    if not dest:
+        return f"Could not find {destination}. Search for its address first."
+    if origin.strip():
+        start = _geocode(origin, near=location)
+        if not start:
+            return f"Could not find {origin}."
+        o_lat, o_lon, o_label = start
+    elif (here := _here(location)):
+        (o_lat, o_lon), o_label = here, "the passenger's location"
+    else:
+        return "The passenger's location is unknown; ask where they are starting from."
+    url = f"{OSRM_URL}/route/v1/driving/{o_lon},{o_lat};{dest[1]},{dest[0]}"
+    resp = requests.get(url, params={"overview": "false"}, headers={"User-Agent": USER_AGENT}, timeout=10)
+    resp.raise_for_status()
+    routes = resp.json().get("routes") or []
+    if not routes:
+        return f"No driving route found to {dest[2]}."
+    r = routes[0]
+    minutes = round(r["duration"] / 60)
+    dist = r["distance"] / (1609.344 if UNITS != "metric" else 1000)
+    unit = "miles" if UNITS != "metric" else "km"
+    eta = (datetime.now() + timedelta(seconds=r["duration"])).strftime("%-I:%M %p")
+    span = f"{minutes // 60} h {minutes % 60} min" if minutes >= 60 else f"{minutes} min"
+    return (f"From {o_label} to {dest[2]}: {dist:.1f} {unit}, about {span} by car "
+            f"(arriving around {eta}). Typical road speeds, not live traffic; use web_search for current traffic.")
+
+
+# ── reminders ────────────────────────────────────────────────────────────────
+
+def _when(minutes: float | None, time_of_day: str, date: str) -> datetime | None:
+    now = datetime.now()
+    if minutes:
+        return now + timedelta(minutes=float(minutes))
+    if not time_of_day:
+        return None
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*", time_of_day)
+    if not m:
+        raise ValueError("time must be HH:MM in 24-hour form, e.g. 17:30")
+    day = datetime.strptime(date, "%Y-%m-%d").date() if date else now.date()
+    due = datetime.combine(day, datetime.min.time()).replace(hour=int(m[1]), minute=int(m[2]))
+    if not date and due <= now:
+        due += timedelta(days=1)  # "at 7:00" after seven means tomorrow
+    return due
+
+
+def _spoken_time(due: datetime) -> str:
+    now = datetime.now()
+    clock = due.strftime("%-I:%M %p")
+    if due.date() == now.date():
+        return f"today at {clock}"
+    if due.date() == (now + timedelta(days=1)).date():
+        return f"tomorrow at {clock}"
+    return due.strftime("%A %B %-d at ") + clock
+
+
+def set_reminder(message: str, minutes: float | None = None, time: str = "", date: str = "") -> str:
+    import db
+    due = _when(minutes, time, date)
+    if due is None:
+        return "Tool error: give either minutes from now, or a time (HH:MM) with an optional date."
+    if due <= datetime.now():
+        return "That time has already passed."
+    rid = db.add_reminder(due.timestamp(), message.strip())
+    return f"Reminder {rid} set for {_spoken_time(due)}: {message.strip()}. I will say it aloud when it is due."
+
+
+def list_reminders() -> str:
+    """Pending reminders, plus those already spoken in the last day."""
+    import db
+    pending = db.pending_reminders()
+    done = db.recently_delivered_reminders((datetime.now() - timedelta(days=1)).timestamp())
+    lines = ["Pending:" if pending else "No reminders are pending."]
+    lines += [f"- #{r['id']} {_spoken_time(datetime.fromtimestamp(r['due']))}: {r['message']}" for r in pending]
+    if done:
+        lines.append("Already reminded in the last day:")
+        lines += [f"- {datetime.fromtimestamp(r['delivered']).strftime('%-I:%M %p')}: {r['message']}" for r in done]
+    return "\n".join(lines)
+
+
+def cancel_reminder(text: str) -> str:
+    """Cancel pending reminders by number ('3') or by words in their message."""
+    import db
+    rows = db.pending_reminders()
+    wanted = text.strip().lstrip("#").lower()
+    hits = [r for r in rows if str(r["id"]) == wanted] or [r for r in rows if wanted and wanted in r["message"].lower()]
+    if not hits:
+        return "No pending reminder matches that."
+    for r in hits:
+        db.cancel_reminder(r["id"])
+    return "Cancelled: " + "; ".join(r["message"] for r in hits)
 
 
 class _TextExtractor(HTMLParser):
@@ -365,6 +551,24 @@ TOOL_SCHEMAS = [
         {"topic": {"type": "string", "description": "Optional: a section (world, nation, business, technology, "
                                                     "entertainment, sports, science, health) or any subject, e.g. 'Tesla'."},
          "area": {"type": "string", "description": "Optional: a town or region for local news, e.g. 'Denver'."}}, []),
+    _fn("get_weather", "Current weather and the forecast for the next hours and three days. With no place, it uses "
+        "the passenger's current location.",
+        {"place": {"type": "string", "description": "Optional town or address, e.g. 'Boulder, Colorado'."}}, []),
+    _fn("get_route", "Driving distance, time and arrival estimate to a destination (typical speeds, not live traffic). "
+        "Starts from the passenger's location unless an origin is given. For 'nearest' places, web_search first.",
+        {"destination": {"type": "string", "description": "Address or place name with its town."},
+         "origin": {"type": "string", "description": "Optional starting point; defaults to the passenger's location."}},
+        ["destination"]),
+    _fn("set_reminder", "Set a spoken reminder or timer. Delamain will say it aloud when it is due. Give minutes from "
+        "now ('in 20 minutes', timers), or a 24-hour time with an optional date.",
+        {"message": {"type": "string", "description": "What to remind them of, e.g. 'call mom'."},
+         "minutes": {"type": "number", "description": "Minutes from now."},
+         "time": {"type": "string", "description": "Time of day, HH:MM 24-hour, e.g. '17:30'."},
+         "date": {"type": "string", "description": "Optional date YYYY-MM-DD; without it, the next time that hour comes."}},
+        ["message"]),
+    _fn("list_reminders", "List the reminders that have not gone off yet.", {}, []),
+    _fn("cancel_reminder", "Cancel a pending reminder by its number or by words from it.",
+        {"text": {"type": "string", "description": "Reminder number or distinctive words, e.g. 'call mom'."}}, ["text"]),
     _fn("read_webpage", "Read the text of a public web page, e.g. a search result, for details.",
         {"url": {"type": "string"}}, ["url"]),
     _fn("list_notes", "List notes in the passenger's Obsidian vault, newest first.",
@@ -392,18 +596,27 @@ TOOL_SCHEMAS = [
 ]
 
 _HANDLERS = {
-    "web_search": web_search, "get_news": get_news, "read_webpage": read_webpage, "list_notes": list_notes,
+    "web_search": web_search, "get_news": get_news, "get_weather": get_weather, "get_route": get_route,
+    "set_reminder": set_reminder, "list_reminders": list_reminders, "cancel_reminder": cancel_reminder,
+    "read_webpage": read_webpage, "list_notes": list_notes,
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
 }
 
 
-def run_tool(name: str, arguments: str | dict) -> str:
+# Tools that need the passenger's browser position get it from the server, never from the model.
+_NEEDS_LOCATION = {"get_weather", "get_route"}
+
+
+def run_tool(name: str, arguments: str | dict, location: dict | None = None) -> str:
     handler = _HANDLERS.get(name)
     if not handler:
         return f"Unknown tool: {name}"
     try:
         args = json.loads(arguments) if isinstance(arguments, str) else (arguments or {})
+        args.pop("location", None)
+        if name in _NEEDS_LOCATION:
+            args["location"] = location
         return str(handler(**args))
     except (ValueError, TypeError) as e:
         return f"Tool error: {e}"

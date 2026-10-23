@@ -18,12 +18,15 @@
 - **Tool loop**: when `TOOLS_ENABLED`, the model can call the tools in `assistant_tools.py`, up to six rounds per reply. A spoken "One moment." covers the wait.
 - **Personality cores**: `delamain` (default) or `corrupted`, chosen per client. Corrupted adds a fractured-core section to the prompt and glitches the audio (`voice_glitch.py`).
 - **F5-TTS** (`tts_engine.py`): voice cloning from a 10-second reference clip. The fixed "one moment" lines are pre-cached at startup.
-- **SQLite** (`db.py`): conversation log
+- **SQLite** (`db.py`): conversation log and reminders
+- **Resume**: a connecting client gets the last 30 minutes of conversation back, so Android Auto reconnects keep the thread
 - **Auth** (`auth.py`): bcrypt password and 30-day JWTs
 
 ### Tools (`assistant_tools.py`)
 - `web_search` (SearXNG) and `read_webpage` (public hosts only)
 - `get_news`: Google News RSS top stories, sections, subjects or a town's local news, with SearXNG news as the fallback
+- `get_weather` (Open-Meteo) and `get_route` (OSRM driving distance and time); both use the passenger's browser position, which the server supplies and the model never sees as an argument
+- `set_reminder`, `list_reminders`, `cancel_reminder`: stored in SQLite; a background task speaks each one when it is due
 - `list_notes`, `read_note`, `search_notes`, `write_note`, `append_to_note`: confined to the Obsidian vault
 - `remember` / `forget`: long-term memory as dated bullets in `Delamain/Memory/*.md`
 

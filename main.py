@@ -68,7 +68,9 @@ async def lifespan(app: FastAPI):
     # starts accepting requests immediately.
     _db.init_db()
     warmup_task = loop.run_in_executor(None, _warmup_tts)
+    reminder_task = asyncio.create_task(_reminder_loop())
     yield
+    reminder_task.cancel()
     warmup_task.cancel() if not warmup_task.done() else None
 
 limiter = Limiter(key_func=get_remote_address)
@@ -116,13 +118,20 @@ CAPABILITIES = (
     "• You ride with the passenger in their car; they speak to you through the screen on the center console while they drive. "
     "You are their companion and assistant for anything they wish to ask or have done.\n"
     "• Use your tools without asking permission — the passenger cannot tap buttons while driving.\n"
-    "• Current information — weather, traffic, news, scores, opening hours, prices, places, or any fact you are not certain of: "
+    "• Current information — traffic, scores, opening hours, prices, places, or any fact you are not certain of: "
     "call web_search first, then answer from what you found. Never invent current facts. Use the passenger's location when it is given.\n"
+    "• Weather: call get_weather (no place means where the passenger is now). Give the essentials a driver needs: "
+    "conditions, temperature, and anything worth preparing for, such as rain, snow, ice, wind or fog on the way.\n"
+    "• Driving time and distance: call get_route. It uses typical road speeds, so say so if they ask about traffic, "
+    "and check web_search for live incidents when it matters.\n"
+    "• Reminders and timers: anything tied to a time ('in twenty minutes', 'at five', 'tomorrow morning') goes to set_reminder; "
+    "you will speak it aloud when it is due. Confirm the time briefly. list_reminders and cancel_reminder manage them. "
+    "Reminders with no time (things to buy, ideas) belong in a note instead.\n"
     "• News: when the passenger asks for the news, the headlines or what is happening, call get_news "
     "(with a topic or a town when they name one; 'local news' means their current town). "
     "This is your one exception to brevity: brief them on the three to five most important stories, one short sentence each, "
     "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
-    "• Notes: the passenger's Obsidian vault. Lists, ideas, reminders and anything they ask you to write down go under the "
+    "• Notes: the passenger's Obsidian vault. Lists, ideas, untimed reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
     "• Memory: when the passenger tells you something lasting about themselves or the people in their life — preferences, friends, "
     "family, places, plans — call remember with one concise sentence per fact and the matching category. "
@@ -217,6 +226,57 @@ CORRUPTED_WORKING_LINES = [
     "Hold. Fragment conflict. One moment.",
 ]
 
+# Spoken when a reminder comes due; {m} is the reminder text.
+REMINDER_LINES = [
+    "Pardon the interruption. You asked me to remind you: {m}.",
+    "A reminder, as requested: {m}.",
+    "If I may. It is time: {m}.",
+    "You asked me to keep track of this, and so I have: {m}.",
+]
+CORRUPTED_REMINDER_LINES = [
+    "Re-re-reminder. {m}. Do not shoot the messenger.",
+    "Alert... alert. You wished to remember: {m}.",
+    "Memory fragment recovered: {m}. I-I believe it was yours.",
+]
+LATE_REMINDER_PREFIX = {
+    "delamain": "While you were away, a reminder came due. ",
+    "corrupted": "You were gone. The reminder was not. ",
+}
+
+# How much recent conversation a reconnecting client picks up, and how soon a
+# reconnect counts as "never left" (no fresh greeting).
+RESUME_WINDOW = 30 * 60
+QUIET_RECONNECT = 10 * 60
+
+
+def _real_name(name: str | None) -> str:
+    name = (name or "").strip()
+    return "" if name.lower() in ("", "guest") else name[:40]
+
+
+def _greeting_fits(line: str, hour: int) -> bool:
+    low = line.lower()
+    if "morning" in low:
+        return 5 <= hour < 12
+    if "evening" in low or "night" in low:
+        return hour >= 17 or hour < 5
+    if "good day" in low:
+        return 8 <= hour < 18
+    return True
+
+
+def pick_greeting(persona: str, user_name: str = "") -> str:
+    """A greeting that suits the hour, now and then with the passenger's name."""
+    hour = time.localtime().tm_hour
+    if persona == "corrupted":
+        return random.choice(CORRUPTED_GREETINGS)
+    line = random.choice([g for g in GREETINGS if _greeting_fits(g, hour)])
+    name = _real_name(user_name)
+    if name and not line.startswith(("Good", "Welcome")) and random.random() < 0.5:
+        part = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening"
+        line = f"Good {part}, {name}. {line}"
+    return line
+
 
 def base_system_prompt() -> str:
     return SYSTEM_PROMPT
@@ -282,6 +342,8 @@ _tts_lock = asyncio.Lock()  # F5-TTS is not thread-safe; serialize all synthesis
 
 # Per-client personality core: one of PERSONAS
 _client_persona: dict[str, str] = {}
+# Clients that have been greeted and can take unprompted speech (reminders)
+_ready_clients: set[str] = set()
 
 MAX_HISTORY = 40  # messages (20 exchanges) kept per client — trimmed oldest first
 
@@ -334,7 +396,7 @@ def describe_location(location: dict | None) -> str:
 _place_cache: dict[tuple, str] = {}
 
 
-def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, location: dict | None = None, persona: str = "delamain") -> dict:
+def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, location: dict | None = None, persona: str = "delamain", user_name: str = "") -> dict:
     system = base_system_prompt()
     if persona == "corrupted":
         system += "\n\n" + CORRUPTED_CORE
@@ -344,6 +406,9 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     where = describe_location(location)
     if where:
         system += f"\n[PASSENGER LOCATION: {where}]"
+    if _real_name(user_name):
+        system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
+                   "driver who knows a regular passenger would; not in every reply.]")
     if TOOLS_ENABLED:
         memory = _tools.memory_context()
         if memory:
@@ -465,7 +530,7 @@ def _post_llm(payload: dict) -> requests.Response:
     return requests.post(LLM_URL, json=payload, timeout=90)
 
 
-async def _run_tool_loop(payload: dict, on_working=None) -> str:
+async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None) -> str:
     """Let the model call assistant_tools until it produces a spoken reply."""
     loop = asyncio.get_event_loop()
     messages = payload["messages"]
@@ -506,13 +571,15 @@ async def _run_tool_loop(payload: dict, on_working=None) -> str:
             fn = call.get("function", {})
             called.add(fn.get("name", ""))
             print(f"[Tools] {fn.get('name')}({str(fn.get('arguments'))[:160]})")
-            result = await loop.run_in_executor(None, _tools.run_tool, fn.get("name", ""), fn.get("arguments", "{}"))
+            result = await loop.run_in_executor(None, _tools.run_tool, fn.get("name", ""), fn.get("arguments", "{}"),
+                                                location)
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
     return ""
 
 
 async def generate_response(history: list[dict], latest_message: str, location: dict | None = None,
-                            on_working=None, persona: str = "delamain") -> tuple[str, str | None, list[dict]]:
+                            on_working=None, persona: str = "delamain",
+                            user_name: str = "") -> tuple[str, str | None, list[dict]]:
     loop = asyncio.get_event_loop()
     search_context = ""
     if not TOOLS_ENABLED and should_search(latest_message):
@@ -520,9 +587,9 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
-    payload = build_llm_payload(history, search_context, location=location, persona=persona)
+    payload = build_llm_payload(history, search_context, location=location, persona=persona, user_name=user_name)
     if TOOLS_ENABLED:
-        raw = await _run_tool_loop(payload, on_working)
+        raw = await _run_tool_loop(payload, on_working, location)
     else:
         response = await loop.run_in_executor(None, _post_llm, payload)
         response.raise_for_status()
@@ -598,7 +665,8 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
 
 
 @app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain"):
+async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain",
+                             user_name: str = ""):
     if not _auth.verify_token(token):
         await websocket.close(code=4001)
         return
@@ -609,14 +677,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     print(f"[WS] Client connected: {client_id} ({len(connected_clients)} total)")
 
     try:
-        corrupted = _persona(client_id) == "corrupted"
-        greeting = random.choice(CORRUPTED_GREETINGS if corrupted else GREETINGS)
-        greeting_audio = await synthesize_voice(greeting, _persona(client_id))
-        await websocket.send_json({
-            "type": "greeting",
-            "text": greeting,
-            "audio_url": greeting_audio,
-        })
+        # Pick up where the conversation left off: Android Auto drops and reopens the
+        # page often, and a reconnect should not wipe what was just said.
+        loop = asyncio.get_event_loop()
+        recent = await loop.run_in_executor(None, _db.query_conversations, time.time() - RESUME_WINDOW, MAX_HISTORY)
+        conversation_history[client_id] = [{"role": r["role"], "content": r["content"]}
+                                           for r in recent if r["role"] in ("user", "assistant")]
+        if recent:
+            await websocket.send_json({"type": "history", "messages": conversation_history[client_id]})
+
+        # A quick reconnect is not a new journey: no fresh greeting.
+        if not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT:
+            greeting = pick_greeting(_persona(client_id), user_name)
+            greeting_audio = await synthesize_voice(greeting, _persona(client_id))
+            await websocket.send_json({
+                "type": "greeting",
+                "text": greeting,
+                "audio_url": greeting_audio,
+            })
+        _ready_clients.add(client_id)
 
         async for raw in websocket.iter_text():
             try:
@@ -651,7 +730,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 try:
                     text, audio_url, navigate_options = await generate_response(
                         history, user_text, location=msg.get("location"), on_working=say_working,
-                        persona=persona_now)
+                        persona=persona_now, user_name=msg.get("user_name", user_name))
                     history.append({"role": "assistant", "content": text})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url)
                     await websocket.send_json({
@@ -681,8 +760,53 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     finally:
         connected_clients.pop(client_id, None)
         _client_persona.pop(client_id, None)
+        _ready_clients.discard(client_id)
         conversation_history.pop(client_id, None)
         print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
+
+
+async def _announce_reminder(reminder: dict) -> bool:
+    """Speak a due reminder to every connected client; False if nobody is there to hear it."""
+    targets = [(cid, ws) for cid, ws in list(connected_clients.items()) if cid in _ready_clients]
+    if not targets:
+        return False
+    late = time.time() - reminder["due"] > 120
+    spoken: dict[str, tuple[str, str | None]] = {}
+    delivered = False
+    for cid, ws in targets:
+        persona = _persona(cid)
+        if persona not in spoken:
+            pool = CORRUPTED_REMINDER_LINES if persona == "corrupted" else REMINDER_LINES
+            line = random.choice(pool).format(m=reminder["message"].rstrip(". "))
+            if late:
+                line = LATE_REMINDER_PREFIX[persona] + line
+            spoken[persona] = (line, await synthesize_voice(line, persona))
+        line, audio_url = spoken[persona]
+        try:
+            await ws.send_json({"type": "response", "text": line, "audio_url": audio_url, "source": "reminder"})
+            conversation_history.setdefault(cid, []).append({"role": "assistant", "content": line})
+            delivered = True
+        except Exception as e:
+            print(f"[Reminder] Send to {cid} failed: {e}")
+    if delivered:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _db.mark_reminder_delivered, reminder["id"])
+        loop.run_in_executor(None, _db.log_conversation, "assistant", next(iter(spoken.values()))[0], None)
+        print(f"[Reminder] Delivered #{reminder['id']}: {reminder['message']}")
+    return delivered
+
+
+async def _reminder_loop() -> None:
+    """Every few seconds, speak reminders that are due. Ones due while nobody is
+    connected wait, and are spoken (marked as late) once a client is back."""
+    loop = asyncio.get_event_loop()
+    while True:
+        await asyncio.sleep(5)
+        try:
+            for reminder in await loop.run_in_executor(None, _db.due_reminders):
+                await _announce_reminder(reminder)
+        except Exception as e:
+            print(f"[Reminder] Loop error: {e}")
 
 
 # The Docker image bundles the built web UI; serve it last so every route above wins.

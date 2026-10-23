@@ -5,7 +5,7 @@
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
 
-A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It runs in any browser, including the one on your car's Android Auto display, so there's nothing to install. Talk to it and it answers in Delamain's cloned voice. It can search the web, read you the news, keep notes and long-term memory in your Obsidian vault, and hand navigation off to your phone's map app.
+A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It runs in any browser, including the one on your car's Android Auto display, so there's nothing to install. Talk to it and it answers in Delamain's cloned voice. It can search the web, read you the news and the weather, tell you how long a drive will take, speak reminders when they're due, keep notes and long-term memory in your Obsidian vault, and hand navigation off to your phone's map app.
 
 ---
 
@@ -34,7 +34,12 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 - **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
 - **Corrupted personality core**: switch to a fractured rogue unit under Settings → Personality Core. It has rival sub-personalities, stutters, and a glitched, damaged voice made by post-processing the synthesized audio. Navigation and safety warnings stay intact.
 - **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
-- **Web search**: weather, traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
+- **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
+- **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.
+- **Drive time and distance**: "how long to Colorado Springs?" uses OSRM routing at typical road speeds, with an arrival estimate.
+- **Picks up where you left off**: Android Auto drops and reopens the page often. On reconnect Delamain restores the last 30 minutes of conversation, and skips the fresh greeting when you've only been gone a few minutes.
+- **Knows the hour and your name**: greetings fit the time of day, and he uses the name from Settings now and then.
+- **Web search**: traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
 - **Notes and memory**: lists, reminders and notes go into your Obsidian vault under `Delamain/`. Lasting facts about you and the people and places in your life are kept in `Delamain/Memory/`, one Markdown note per topic, and you can read and edit them in Obsidian.
 - **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route.
 - **Voice input**: a push-to-talk microphone button using the browser's speech recognition, plus a text chat panel.
@@ -171,6 +176,8 @@ Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:lat
 | `NEWS_RSS_URL` | `https://news.google.com/rss` | Google News RSS base used by the news tool |
 | `OBSIDIAN_VAULT_PATH` | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
 | `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
+| `DELAMAIN_UNITS` | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
+| `OSRM_URL` | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
 | `ALLOWED_ORIGINS` | `https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
 
 ---
@@ -181,7 +188,7 @@ Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:lat
 |---|---|---|
 | `POST /api/login` | — | Authenticate, receive JWT |
 | `GET /health` | — | Health check |
-| `WS /ws/{client_id}?token=&persona=` | JWT | Main WebSocket: talk, replies, audio |
+| `WS /ws/{client_id}?token=&persona=&user_name=` | JWT | Main WebSocket: talk, replies, reminders, audio |
 | `GET /api/data/conversations` | JWT | Conversation history |
 | `POST /api/chat` | JWT | Single-turn chat (REST fallback) |
 
