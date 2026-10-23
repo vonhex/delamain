@@ -87,6 +87,36 @@ function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number): 
   return pickFrom(ANIMATIONS.random, last);
 }
 
+// The clips play in <video> elements that are never added to the page, and are
+// painted onto canvases inside the circle. Some Android WebViews (Fermata on
+// Android Auto, for one) hand any on-page video to a native fullscreen player,
+// which pulled Delamain out of his circle; an off-page video gives them nothing to grab.
+function makeOffscreenVideo(): HTMLVideoElement {
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('webkit-playsinline', '');
+  v.disablePictureInPicture = true;
+  v.preload = 'auto';
+  return v;
+}
+
+// Draw the current video frame to fill the canvas, cropping like object-fit: cover.
+function drawCover(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
+  if (video.readyState < 2 || !video.videoWidth) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(rect.width * dpr));
+  const h = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
+  const sw = w / scale, sh = h / scale;
+  ctx.drawImage(video, (video.videoWidth - sw) / 2, (video.videoHeight - sh) / 2, sw, sh, 0, 0, w, h);
+}
+
 function computeColor(idleMs: number): string {
   if (idleMs > 60 * 60_000) return COLOR.orange;
   if (idleMs > 30 * 60_000) return COLOR.amber;
@@ -94,8 +124,11 @@ function computeColor(idleMs: number): string {
 }
 
 const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', size = 'normal' }) => {
-  const videoA = useRef<HTMLVideoElement>(null);
-  const videoB = useRef<HTMLVideoElement>(null);
+  const [offscreen] = useState(() => [makeOffscreenVideo(), makeOffscreenVideo()] as const);
+  const videoA = useRef<HTMLVideoElement | null>(offscreen[0]);
+  const videoB = useRef<HTMLVideoElement | null>(offscreen[1]);
+  const canvasA = useRef<HTMLCanvasElement>(null);
+  const canvasB = useRef<HTMLCanvasElement>(null);
   const activeSlot = useRef<'a' | 'b'>('a');
   const lastVideo = useRef<string | null>(null);
   const isTalkingRef = useRef(isTalking);
@@ -163,6 +196,35 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     incoming.addEventListener('canplay', onReady);
   }, [getNext, refreshColor]);
 
+  // ── off-page videos: advance when the active clip ends ─────────────────────
+  useEffect(() => {
+    const a = videoA.current!, b = videoB.current!;
+    const endA = () => { if (activeSlot.current === 'a') advance(); };
+    const endB = () => { if (activeSlot.current === 'b') advance(); };
+    a.addEventListener('ended', endA);
+    b.addEventListener('ended', endB);
+    return () => { a.removeEventListener('ended', endA); b.removeEventListener('ended', endB); };
+  }, [advance]);
+
+  // ── paint both clips onto their canvases every frame ───────────────────────
+  useEffect(() => {
+    let frame = 0;
+    const paint = () => {
+      if (canvasA.current) drawCover(canvasA.current, videoA.current!);
+      if (canvasB.current) drawCover(canvasB.current, videoB.current!);
+      frame = requestAnimationFrame(paint);
+    };
+    frame = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // Stop the off-page videos when the face unmounts.
+  useEffect(() => () => {
+    for (const v of [videoA.current, videoB.current]) {
+      if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+    }
+  }, []);
+
   // ── boot: set first video ─────────────────────────────────────────────────
   useEffect(() => {
     const first = getNext();
@@ -207,13 +269,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     return () => clearInterval(id);
   }, [refreshColor]);
 
-  // ── shared video element props ─────────────────────────────────────────────
-  const sharedVideoProps = {
-    autoPlay: false,
-    muted: true,
-    playsInline: true,
-    className: 'absolute inset-0 w-full h-full object-cover',
-  };
+  const canvasClass = 'absolute inset-0 w-full h-full';
 
   // Crossfade: outgoing stays fully opaque while incoming fades in on top.
   // States per slot:
@@ -253,18 +309,16 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
             boxShadow: isTalking ? `0 0 40px ${hexAlpha(ac, 0.7)}` : 'none',
           }}
         >
-          <video
-            ref={videoA}
-            {...sharedVideoProps}
+          <canvas
+            ref={canvasA}
+            className={canvasClass}
             style={slotStyle('a')}
-            onEnded={() => { if (activeSlot.current === 'a') advance(); }}
             onAnimationEnd={() => { if (fadingIn === 'a') setFadingIn(null); }}
           />
-          <video
-            ref={videoB}
-            {...sharedVideoProps}
+          <canvas
+            ref={canvasB}
+            className={canvasClass}
             style={slotStyle('b')}
-            onEnded={() => { if (activeSlot.current === 'b') advance(); }}
             onAnimationEnd={() => { if (fadingIn === 'b') setFadingIn(null); }}
           />
 
