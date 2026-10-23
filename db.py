@@ -1,9 +1,10 @@
 """SQLite database for Delamain — conversation history."""
+import os
 import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "delamain.db"
+DB_PATH = Path(os.environ.get("DELAMAIN_DB", Path(__file__).parent / "delamain.db"))
 
 # Older installs also have telemetry and events tables from the retired sunnypilot
 # link; they are left alone so existing databases keep working.

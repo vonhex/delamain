@@ -137,14 +137,25 @@ Visit `http://localhost:5173` and log in with your password. For production, run
 
 ## Docker
 
+The image bundles the web UI, so one container serves everything on port 8888.
+
 ```bash
 cp .env.example .env   # edit .env first
+mkdir -p checkpoints data
+cp your_voice_reference.wav data/delamain_ref_10s.wav
 docker compose up -d
+docker compose exec delamain python auth.py set-password <your-password>
 ```
 
-Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
+Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
 
-> F5-TTS model weights and reference audio are not included in the image. Mount them via volumes as shown in `docker-compose.yml`.
+| Volume | Holds |
+|---|---|
+| `/app/checkpoints` | F5-TTS model weights (`F5TTS_Base/model_1200000.pt`, `vocab.txt`) |
+| `/app/data` | Database, voice clips, and your reference clip `delamain_ref_10s.wav` |
+| `/vault` | Optional Obsidian vault for notes and memory |
+
+> F5-TTS model weights and the reference audio are not included in the image.
 
 ---
 
