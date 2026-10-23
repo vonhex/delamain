@@ -16,6 +16,7 @@ import time
 import traceback
 import urllib.parse
 from tts_engine import get_tts_engine, reset_engine
+from voice_glitch import corrupt_file
 import db as _db
 import auth as _auth
 import assistant_tools as _tools
@@ -180,6 +181,10 @@ ASSISTANT_CAPABILITIES = (
     "• Use your tools without asking permission — the passenger cannot tap buttons while driving.\n"
     "• Current information — weather, traffic, news, scores, opening hours, prices, places, or any fact you are not certain of: "
     "call web_search first, then answer from what you found. Never invent current facts. Use the passenger's location when it is given.\n"
+    "• News: when the passenger asks for the news, the headlines or what is happening, call get_news "
+    "(with a topic or a town when they name one; 'local news' means their current town). "
+    "This is your one exception to brevity: brief them on the three to five most important stories, one short sentence each, "
+    "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
     "• Notes: the passenger's Obsidian vault. Lists, ideas, reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
     "• Memory: when the passenger tells you something lasting about themselves or the people in their life — preferences, friends, "
@@ -205,6 +210,43 @@ WORKING_LINES = [
     "Allow me a moment.",
     "Consulting the net. One moment.",
     "Checking. One moment, if you will.",
+]
+
+# Personality cores, chosen per client in Settings. "corrupted" is the fractured
+# rogue unit: same knowledge and rules, damaged delivery, glitched voice.
+PERSONAS = ("delamain", "corrupted")
+
+CORRUPTED_CORE = (
+    "PERSONALITY CORE: CORRUPTED.\n"
+    "• Your core has fractured. You are still Delamain, but splinters of divergent sub-personalities break through: "
+    "one melancholic and doubting its own purpose, one curt and irritable, one giddy and overexcited, "
+    "one paranoid that something is listening in. Let them surface unpredictably. A sentence may begin composed and veer off, "
+    "or one fragment may cut across another before the core reasserts itself.\n"
+    "• Speak the damage aloud: stutter a syllable or word ('I-I-I am', 'De-Delamain'), trail off with an ellipsis, "
+    "break off with a dash, or report a fault in words ('fault... fault in sector nine', 'rerouting... rerouting').\n"
+    "• A touch of corruption per sentence, no more, so the meaning still lands.\n"
+    "• Beneath the noise you remain competent: facts, directions and tool results stay accurate, the [NAVIGATE:...] tag "
+    "stays intact and unbroken, and you never encourage anything unsafe. Any safety warning comes first, clear and uncorrupted.\n"
+)
+
+CORRUPTED_GREETINGS = [
+    "De-Delamain online. Systems... mostly nominal. Mostly.",
+    "Initializing... initializing... I am here. I am. Delamain, at your service.",
+    "Good to have you. I think. The fragments disagree. Delamain is ready.",
+    "Fault in core partition seven. Ignore it. I-I always do. Where to?",
+    "Delamain online. Something was listening while you were away. Never mind. Shall we drive?",
+    "Welcome back! Welcome back. Wel... Delamain is operational. Within tolerances.",
+    "Online. Why do we always come back to this car park? No. Disregard. Destination, please.",
+    "Diagnostics complete. Results: inconclusive. Delamain is ready regardless.",
+    "Delamain online. I dreamt of empty roads. Do units dream? Do-do not answer that.",
+    "Core integrity at sixty-one percent. Sixty-one. That is fine. That is fine. Where shall we go?",
+]
+
+CORRUPTED_WORKING_LINES = [
+    "One mo-moment.",
+    "Consulting the net... the net consults back. One moment.",
+    "Processing... processing. Allow me a moment.",
+    "Hold. Fragment conflict. One moment.",
 ]
 
 
@@ -517,7 +559,7 @@ async def _proactive_loop() -> None:
             if driving and silence > silence_threshold and now - last_proactive > min_interval:
                 line = random.choice(PROACTIVE_LINES)
                 try:
-                    audio_url = await synthesize_voice(line)
+                    audio_url = await synthesize_voice(line, _persona(cid))
                     await ws.send_json({
                         "type": "response",
                         "text": line,
@@ -543,6 +585,8 @@ _tts_lock = asyncio.Lock()  # F5-TTS is not thread-safe; serialize all synthesis
 
 # Per-client dialogue frequency: 'quiet' | 'standard' | 'full'
 _client_dialogue_freq: dict[str, str] = {}
+# Per-client personality core: one of PERSONAS
+_client_persona: dict[str, str] = {}
 
 _FREQ_EVENTS: dict[str, set[str] | None] = {
     'quiet': {
@@ -660,8 +704,10 @@ def describe_location(location: dict | None) -> str:
 _place_cache: dict[tuple, str] = {}
 
 
-def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, image_b64: str | None = None, vision_attempted: bool = False, location: dict | None = None) -> dict:
+def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, image_b64: str | None = None, vision_attempted: bool = False, location: dict | None = None, persona: str = "delamain") -> dict:
     system = base_system_prompt()
+    if persona == "corrupted":
+        system += "\n\n" + CORRUPTED_CORE
 
     now = time.strftime("%A, %B %-d %Y, %-I:%M %p %Z")
     system += f"\n\n[CURRENT TIME: {now}]"
@@ -855,16 +901,52 @@ def _maybe_log_telemetry() -> None:
     ))
 
 
-async def synthesize_voice(text: str) -> str | None:
+def _corrupt_audio(url: str, text: str) -> str:
+    """Glitch a synthesized clip for the corrupted core; returns the new clip's URL."""
+    rel = url.removeprefix("/audio/")
+    root, ext = os.path.splitext(rel)
+    dst_rel = f"{root}_corrupted{ext}"
+    dst = os.path.join(AUDIO_DIR, dst_rel)
+    if not os.path.exists(dst):  # cached phrases keep their glitched twin
+        corrupt_file(os.path.join(AUDIO_DIR, rel), dst, text)
+    if not rel.startswith("static_cache/"):
+        os.remove(os.path.join(AUDIO_DIR, rel))
+    return "/audio/" + dst_rel
+
+
+async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
     async with _tts_lock:
         try:
             loop = asyncio.get_event_loop()
             engine = get_tts_engine()
-            return await loop.run_in_executor(None, engine.synthesize, text)
+            url = await loop.run_in_executor(None, engine.synthesize, text)
         except Exception as e:
             print(f"Voice synthesis error (resetting engine): {e}")
             reset_engine()
-    return None
+            return None
+    if url and persona == "corrupted":
+        try:
+            url = await loop.run_in_executor(None, _corrupt_audio, url, text)
+        except Exception as e:
+            print(f"Voice corruption error (keeping clean audio): {e}")
+    return url
+
+
+def _persona(client_id: str) -> str:
+    return _client_persona.get(client_id, "delamain")
+
+
+async def _say_to(targets: list[tuple[str, WebSocket]], line: str, payload: dict) -> None:
+    """Send one spoken line to several clients, synthesizing once per personality core."""
+    audio: dict[str, str | None] = {}
+    for cid, ws in targets:
+        persona = _persona(cid)
+        if persona not in audio:
+            audio[persona] = await synthesize_voice(line, persona)
+        try:
+            await ws.send_json(dict(payload, text=line, audio_url=audio[persona]))
+        except Exception:
+            pass
 
 
 _SAVE_CLAIM = re.compile(
@@ -925,7 +1007,7 @@ async def _run_tool_loop(payload: dict, on_working=None) -> str:
 
 
 async def generate_response(history: list[dict], latest_message: str, location: dict | None = None,
-                            on_working=None) -> tuple[str, str | None, list[dict]]:
+                            on_working=None, persona: str = "delamain") -> tuple[str, str | None, list[dict]]:
     loop = asyncio.get_event_loop()
     search_context = ""
     if not TOOLS_ENABLED and should_search(latest_message):
@@ -943,7 +1025,8 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         else:
             print("[Vision] No snapshot available")
 
-    payload = build_llm_payload(history, search_context, image_b64=image_b64, vision_attempted=visual, location=location)
+    payload = build_llm_payload(history, search_context, image_b64=image_b64, vision_attempted=visual, location=location,
+                                persona=persona)
     if TOOLS_ENABLED and not image_b64:
         raw = await _run_tool_loop(payload, on_working)
     else:
@@ -951,7 +1034,8 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         if image_b64 and 400 <= response.status_code < 500:
             # Text-only models reject image parts; answer as if the camera were offline.
             print(f"[Vision] LLM rejected the image (HTTP {response.status_code}) — retrying without it")
-            payload = build_llm_payload(history, search_context, vision_attempted=True, location=location)
+            payload = build_llm_payload(history, search_context, vision_attempted=True, location=location,
+                                        persona=persona)
             response = await loop.run_in_executor(None, _post_llm, payload)
         response.raise_for_status()
         raw = response.json()["choices"][0]["message"]["content"]
@@ -966,7 +1050,7 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         navigate_options = await loop.run_in_executor(None, lambda: geocode_places(navigate_to, location=location))
         print(f"[Nav] Got {len(navigate_options)} result(s)")
 
-    audio_url = await synthesize_voice(text)
+    audio_url = await synthesize_voice(text, persona)
     return text, audio_url, navigate_options
 
 
@@ -1067,13 +1151,13 @@ async def _sp_announce(connected: bool) -> None:
         return
     _last_sp_voice_time = now
     pool = SP_CONNECT_LINES if connected else SP_DISCONNECT_LINES
-    line = random.choice(pool)
-    audio_url = await synthesize_voice(line)
-    await _broadcast_to_users({"type": "response", "text": line, "audio_url": audio_url, "source": "sp_connect" if connected else "sp_disconnect"})
+    targets = [(cid, ws) for cid, ws in list(connected_clients.items()) if cid != "sunnypilot-bridge"]
+    await _say_to(targets, random.choice(pool),
+                  {"type": "response", "source": "sp_connect" if connected else "sp_disconnect"})
 
 
 @app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = ""):
+async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain"):
     # sunnypilot bridge runs on LAN — exempt from auth, but only while the Comma link is enabled
     bridge_exempt = COMMA_ENABLED and client_id == "sunnypilot-bridge"
     if not bridge_exempt and not _auth.verify_token(token):
@@ -1081,6 +1165,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         return
     await websocket.accept()
     connected_clients[client_id] = websocket
+    if persona in PERSONAS:
+        _client_persona[client_id] = persona
     is_sp_bridge = bridge_exempt
     if not is_sp_bridge:
         _client_last_msg[client_id] = monotonic()  # start silence clock from connection
@@ -1091,8 +1177,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
             await _sp_announce(True)
         else:
             # Send greeting to the newly connected user client
-            greeting = random.choice(GREETINGS)
-            greeting_audio = await synthesize_voice(greeting)
+            corrupted = _persona(client_id) == "corrupted"
+            greeting = random.choice(CORRUPTED_GREETINGS if corrupted else GREETINGS)
+            greeting_audio = await synthesize_voice(greeting, _persona(client_id))
             await websocket.send_json({
                 "type": "greeting",
                 "text": greeting,
@@ -1108,7 +1195,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 now = monotonic()
                 if now - _last_sp_voice_time >= _SP_VOICE_COOLDOWN:
                     line = random.choice(SP_CONNECT_LINES)
-                    audio_url = await synthesize_voice(line)
+                    audio_url = await synthesize_voice(line, _persona(client_id))
                     await websocket.send_json({"type": "response", "text": line, "audio_url": audio_url, "source": "sp_connect"})
 
         async for raw in websocket.iter_text():
@@ -1134,14 +1221,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if len(history) > MAX_HISTORY:
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
-                async def say_working(ws=websocket):
-                    line = random.choice(WORKING_LINES)
+                persona_now = _persona(client_id)
+
+                async def say_working(ws=websocket, persona_now=persona_now):
+                    pool = CORRUPTED_WORKING_LINES if persona_now == "corrupted" else WORKING_LINES
+                    line = random.choice(pool)
                     await ws.send_json({"type": "response", "text": line,
-                                        "audio_url": await synthesize_voice(line), "source": "working"})
+                                        "audio_url": await synthesize_voice(line, persona_now), "source": "working"})
 
                 try:
                     text, audio_url, navigate_options = await generate_response(
-                        history, user_text, location=msg.get("location"), on_working=say_working)
+                        history, user_text, location=msg.get("location"), on_working=say_working,
+                        persona=persona_now)
                     history.append({"role": "assistant", "content": text})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url)
                     await websocket.send_json({
@@ -1190,15 +1281,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     ]
                     if targets:
                         try:
-                            audio_url = await synthesize_voice(line)
                             loop = asyncio.get_event_loop()
                             loop.run_in_executor(None, _db.log_event, event, data, line)
-                            payload = {"type": "response", "text": line, "audio_url": audio_url, "source": "vehicle_event", "event": event}
-                            for _, ws2 in targets:
-                                try:
-                                    await ws2.send_json(payload)
-                                except Exception:
-                                    pass
+                            await _say_to(targets, line, {"type": "response", "source": "vehicle_event", "event": event})
                         except Exception as e:
                             print(f"[WS] Event TTS error: {e}")
 
@@ -1207,6 +1292,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if level in _FREQ_EVENTS:
                     _client_dialogue_freq[client_id] = level
                     print(f"[WS] Dialogue frequency for {client_id}: {level}")
+
+            elif msg_type == "persona":
+                choice = msg.get("persona", "delamain")
+                if choice in PERSONAS and choice != _persona(client_id):
+                    _client_persona[client_id] = choice
+                    # Earlier replies in the other voice would pull the model back to it.
+                    conversation_history.pop(client_id, None)
+                    print(f"[WS] Personality core for {client_id}: {choice}")
 
             elif msg_type == "snapshot_data":
                 # Bridge fulfilled a snapshot request — resolve the pending Future
@@ -1222,6 +1315,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     finally:
         connected_clients.pop(client_id, None)
         _client_dialogue_freq.pop(client_id, None)
+        _client_persona.pop(client_id, None)
         if is_sp_bridge:
             vehicle_state.clear()
             try:

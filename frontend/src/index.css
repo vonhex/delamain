@@ -4,6 +4,7 @@
   --color-cyber-blue: #00f3ff;
   --color-cyber-dark: #0a0a0c;
   --color-cyber-gray: #1a1a1e;
+  --color-cyber-red: #ff2a45;
 
   --font-rajdhani: Rajdhani, sans-serif;
   --font-mono: Share Tech Mono, monospace;
@@ -44,4 +45,24 @@ body {
 
 #root {
   width: 100%;
+}
+
+/* Corrupted personality core: the face shifts toward red and tears now and then. */
+.corrupted-core {
+  filter: hue-rotate(165deg) saturate(1.4);
+  animation: core-tear 4.7s steps(1, end) infinite;
+}
+
+@keyframes core-tear {
+  0%, 100% { transform: none; filter: hue-rotate(165deg) saturate(1.4); }
+  31% { transform: translateX(-3px) skewX(-4deg); }
+  32% { transform: translateX(4px); filter: hue-rotate(140deg) saturate(2) contrast(1.4); }
+  33% { transform: none; }
+  71% { transform: translateY(2px) scaleY(0.97); filter: hue-rotate(185deg) saturate(1.8); }
+  72% { transform: translateX(-2px); }
+  73% { transform: none; filter: hue-rotate(165deg) saturate(1.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corrupted-core { animation: none; }
 }

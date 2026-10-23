@@ -40,6 +40,7 @@ interface AppSettings {
   temperature: number;
   maxTokens: number;
   dialogueFrequency: 'quiet' | 'standard' | 'full';
+  persona: 'delamain' | 'corrupted';
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -50,6 +51,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   temperature: 0.7,
   maxTokens: 150,
   dialogueFrequency: 'standard',
+  persona: 'delamain',
 };
 
 function App() {
@@ -91,6 +93,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const dialogueFreqRef = useRef(settings.dialogueFrequency);
+  const personaRef = useRef(settings.persona);
 
   // Audio queue — prevents vehicle event voices from overlapping
   const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
@@ -114,6 +117,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
     }
   }, [settings.dialogueFrequency]);
 
+  useEffect(() => {
+    personaRef.current = settings.persona;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'persona', persona: settings.persona }));
+    }
+  }, [settings.persona]);
+
   // Handle 401s from data API — if token is rejected, log out
   useEffect(() => {
     const id = axios.interceptors.response.use(
@@ -130,7 +140,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   useEffect(() => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const clientId = `web-${Date.now()}`;
-    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}`);
+    // The core travels in the URL so the greeting is already spoken in the right voice.
+    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}`);
     wsRef.current = ws;
 
     const playNext = () => {
@@ -475,6 +486,31 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   {tempSettings.dialogueFrequency === 'full' && 'All events — lane changes, acceleration, proactive remarks.'}
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Personality Core</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['delamain', 'corrupted'] as const).map(core => (
+                    <button
+                      key={core}
+                      onClick={() => setTempSettings({...tempSettings, persona: core})}
+                      className={`py-2 px-3 rounded border text-xs font-bold uppercase tracking-wider transition-colors ${
+                        tempSettings.persona === core
+                          ? core === 'corrupted'
+                            ? 'bg-cyber-red/20 border-cyber-red text-cyber-red'
+                            : 'bg-cyber-blue/20 border-cyber-blue text-cyber-blue'
+                          : 'bg-cyber-gray/30 border-cyber-blue/10 text-gray-500 hover:border-cyber-blue/30 hover:text-gray-300'
+                      }`}
+                    >
+                      {core}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-gray-500 leading-relaxed">
+                  {tempSettings.persona === 'delamain' && 'The original core — composed, formal, precise.'}
+                  {tempSettings.persona === 'corrupted' && 'A fractured core — stutters, rival sub-personalities and a damaged voice. Still drives you safely.'}
+                </p>
+              </div>
             </div>
 
             <div className="p-4 border-t border-cyber-gray bg-cyber-dark flex justify-end gap-3">
@@ -517,7 +553,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
             </div>
           </div>
 
-          <DelamainFace isTalking={isTalking} mood={faceMode} size="large" />
+          <div className={settings.persona === 'corrupted' ? 'corrupted-core' : undefined}>
+            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" />
+          </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}
           <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
