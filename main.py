@@ -16,7 +16,7 @@ import re
 import time
 import traceback
 import urllib.parse
-from tts_engine import get_tts_engine, reset_engine
+from tts_engine import OUTPUT_DIR, get_tts_engine, reset_engine
 from voice_glitch import corrupt_file
 import db as _db
 import auth as _auth
@@ -96,13 +96,13 @@ def require_auth(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) 
     if not creds or not _auth.verify_token(creds.credentials):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-AUDIO_DIR = os.path.join(os.path.dirname(__file__), "audio_output")
+AUDIO_DIR = OUTPUT_DIR
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
-LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4-vision-preview")
+LLM_MODEL = os.environ.get("LLM_MODEL") or "gpt-4-vision-preview"
 # Reasoning models (e.g. Halogen/Qwen) think by default; "none" keeps the whole
 # max_tokens budget for the spoken reply. Unset to send nothing.
 LLM_REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "")
@@ -683,6 +683,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         _client_persona.pop(client_id, None)
         conversation_history.pop(client_id, None)
         print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
+
+
+# The Docker image bundles the built web UI; serve it last so every route above wins.
+FRONTEND_DIST = os.environ.get("FRONTEND_DIST", "")
+if FRONTEND_DIST and os.path.isdir(FRONTEND_DIST):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 
 if __name__ == "__main__":

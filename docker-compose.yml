@@ -1,20 +1,25 @@
 services:
-  backend:
+  delamain:
     build: .
     image: ghcr.io/vonhex/delamain:latest
-    container_name: delamain-backend
+    container_name: delamain
     restart: unless-stopped
     ports:
-      - "8888:8888"
+      - "8888:8888"   # web UI, API and WebSocket
     volumes:
       # F5-TTS model weights — download separately, see README
       - ./checkpoints:/app/checkpoints
-      # Persistent data: database, audio cache, reference audio
-      - delamain-data:/app/data
+      # Database, voice clips, and your reference audio (delamain_ref_10s.wav)
+      - ./data:/app/data
+      # Optional: Obsidian vault for notes and long-term memory
+      - ${OBSIDIAN_VAULT_PATH:-./vault}:/vault
     environment:
       - LLM_URL=${LLM_URL:-http://host.docker.internal:8080/v1/chat/completions}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-}
+      - TOOLS_ENABLED=${TOOLS_ENABLED:-true}
       - SEARXNG_URL=${SEARXNG_URL:-}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8888}
     # GPU passthrough — uncomment if using NVIDIA GPU for F5-TTS
     # deploy:
     #   resources:
@@ -23,19 +28,3 @@ services:
     #         - driver: nvidia
     #           count: 1
     #           capabilities: [gpu]
-
-  frontend:
-    image: node:20-alpine
-    container_name: delamain-frontend
-    restart: unless-stopped
-    working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host"
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-    environment:
-      - VITE_BACKEND_URL=http://localhost:8888
-
-volumes:
-  delamain-data:

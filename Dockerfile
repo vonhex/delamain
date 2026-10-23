@@ -1,3 +1,12 @@
+# ── Web UI ───────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ── Backend (also serves the web UI) ─────────────────────────────────────────
 FROM python:3.12-slim
 
 # CUDA support: if you have an NVIDIA GPU, use the nvidia/cuda base instead:
@@ -17,20 +26,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# App source
-COPY main.py auth.py db.py tts_engine.py ./
+# App source and the built web UI
+COPY *.py ./
+COPY --from=frontend /frontend/dist /app/frontend_dist
 
 # Directories mounted at runtime via volumes:
 #   /app/checkpoints  — F5-TTS model weights
-#   /app/data         — database, audio output, reference audio
-RUN mkdir -p /app/audio_output/static_cache /app/checkpoints /app/data
+#   /app/data         — database, voice clips, reference audio (delamain_ref_10s.wav)
+#   /vault            — optional Obsidian vault for notes and memory
+RUN mkdir -p /app/checkpoints /app/data
 
-# Symlink audio_output into data volume so it persists
-RUN ln -s /app/data/audio_output /app/audio_output || true
+ENV PYTHONUNBUFFERED=1 \
+    DELAMAIN_DB=/app/data/delamain.db \
+    DELAMAIN_AUDIO_DIR=/app/data/audio_output \
+    DELAMAIN_REF_AUDIO=/app/data/delamain_ref_10s.wav \
+    FRONTEND_DIST=/app/frontend_dist \
+    OBSIDIAN_VAULT_PATH=/vault
 
 EXPOSE 8888
-
-ENV PYTHONUNBUFFERED=1
 
 CMD ["python", "-m", "uvicorn", "main:app", \
      "--host", "0.0.0.0", \
