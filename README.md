@@ -5,7 +5,7 @@
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
 
-An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. Delamain integrates with [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) on Comma hardware to deliver real-time voice commentary, proactive driving observations, navigation, web search, and a full data dashboard. Access it from your phone or via Android Auto's web browser — no app installation required.
+A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It runs in any browser, including the one on your car's Android Auto display, so there's nothing to install. Talk to it and it answers in Delamain's cloned voice. It can search the web, read you the news, keep notes and long-term memory in your Obsidian vault, and hand navigation off to your phone's map app.
 
 ---
 
@@ -23,8 +23,7 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
     <td><img src="Screenshots/login.png" alt="Login page" /></td>
   </tr>
   <tr>
-    <td><img src="Screenshots/data-explorer.png" alt="Data explorer dashboard" /></td>
-    <td><img src="Screenshots/settings.png" alt="System configuration panel" /></td>
+    <td colspan="2"><img src="Screenshots/settings.png" alt="System configuration panel" /></td>
   </tr>
 </table>
 
@@ -32,53 +31,44 @@ An AI companion for your vehicle — modeled on Delamain from Cyberpunk 2077. De
 
 ## Features
 
-- **Voice personality** — Delamain speaks with the exact character from Cyberpunk 2077: formal, measured, dry wit. Powered by F5-TTS with a custom voice clone.
-- **Real-time vehicle events** — hard braking, ACC engagement, lead car proximity, speeding alerts, lane changes, thermal warnings, and more — all with Delamain-voiced responses.
-- **Static phrase pre-cache** — alert phrases are synthesized at startup and served instantly. No latency on common events.
-- **Proactive commentary** — Delamain speaks unprompted after 30 minutes of driver silence while moving.
-- **Navigation** — ask Delamain to navigate anywhere; geocoded via Nominatim.
-- **Web search** — live weather, traffic, news, fuel prices via SearXNG integration.
-- **News bulletins** — "read me the news", "any tech news?", "local news": Delamain fetches current headlines (Google News RSS, SearXNG as fallback) and reads a short spoken bulletin.
-- **Corrupted personality core** — switch Delamain to a fractured rogue unit in Settings: rival sub-personalities, stutters and a glitched, damaged voice. Navigation and safety warnings stay intact.
-- **Road camera vision** — ask what's ahead; the sunnypilot bridge captures a road frame and Delamain describes it.
-- **Data dashboard** — web GUI with telemetry charts, event log, conversation history, trip summaries with GPS route maps and drive scores.
-- **JWT authentication** — single shared password, rate-limited login, 30-day tokens.
+- **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
+- **Corrupted personality core**: switch to a fractured rogue unit under Settings → Personality Core. It has rival sub-personalities, stutters, and a glitched, damaged voice made by post-processing the synthesized audio. Navigation and safety warnings stay intact.
+- **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
+- **Web search**: weather, traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
+- **Notes and memory**: lists, reminders and notes go into your Obsidian vault under `Delamain/`. Lasting facts about you and the people and places in your life are kept in `Delamain/Memory/`, one Markdown note per topic, and you can read and edit them in Obsidian.
+- **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route.
+- **Voice input**: a push-to-talk microphone button using the browser's speech recognition, plus a text chat panel.
+- **Conversation log**: a history panel of everything you and Delamain have said.
+- **JWT authentication**: a single shared password, rate-limited login and 30-day tokens.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────┐     WebSocket      ┌──────────────────────┐
-│  Comma 4            │◄──────────────────►│  Delamain Backend    │
-│  sunnypilot bridge  │  vehicle telemetry  │  (FastAPI + F5-TTS)  │
-└─────────────────────┘  events / snapshots └──────────┬───────────┘
-                                                        │ REST / WS
-                                            ┌───────────▼──────────┐
-                                            │  Web UI              │
-                                            │  (React + Vite)      │
-                                            └──────────────────────┘
+┌──────────────────────────┐   WebSocket    ┌──────────────────────────────┐
+│  Web UI (React + Vite)   │◄──────────────►│  Delamain backend (FastAPI)  │
+│  phone / Android Auto /  │  talk, replies │  F5-TTS voice, SQLite log    │
+│  any browser             │  audio URLs    └──┬──────────┬────────────┬───┘
+└──────────────────────────┘                   │          │            │
+                                     OpenAI-compatible  SearXNG /   Obsidian
+                                     LLM (tool calling) news RSS    vault
 ```
 
-- **Backend** — FastAPI on Python 3.12, SQLite database, F5-TTS voice engine, llama.cpp LLM integration.
-- **Frontend** — React + Vite, Tailwind CSS (cyber theme), recharts, Leaflet maps.
-- **Bridge** — `delamaind.py` runs on the Comma device, reads sunnypilot msgq shared memory, streams telemetry and events over WebSocket.
+- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. It works with any OpenAI-compatible chat endpoint (llama.cpp, vLLM, Halogen, …), and the LLM uses the tools in `assistant_tools.py`.
+- **Frontend**: React + Vite with Tailwind CSS v4 (cyber theme).
+- More detail: [docs/architecture.md](docs/architecture.md).
 
 ---
 
 ## Requirements
 
-### Hardware
-- **Comma 4** (or Comma 3X) running sunnypilot
-- **Server** with NVIDIA GPU (RTX 3060+ recommended for F5-TTS inference; 8GB+ VRAM)
-  - CPU-only works but TTS will be significantly slower on uncached phrases
-
-### Software
 - Python 3.11+
-- CUDA 12+ (if using GPU)
-- Node.js 20+ (for frontend dev)
-- llama.cpp server or any OpenAI-compatible LLM endpoint
-- SearXNG (optional, for web search)
+- A GPU is recommended for F5-TTS (NVIDIA CUDA or AMD ROCm). CPU works, but uncached phrases take noticeably longer to speak.
+- Node.js 20+ to build the frontend
+- An OpenAI-compatible LLM endpoint with tool calling (llama.cpp server, vLLM, Halogen, …)
+- SearXNG (optional; used for web search and as the news fallback)
+- An Obsidian vault (optional; used for notes and memory)
 
 ---
 
@@ -112,13 +102,13 @@ F5-TTS clones the voice from a reference clip. Provide a clean 10-second WAV of 
 cp your_voice_reference.wav delamain_ref_10s.wav
 ```
 
-Edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken in that clip.
+Edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken in that clip. See [docs/f5-tts.md](docs/f5-tts.md).
 
 ### 4. Configure environment
 
 ```bash
 cp .env.example .env
-# Edit .env with your LLM URL, SearXNG URL, and allowed origins
+# Set LLM_URL, LLM_MODEL, SEARXNG_URL, OBSIDIAN_VAULT_PATH and ALLOWED_ORIGINS
 ```
 
 ### 5. Set a password
@@ -141,7 +131,7 @@ npm install
 npm run dev
 ```
 
-Visit `http://localhost:5173` and log in with your password.
+Visit `http://localhost:5173` and log in with your password. For production, run `npm run build` and serve `frontend/dist`. The full guide is in [docs/setup.md](docs/setup.md).
 
 ---
 
@@ -152,17 +142,9 @@ cp .env.example .env   # edit .env first
 docker compose up -d
 ```
 
-Pre-built image: `ghcr.io/vonhex/delamain:latest`
+Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
 
 > F5-TTS model weights and reference audio are not included in the image. Mount them via volumes as shown in `docker-compose.yml`.
-
----
-
-## sunnypilot Bridge
-
-Delamain connects to sunnypilot via a bridge daemon that runs on the Comma device.
-
-**→ [vonhex/delamain-sp-bridge](https://github.com/vonhex/delamain-sp-bridge)**
 
 ---
 
@@ -170,10 +152,15 @@ Delamain connects to sunnypilot via a bridge daemon that runs on the Comma devic
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_URL` | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible LLM endpoint |
-| `SEARXNG_URL` | `http://localhost:8887/search` | SearXNG instance for web search |
+| `LLM_URL` | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible chat completions endpoint |
+| `LLM_MODEL` | `gpt-4-vision-preview` | Model id sent to the endpoint (check its `/v1/models`) |
+| `LLM_REASONING_EFFORT` | *(unset)* | For reasoning models: `none` turns thinking off so the whole reply budget goes to speech |
+| `TOOLS_ENABLED` | `true` | Let the LLM call web search, news, notes and memory |
+| `SEARXNG_URL` | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |
 | `NEWS_RSS_URL` | `https://news.google.com/rss` | Google News RSS base used by the news tool |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
+| `OBSIDIAN_VAULT_PATH` | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
+| `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
+| `ALLOWED_ORIGINS` | `https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
 
 ---
 
@@ -183,24 +170,22 @@ Delamain connects to sunnypilot via a bridge daemon that runs on the Comma devic
 |---|---|---|
 | `POST /api/login` | — | Authenticate, receive JWT |
 | `GET /health` | — | Health check |
-| `WS /ws/{client_id}?token=` | JWT | Main WebSocket — chat, events, audio |
-| `GET /api/data/telemetry` | JWT | Vehicle telemetry history |
-| `GET /api/data/events` | JWT | Vehicle event log |
-| `GET /api/data/conversations` | JWT | Chat history |
-| `GET /api/data/event-counts` | JWT | Event frequency |
-| `GET /api/data/trips` | JWT | Trip summaries with GPS routes and drive scores |
+| `WS /ws/{client_id}?token=&persona=` | JWT | Main WebSocket: talk, replies, audio |
+| `GET /api/data/conversations` | JWT | Conversation history |
 | `POST /api/chat` | JWT | Single-turn chat (REST fallback) |
+
+Details in [docs/api.md](docs/api.md).
 
 ---
 
 ## License
 
-[PolyForm Noncommercial License 1.0.0](LICENSE) — free for personal use; commercial use requires a separate agreement.
+[PolyForm Noncommercial License 1.0.0](LICENSE). It is free for personal use; commercial use requires a separate agreement.
 
 ---
 
 ## Acknowledgements
 
-- [F5-TTS](https://github.com/SWivid/F5-TTS) — voice synthesis
-- [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) — the ADAS platform Delamain bridges
-- CD Projekt Red — Cyberpunk 2077 and the Delamain character that inspired this project
+- [F5-TTS](https://github.com/SWivid/F5-TTS): voice synthesis
+- [SearXNG](https://github.com/searxng/searxng): private web search
+- CD Projekt Red: Cyberpunk 2077 and the Delamain character that inspired this project

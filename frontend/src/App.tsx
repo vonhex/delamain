@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Radio, Mic, Database, LogOut } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { DataDashboard } from './components/DataDashboard';
 import { LoginPage } from './components/LoginPage';
-import { playConnectChime, playResponsePing, playDisconnectTone } from './utils/sounds';
+import { playConnectChime, playResponsePing } from './utils/sounds';
 
 interface NavOption {
   name: string;
@@ -13,9 +13,6 @@ interface NavOption {
   lon?: string;
   query?: string;  // set when the place could not be geocoded; the map app searches it
 }
-
-// Comma / sunnypilot UI (link indicator). Build with VITE_COMMA_ENABLED=true to show it.
-const COMMA_ENABLED = import.meta.env.VITE_COMMA_ENABLED === 'true';
 
 // Last known browser position, sent with each message for "near me" questions.
 let lastLocation: { lat: number; lon: number } | null = null;
@@ -39,7 +36,6 @@ interface AppSettings {
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
-  dialogueFrequency: 'quiet' | 'standard' | 'full';
   persona: 'delamain' | 'corrupted';
 }
 
@@ -50,7 +46,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   systemPrompt: '',
   temperature: 0.7,
   maxTokens: 150,
-  dialogueFrequency: 'standard',
   persona: 'delamain',
 };
 
@@ -86,16 +81,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
-  const [spConnected, setSpConnected] = useState(false);
-  const [liveVehicleState, setLiveVehicleState] = useState<Record<string, any>>({});
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
   const [isListening, setIsListening] = useState(false);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
-  const dialogueFreqRef = useRef(settings.dialogueFrequency);
   const personaRef = useRef(settings.persona);
 
-  // Audio queue — prevents vehicle event voices from overlapping
+  // Audio queue — keeps spoken replies from overlapping
   const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
   const audioPlayingRef = useRef(false);
 
@@ -106,16 +98,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
   }, [settings]);
-
-  useEffect(() => {
-    dialogueFreqRef.current = settings.dialogueFrequency;
-  }, [settings.dialogueFrequency]);
-
-  useEffect(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'dialogue_frequency', level: settings.dialogueFrequency }));
-    }
-  }, [settings.dialogueFrequency]);
 
   useEffect(() => {
     personaRef.current = settings.persona;
@@ -171,22 +153,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'vehicle_state') {
-        setLiveVehicleState(msg.data);
-      } else if (msg.type === 'sp_status') {
-        setSpConnected(msg.connected);
-      } else if (msg.type === 'greeting') {
+      if (msg.type === 'greeting') {
         playConnectChime();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
       } else if (msg.type === 'response') {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
-        if (msg.source === 'sp_connect') setSpConnected(true);
-        if (msg.source === 'sp_disconnect') {
-          setSpConnected(false);
-          playDisconnectTone();
-        }
         playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
@@ -196,10 +169,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
           setNavOptions(msg.navigate_options);
         }
       }
-    };
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'dialogue_frequency', level: dialogueFreqRef.current }));
     };
 
     ws.onclose = (e) => {
@@ -362,14 +331,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
           <Database size={24} />
         </button>
         <div className="mt-auto flex flex-col items-center gap-3 pb-1">
-          {COMMA_ENABLED && <div
-            title={spConnected ? 'SUNNYPILOT LINK ACTIVE' : 'SUNNYPILOT LINK OFFLINE'}
-            className={`flex flex-col items-center gap-1 transition-colors duration-500 ${spConnected ? 'text-green-400' : 'text-gray-700'}`}
-          >
-            <Radio size={18} />
-            <span className="text-[8px] font-bold tracking-widest">SP</span>
-            <div className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${spConnected ? 'bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.7)]' : 'bg-gray-700'}`} />
-          </div>}
           <button
             onClick={onLogout}
             title="Sign out"
@@ -461,30 +422,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
                     className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Dialogue Frequency</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['quiet', 'standard', 'full'] as const).map(level => (
-                    <button
-                      key={level}
-                      onClick={() => setTempSettings({...tempSettings, dialogueFrequency: level})}
-                      className={`py-2 px-3 rounded border text-xs font-bold uppercase tracking-wider transition-colors ${
-                        tempSettings.dialogueFrequency === level
-                          ? 'bg-cyber-blue/20 border-cyber-blue text-cyber-blue'
-                          : 'bg-cyber-gray/30 border-cyber-blue/10 text-gray-500 hover:border-cyber-blue/30 hover:text-gray-300'
-                      }`}
-                    >
-                      {level}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[9px] text-gray-500 leading-relaxed">
-                  {tempSettings.dialogueFrequency === 'quiet' && 'Safety alerts only — hard brakes, critical warnings, seatbelt.'}
-                  {tempSettings.dialogueFrequency === 'standard' && 'Key events — ACC, speeding, proximity alerts, drive milestones.'}
-                  {tempSettings.dialogueFrequency === 'full' && 'All events — lane changes, acceleration, proactive remarks.'}
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -585,7 +522,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {/* Data Explorer Panel */}
         {isDataOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 w-full md:w-[560px]">
-            <DataDashboard token={token} liveVehicleState={liveVehicleState} onClose={() => setIsDataOpen(false)} />
+            <DataDashboard token={token} onClose={() => setIsDataOpen(false)} />
           </div>
         )}
 

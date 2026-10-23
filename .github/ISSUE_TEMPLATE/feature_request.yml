@@ -38,12 +38,11 @@ body:
       options:
         - Voice / TTS
         - Chat / LLM
-        - Vehicle events
-        - sunnypilot bridge
+        - Personality / corrupted core
         - Navigation
-        - Web search
-        - Road camera / vision
-        - Data dashboard
+        - Web search / news
+        - Notes / memory (Obsidian)
+        - Conversation log
         - Docker / deployment
         - API
         - Other

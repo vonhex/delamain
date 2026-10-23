@@ -28,7 +28,8 @@ Delamain is designed for personal or trusted-network use. Keep the following in 
 
 - **JWT authentication** is enforced on all API endpoints and WebSocket connections. Tokens expire after 30 days.
 - **Rate limiting** is applied to the login endpoint (10 requests/minute per IP) to prevent brute-force attacks.
-- **The sunnypilot bridge** (`client_id = "sunnypilot-bridge"`) is exempt from token auth and is assumed to be on a trusted LAN. Do not expose port 8888 directly to the internet without a reverse proxy and TLS.
+- **No auth exemptions**: every WebSocket client needs a valid token. Do not expose port 8888 directly to the internet without a reverse proxy and TLS.
+- **Tools are confined**: note tools cannot leave the configured Obsidian vault, and `read_webpage` refuses private and local addresses.
 - **HTTPS / TLS** is not handled by Delamain itself — use a reverse proxy (nginx, Caddy, Cloudflare Tunnel) if you need remote access.
 
 Always run Delamain behind a VPN or secure tunnel if exposing it beyond your local network.

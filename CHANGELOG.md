@@ -4,6 +4,18 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.4.0] — 2026-10-23
+
+### Removed
+- **sunnypilot / openpilot integration.** Delamain is now a general voice assistant for the drive. Removed: the Comma bridge (`sunnypilot_bridge/`), vehicle event announcements, live telemetry in the prompt, the road camera, the proactive "still driving" remarks, the SP link indicator, the dialogue-frequency setting, the telemetry/events/trips dashboard and its API endpoints, and the `COMMA_ENABLED` switch. Existing databases keep their old tables untouched.
+- The chart and map libraries the old dashboard used (recharts, Leaflet), which cuts the frontend bundle roughly in half.
+
+### Changed
+- The Data panel is now a conversation log.
+- The README, docs, privacy policy and security notes describe the current app, including every outside service Delamain contacts.
+
+---
+
 ## [1.3.0] — 2026-10-23
 
 ### Added

@@ -13,8 +13,6 @@ Authorization: Bearer <token>
 
 For WebSocket: pass as query param: `/ws/{client_id}?token=<token>`
 
-The `sunnypilot-bridge` client ID is exempt from auth (LAN-only bridge).
-
 ---
 
 ## Endpoints
@@ -47,49 +45,6 @@ No auth required.
 
 ---
 
-### `GET /api/data/telemetry`
-
-**Query params:**
-- `since` — Unix timestamp (default: 0)
-- `limit` — max rows (default: 2000)
-
-**Response:** Array of telemetry rows ordered by timestamp ascending.
-
-```json
-[
-  {
-    "ts": 1748000000.0,
-    "speed_mph": 45.2,
-    "cruise_mph": 50.0,
-    "acc_active": 1,
-    "lead_dist_m": 32.5,
-    "speed_limit_mph": 45.0,
-    "lat": 37.7749,
-    "lon": -122.4194
-  }
-]
-```
-
----
-
-### `GET /api/data/events`
-
-**Query params:**
-- `since`, `limit`, `event` (filter by event name)
-
-```json
-[
-  {
-    "ts": 1748000100.0,
-    "event": "hard_brake",
-    "data": { "decel": -4.8, "speed_mph": 52 },
-    "response": "Substantial deceleration. I trust the situation is under control."
-  }
-]
-```
-
----
-
 ### `GET /api/data/conversations`
 
 **Query params:** `since`, `limit`
@@ -103,58 +58,20 @@ No auth required.
 
 ---
 
-### `GET /api/data/event-counts`
+## WebSocket: `/ws/{client_id}?token=&persona=`
 
-**Query params:** `since`
-
-```json
-[
-  { "event": "lead_car_close", "count": 12 },
-  { "event": "hard_brake", "count": 3 }
-]
-```
-
----
-
-### `GET /api/data/trips`
-
-**Query params:** `limit` (default: 20)
-
-Trips are segmented from telemetry by 5-minute gaps in data. Drive score starts at 100 and deducts for dangerous events.
-
-```json
-[
-  {
-    "start_ts": 1748000000.0,
-    "end_ts": 1748003600.0,
-    "duration_min": 60.0,
-    "avg_speed": 38.5,
-    "max_speed": 72.0,
-    "acc_pct": 45,
-    "score": 85,
-    "events": { "hard_brake": 2, "speeding": 1 },
-    "route": [{ "lat": 37.77, "lon": -122.41 }, ...],
-    "center": { "lat": 37.78, "lon": -122.42 }
-  }
-]
-```
-
-**Drive score deductions:**
-- `very_hard_brake` × 15 (max 30)
-- `hard_brake` × 5 (max 20)
-- `lead_car_very_close` × 10 (max 25)
-- `lead_car_close` × 3 (max 15)
-- `speeding` × 5 (max 20)
-
----
-
-## WebSocket: `/ws/{client_id}?token=`
+`persona` is optional: `delamain` (default) or `corrupted`. It sets the personality core from the first message, the greeting included.
 
 ### Client → Server messages
 
-**Talk:**
+**Talk:** `location` is optional and is used for "near me" questions and local news.
 ```json
-{ "type": "talk", "text": "What is the speed limit here?", "user_name": "V" }
+{ "type": "talk", "text": "Read me the news.", "user_name": "V", "location": { "lat": 39.74, "lon": -104.99 } }
+```
+
+**Switch personality core:** clears the conversation history so the new voice starts clean.
+```json
+{ "type": "persona", "persona": "corrupted" }
 ```
 
 **Ping:**
@@ -169,20 +86,19 @@ Trips are segmented from telemetry by 5-minute gaps in data. Drive score starts 
 { "type": "greeting", "text": "Delamain online...", "audio_url": "/audio/xyz.wav" }
 ```
 
-**Response** (to talk, vehicle event, or proactive):
+**Response** (to talk). While tools run, a short line with `"source": "working"` ("One moment.") arrives first, then the reply:
 ```json
 {
   "type": "response",
-  "text": "The speed limit is 45 miles per hour.",
+  "text": "Plotting a course to Union Station.",
   "audio_url": "/audio/xyz.wav",
-  "source": "talk",
-  "navigate_options": []
+  "navigate_options": [{ "name": "Union Station", "address": "Wynkoop Street, Denver", "lat": "39.75", "lon": "-105.00" }]
 }
 ```
 
-**SP status:**
+**Error:**
 ```json
-{ "type": "sp_status", "connected": true }
+{ "type": "error", "detail": "..." }
 ```
 
 **Pong:**
@@ -190,4 +106,4 @@ Trips are segmented from telemetry by 5-minute gaps in data. Drive score starts 
 { "type": "pong" }
 ```
 
-`navigate_options` is an array of `{ name, address, lat, lon }` when Delamain has geocoded a navigation request.
+`navigate_options` is an array of `{ name, address, lat, lon }` when Delamain has geocoded a navigation request, or `{ name, address, query }` when geocoding found nothing and the map app should search by text. Audio for the corrupted core ends in `_corrupted.wav`.

@@ -1,26 +1,36 @@
 # Privacy Policy for Delamain
 
-**Last updated: May 9, 2026**
+**Last updated: October 23, 2026**
 
 ## Overview
 
-Delamain is a personal AI assistant for Android Auto. This policy explains how the app handles your data.
+Delamain is a self-hosted voice assistant that runs in a web browser. You run the backend yourself; this policy explains what it does with your data.
 
 ## Microphone Access
 
-The app uses your device's microphone solely to capture voice input when you tap the Talk button. Audio is processed on-device by Android's speech recognition system and is not recorded, stored, or transmitted to any third party by this app.
+The browser asks for microphone access when you press the Talk button. Speech is turned into text by the browser's built-in speech recognition. In Chrome and Android browsers that service is provided by Google, so your spoken audio is processed under Google's terms. Delamain receives only the resulting text and never records audio.
 
-## Data Collection
+## Location
 
-Delamain does not collect, store, or share any personal information. No analytics, no tracking, no advertising.
+If you allow it, the browser shares your approximate position with your Delamain server for "near me" questions, local news and navigation.
 
-## Vehicle Data
+## What is stored
 
-If connected to a compatible vehicle telemetry source, real-time driving data (speed, acceleration) is used locally to personalize responses during your session. This data is never stored or transmitted beyond your session.
+- **Conversation log**: what you say and what Delamain replies are saved in the SQLite database on your server (`delamain.db`), viewable in the conversation log panel.
+- **Notes and memory**: notes, reminders and long-term memory are written as Markdown files in the Obsidian vault you configure, under `Delamain/`. You can read, edit or delete them at any time.
+- **Voice clips**: synthesized replies are saved as WAV files in `audio_output/` on your server.
 
-## Third-Party Services
+Delamain has no analytics, tracking or advertising, and nothing is sent to the project's authors.
 
-The app communicates with a self-hosted backend server you control. No data is sent to third-party services.
+## Services Delamain contacts
+
+Your server contacts only the services needed to answer you:
+
+- **Your LLM endpoint** (`LLM_URL`): receives the conversation, your rough location and your memory notes in order to write replies. If you point it at a hosted provider, that provider's terms apply.
+- **SearXNG** (`SEARXNG_URL`): receives web search queries. It is usually self-hosted.
+- **Google News RSS**: receives the news topic or town you ask about.
+- **OpenStreetMap Nominatim**: receives your coordinates, to name the nearby town, and the names of places you navigate to.
+- **Public web pages**: fetched when Delamain reads a search result for detail.
 
 ## Contact
 
