@@ -60,7 +60,7 @@ No auth required.
 
 ## WebSocket: `/ws/{client_id}?token=&persona=`
 
-`persona` is optional: `delamain` (default) or `corrupted`. It sets the personality core from the first message, the greeting included.
+`persona` is optional: `delamain` (default) or `corrupted`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
 
 ### Client → Server messages
 
@@ -81,7 +81,12 @@ No auth required.
 
 ### Server → Client messages
 
-**Greeting** (on connect):
+**History** (on connect, when there was conversation in the last 30 minutes):
+```json
+{ "type": "history", "messages": [{ "role": "user", "content": "..." }, { "role": "assistant", "content": "..." }] }
+```
+
+**Greeting** (on connect; skipped when the last message was under 10 minutes ago):
 ```json
 { "type": "greeting", "text": "Delamain online...", "audio_url": "/audio/xyz.wav" }
 ```
@@ -95,6 +100,8 @@ No auth required.
   "navigate_options": [{ "name": "Union Station", "address": "Wynkoop Street, Denver", "lat": "39.75", "lon": "-105.00" }]
 }
 ```
+
+**Reminder** (unprompted, when a reminder is due): a `response` with `"source": "reminder"`.
 
 **Error:**
 ```json

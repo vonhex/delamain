@@ -86,6 +86,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const personaRef = useRef(settings.persona);
+  const userNameRef = useRef(settings.userName);
 
   // Audio queue — keeps spoken replies from overlapping
   const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
@@ -98,6 +99,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   useEffect(() => {
     localStorage.setItem('delamain_settings', JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => { userNameRef.current = settings.userName; }, [settings.userName]);
 
   useEffect(() => {
     personaRef.current = settings.persona;
@@ -123,7 +126,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const clientId = `web-${Date.now()}`;
     // The core travels in the URL so the greeting is already spoken in the right voice.
-    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}`);
+    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}`);
     wsRef.current = ws;
 
     const playNext = () => {
@@ -153,7 +156,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'greeting') {
+      if (msg.type === 'history') {
+        // Reconnected mid-conversation: show what was said, unless this tab already has it.
+        setMessages(prev => prev.length ? prev : msg.messages.map((m: { role: string; content: string }) => ({
+          role: m.role === 'user' ? 'user' : 'delamain', content: m.content,
+        })));
+      } else if (msg.type === 'greeting') {
         playConnectChime();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);

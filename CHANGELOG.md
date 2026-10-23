@@ -4,6 +4,19 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.5.0] — 2026-10-23
+
+### Added
+- **Spoken reminders and timers**: `set_reminder`, `list_reminders` and `cancel_reminder` tools. Reminders are stored in SQLite; a background task speaks each one in character when it is due, and on reconnect if nobody was listening.
+- **Weather** (`get_weather`, Open-Meteo) and **drive time and distance** (`get_route`, OSRM), using the passenger's location.
+- **Conversation resumes across reconnects**: the last 30 minutes are restored and shown in the chat panel. A reconnect within 10 minutes skips the greeting.
+- **Greetings fit the time of day**, and Delamain uses the passenger's name from Settings now and then.
+
+### Fixed
+- **The face no longer jumps to fullscreen in Fermata on Android Auto**: the animations decode in off-page video elements and are painted onto canvases inside the circle.
+
+---
+
 ## [1.4.0] — 2026-10-23
 
 ### Removed
