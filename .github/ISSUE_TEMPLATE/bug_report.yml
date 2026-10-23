@@ -63,6 +63,7 @@ body:
       label: GPU / TTS setup
       options:
         - NVIDIA GPU (CUDA)
+        - AMD GPU (ROCm)
         - CPU only
         - Not using TTS / voice disabled
         - Other
@@ -80,4 +81,4 @@ body:
     id: extra
     attributes:
       label: Anything else?
-      description: Screenshots, browser console errors, sunnypilot bridge version — anything that might help.
+      description: Screenshots, browser console errors, your LLM server and model — anything that might help.

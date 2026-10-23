@@ -1,78 +1,44 @@
 # Architecture
 
-## Overview
-
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Comma 4 Device (sunnypilot)                                 │
-│                                                              │
-│  ┌─────────────┐   mmap read-only   ┌──────────────────┐   │
-│  │  sunnypilot │ ◄───────────────── │  delamaind.py    │   │
-│  │  msgq shm   │                    │  (bridge daemon) │   │
-│  └─────────────┘                    └────────┬─────────┘   │
-│                                              │ WebSocket    │
-└──────────────────────────────────────────────│──────────────┘
-                                               │
-                              ┌────────────────▼─────────────────┐
-                              │  Delamain Backend (your server)   │
-                              │                                   │
-                              │  FastAPI + SQLite + F5-TTS        │
-                              │  ┌────────────┐ ┌─────────────┐  │
-                              │  │  REST API  │ │  WebSocket  │  │
-                              │  └────────────┘ └─────────────┘  │
-                              │  ┌────────────┐ ┌─────────────┐  │
-                              │  │  llama.cpp │ │  SearXNG    │  │
-                              │  │  (LLM)     │ │  (search)   │  │
-                              │  └────────────┘ └─────────────┘  │
-                              └────────────────┬─────────────────┘
-                                               │ REST / WS
-                              ┌────────────────▼─────────────────┐
-                              │  Client (your browser)           │
-                              │                                   │
-                              │  React web app                   │
-                              └──────────────────────────────────┘
+┌──────────────────────────┐   WebSocket    ┌──────────────────────────────┐
+│  Web UI (React + Vite)   │◄──────────────►│  Delamain backend (FastAPI)  │
+│  phone / Android Auto /  │  talk, replies │  F5-TTS voice, SQLite log    │
+│  any browser             │  audio URLs    └──┬──────────┬────────────┬───┘
+└──────────────────────────┘                   │          │            │
+                                     OpenAI-compatible  SearXNG /   Obsidian
+                                     LLM (tool calling) news RSS    vault
 ```
 
 ## Components
 
 ### Backend (`main.py`)
-- **FastAPI** — REST endpoints + WebSocket server
-- **SQLite** (`db.py`) — telemetry, events, conversations, auth settings
-- **F5-TTS** (`tts_engine.py`) — voice synthesis with static phrase pre-cache
-- **JWT auth** (`auth.py`) — bcrypt password, 30-day tokens
+- **FastAPI** with one WebSocket per browser tab (`/ws/{client_id}`), plus a few REST endpoints
+- **LLM**: any OpenAI-compatible chat endpoint (`LLM_URL`). The system prompt carries Delamain's character, the current time, the passenger's rough location (reverse-geocoded from the browser), and long-term memory.
+- **Tool loop**: when `TOOLS_ENABLED`, the model can call the tools in `assistant_tools.py`, up to six rounds per reply. A spoken "One moment." covers the wait.
+- **Personality cores**: `delamain` (default) or `corrupted`, chosen per client. Corrupted adds a fractured-core section to the prompt and glitches the audio (`voice_glitch.py`).
+- **F5-TTS** (`tts_engine.py`): voice cloning from a 10-second reference clip. The fixed "one moment" lines are pre-cached at startup.
+- **SQLite** (`db.py`): conversation log
+- **Auth** (`auth.py`): bcrypt password and 30-day JWTs
+
+### Tools (`assistant_tools.py`)
+- `web_search` (SearXNG) and `read_webpage` (public hosts only)
+- `get_news`: Google News RSS top stories, sections, subjects or a town's local news, with SearXNG news as the fallback
+- `list_notes`, `read_note`, `search_notes`, `write_note`, `append_to_note`: confined to the Obsidian vault
+- `remember` / `forget`: long-term memory as dated bullets in `Delamain/Memory/*.md`
 
 ### Frontend (`frontend/`)
-- React + TypeScript + Vite
-- Tailwind CSS (cyber theme)
-- `DelamainFace` — animated talking face
-- `DataDashboard` — telemetry charts, event log, trip summaries, GPS maps
-- `LoginPage` — JWT authentication
-- WebSocket connection to backend for real-time audio and events
+- **React + Vite**, Tailwind CSS v4 cyber theme
+- `App.tsx`: WebSocket client, audio queue, push-to-talk, chat panel, settings and navigation hand-off
+- `DelamainFace`: animated face; it tints red and tears when the corrupted core is active
+- `DataDashboard`: conversation log
 
-### Bridge (`delamaind.py`)
-- Reads sunnypilot shared memory via `mmap` (read-only, zero impact on SP)
-- Fires vehicle events with per-event cooldowns to avoid spam
-- Streams telemetry at 2 Hz
-- Captures road camera frames via VisionIPC on demand
+## Conversation flow
 
-## Data flow: voice alert
-
-1. Vehicle event fires (e.g. hard brake detected by bridge)
-2. Bridge sends `{"type": "vehicle_event", "event": "hard_brake", ...}` over WebSocket
-3. Backend picks a random response from the event pool
-4. Backend checks static cache — if the phrase was pre-synthesized at startup, returns instantly
-5. If not cached, calls F5-TTS (1–3 seconds)
-6. Backend sends `{"type": "response", "text": "...", "audio_url": "..."}` to all connected clients
-7. Web app plays the audio URL
-
-## Data flow: LLM conversation
-
-1. User speaks → STT (Web Speech API) → transcribed text
-2. Client sends `{"type": "talk", "text": "..."}` over WebSocket
-3. Backend checks for visual question trigger → requests road camera snapshot if needed
-4. Backend checks for search trigger → queries SearXNG if needed
-5. Backend calls llama.cpp with system prompt, conversation history, any context
-6. Response parsed for `[NAVIGATE:...]` tag → geocoded if present
-7. F5-TTS synthesizes response audio
-8. Backend sends response + audio URL back over WebSocket
-9. Client plays audio, displays text, handles navigation if needed
+1. The passenger presses the mic (browser speech recognition) or types a message.
+2. The frontend sends `{"type": "talk", "text": "...", "location": {...}}` over the WebSocket.
+3. The backend builds the prompt (character, personality core, time, location, memory) and runs the tool loop.
+4. If tools run, a "One moment." line is spoken first.
+5. The reply text is checked for a `[NAVIGATE:destination]` tag; destinations are geocoded with Nominatim.
+6. F5-TTS synthesizes the reply (then glitches it for the corrupted core) and the backend sends `{"type": "response", "text": ..., "audio_url": ..., "navigate_options": [...]}`.
+7. The frontend queues and plays the audio, and opens the map app for a single navigation result.

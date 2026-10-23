@@ -34,9 +34,3 @@ export function playConnectChime(): void {
 export function playResponsePing(): void {
   tone(659.25, 0.0, 0.08, 0.10); // E5, barely there
 }
-
-// Low two-note chord played when SP link drops
-export function playDisconnectTone(): void {
-  tone(440.00, 0.0, 0.25, 0.15); // A4
-  tone(329.63, 0.1, 0.30, 0.12); // E4 — descending feel
-}

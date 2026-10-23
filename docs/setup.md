@@ -38,8 +38,11 @@ Edit `.env`:
 
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_URL` | Yes | llama.cpp or OpenAI-compatible endpoint |
-| `SEARXNG_URL` | No | SearXNG instance for web search |
+| `LLM_URL` | Yes | OpenAI-compatible chat endpoint with tool calling |
+| `LLM_MODEL` | Yes | Model id the endpoint serves (see its `/v1/models`) |
+| `LLM_REASONING_EFFORT` | No | `none` turns thinking off on reasoning models |
+| `SEARXNG_URL` | No | SearXNG instance for web search and the news fallback |
+| `OBSIDIAN_VAULT_PATH` | No | Vault for notes and memory |
 | `ALLOWED_ORIGINS` | Yes | Your domain/IP for CORS |
 
 ## 5. Set a password
@@ -72,6 +75,6 @@ cd frontend && npm run build
 # Serve dist/ with nginx or any static file server
 ```
 
-## 7. Connect sunnypilot bridge
+## 7. Use it in the car
 
-See [sunnypilot-bridge.md](sunnypilot-bridge.md).
+Open the frontend's address in the browser on your phone or on the Android Auto display, log in, and press the mic. Over the internet, put it behind HTTPS (for example a Cloudflare Tunnel) and add that origin to `ALLOWED_ORIGINS`. Browsers only allow the microphone and location on secure pages.
