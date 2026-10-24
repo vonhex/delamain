@@ -91,7 +91,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const userNameRef = useRef(settings.userName);
 
   // Audio queue — keeps spoken replies from overlapping
-  const audioQueueRef = useRef<Array<{ url: string; text?: string }>>([]);
+  const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string }>>([]);
+  const [lineClip, setLineClip] = useState<{ url: string; n: number } | null>(null);
   const audioPlayingRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -132,22 +133,25 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const playNext = () => {
       const item = audioQueueRef.current.shift();
       if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
-      const { url: audioUrl, text } = item;
+      const { url: audioUrl, text, video } = item;
+      // A pre-recorded line with its own lip-synced clip: the face cuts to it as the audio starts.
+      const showClip = () => { if (video) setLineClip({ url: video, n: Date.now() }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
-      audio.onplay  = () => setIsTalking(true);
+      audio.onplay  = () => { showClip(); setIsTalking(true); };
       audio.onended = () => { playNext(); };
       audio.onerror = () => { playNext(); };
       audio.play().catch(() => {
         if (text) {
+          showClip();
           setIsTalking(true);
           setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
         } else { playNext(); }
       });
     };
 
-    const playAudio = (audioUrl: string, text?: string) => {
-      audioQueueRef.current.push({ url: audioUrl, text });
+    const playAudio = (audioUrl: string, text?: string, video?: string) => {
+      audioQueueRef.current.push({ url: audioUrl, text, video });
       if (!audioPlayingRef.current) {
         audioPlayingRef.current = true;
         playNext();
@@ -163,13 +167,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
         })));
       } else if (msg.type === 'greeting') {
         playConnectChime();
-        if (msg.audio_url) playAudio(msg.audio_url, msg.text);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
       } else if (msg.type === 'response') {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
         playResponsePing();
-        if (msg.audio_url) playAudio(msg.audio_url, msg.text);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
           navigateToCoords(msg.navigate_options[0]);
@@ -521,7 +525,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
           </div>
 
           <div className={settings.persona === 'delamain' ? undefined : `core-${settings.persona}`}>
-            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" />
+            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip} />
           </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}

@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tts_engine import OUTPUT_DIR, get_tts_engine, reset_engine
 from voice_glitch import corrupt_file
 import personas as _personas
+import lines as _lines
 import db as _db
 import auth as _auth
 import assistant_tools as _tools
@@ -57,15 +58,23 @@ def web_search(query: str, max_results: int = 5) -> str:
 _tts_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
 
 
-def _warmup_tts() -> None:
-    """Load the TTS engine and pre-synthesize the fixed 'one moment' lines."""
+async def _warmup_tts() -> None:
+    """Load the TTS engine, then pre-synthesize every fixed line, one at a time.
+
+    Every fixed line is cached (greetings, "one moment", the canned replies in
+    lines.py), so each always plays the same take and can have a lip-synced clip.
+    Each line takes the TTS lock on its own, so live replies are not held up
+    behind the whole batch."""
+    loop = asyncio.get_event_loop()
     try:
-        engine = get_tts_engine()
-        # Greetings are cached too, so each one always plays the same take and can
-        # have a lip-synced face clip made for it.
-        static_phrases = [line for p in PERSONAS.values() for line in p.working + p.greetings] + GREETINGS
-        print(f"[TTS] Pre-caching {len(static_phrases)} static phrases...")
-        engine.pre_cache(static_phrases)
+        engine = await loop.run_in_executor(_tts_executor, get_tts_engine)
+        phrases = list(dict.fromkeys(r["line"] for r in _lines.registry()))
+        missing = [t for t in phrases if not engine.is_cached(t)]
+        print(f"[TTS] {len(phrases)} fixed lines, {len(missing)} to pre-record")
+        for text in missing:
+            async with _tts_lock:
+                await loop.run_in_executor(_tts_executor, engine.pre_cache, [text])
+        print(f"[TTS] Pre-cache complete ({len(phrases)} fixed lines ready).")
     except Exception as e:
         print(f"[TTS] Warmup error (non-fatal): {e}")
 
@@ -76,7 +85,7 @@ async def lifespan(app: FastAPI):
     # Load TTS and pre-cache the fixed phrases in background so the server
     # starts accepting requests immediately.
     _db.init_db()
-    warmup_task = loop.run_in_executor(_tts_executor, _warmup_tts)
+    warmup_task = asyncio.create_task(_warmup_tts())
     reminder_task = asyncio.create_task(_reminder_loop())
     yield
     reminder_task.cancel()
@@ -111,6 +120,23 @@ AUDIO_DIR = OUTPUT_DIR
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
+
+# Lip-synced face clips for the pre-recorded lines, saved as <clip id>.mp4
+# (for example 04_glen/greeting_01.mp4). A line without a clip uses the talking loops.
+LINES_DIR = os.environ.get("DELAMAIN_LINES_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_clips"))
+os.makedirs(LINES_DIR, exist_ok=True)
+app.mount("/lines", StaticFiles(directory=LINES_DIR), name="lines")
+_line_ids: dict[tuple[str, str], str] = {}
+
+
+def line_video(persona: str, text: str) -> str | None:
+    """URL of the lip-synced clip for a pre-recorded line, if one has been made."""
+    if not _line_ids:
+        _line_ids.update({(r["core_key"], r["line"]): r["id"] for r in _lines.registry()})
+    clip = _line_ids.get((persona, text))
+    if clip and os.path.exists(os.path.join(LINES_DIR, clip + ".mp4")):
+        return f"/lines/{clip}.mp4"
+    return None
 
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
 LLM_MODEL = os.environ.get("LLM_MODEL") or "gpt-4-vision-preview"
@@ -309,6 +335,8 @@ _tts_lock = asyncio.Lock()  # F5-TTS is not thread-safe; serialize all synthesis
 
 # Per-client personality core: one of PERSONAS
 _client_persona: dict[str, str] = {}
+# Last pre-recorded reply of each kind per client, so the same line is not used twice running
+_last_canned: dict[tuple[str, str], str] = {}
 # Clients that have been greeted and can take unprompted speech (reminders)
 _ready_clients: set[str] = set()
 
@@ -666,6 +694,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 "type": "greeting",
                 "text": greeting,
                 "audio_url": greeting_audio,
+                "video_url": line_video(_persona(client_id), greeting),
             })
         _ready_clients.add(client_id)
 
@@ -696,7 +725,23 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 async def say_working(ws=websocket, persona_now=persona_now):
                     line = random.choice(_personas.get(persona_now).working)
                     await ws.send_json({"type": "response", "text": line,
-                                        "audio_url": await synthesize_voice(line, persona_now), "source": "working"})
+                                        "audio_url": await synthesize_voice(line, persona_now),
+                                        "video_url": line_video(persona_now, line), "source": "working"})
+
+                # Everyday messages ("thanks", "how are you", "combat mode") get an
+                # instant pre-recorded reply instead of a model call.
+                prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
+                kind = _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
+                if kind:
+                    text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
+                    _last_canned[(client_id, kind)] = text
+                    audio_url = await synthesize_voice(text, persona_now)
+                    history.append({"role": "assistant", "content": text})
+                    loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
+                    print(f"[WS] Pre-recorded reply ({kind}) to {client_id}")
+                    await websocket.send_json({"type": "response", "text": text, "audio_url": audio_url,
+                                               "video_url": line_video(persona_now, text), "source": "canned"})
+                    continue
 
                 try:
                     text, audio_url, navigate_options = await generate_response(
@@ -713,7 +758,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 except Exception as e:
                     print(f"[WS] Response error: {e}")
                     history.pop()
-                    await websocket.send_json({"type": "error", "detail": str(e)})
+                    line = _lines.pick(persona_now, "error")
+                    await websocket.send_json({"type": "response", "text": line,
+                                               "audio_url": await synthesize_voice(line, persona_now),
+                                               "video_url": line_video(persona_now, line), "source": "error"})
 
             elif msg_type == "persona":
                 choice = msg.get("persona", "delamain")
@@ -732,6 +780,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         connected_clients.pop(client_id, None)
         _client_persona.pop(client_id, None)
         _ready_clients.discard(client_id)
+        for key in [k for k in _last_canned if k[0] == client_id]:
+            _last_canned.pop(key, None)
         conversation_history.pop(client_id, None)
         print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
 

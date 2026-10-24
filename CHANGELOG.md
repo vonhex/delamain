@@ -4,6 +4,25 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.7.0] — 2026-10-24
+
+### Added
+- **Instant pre-recorded replies**: about 470 fixed lines across all ten cores for everyday messages (thanks, goodbye, good night, good morning, how are you, who are you, what can you do, are you there, compliments, I love you, insults, never mind, okay, jokes, combat mode). They skip the model and use audio recorded at startup, so they answer in well under a second.
+- **Combat mode**: "My apologies, but you do not appear to be in any sort of imminent danger," as Delamain told Jackie. A new safety rule comes first: if the passenger says they are being followed or threatened, he answers seriously.
+- **Lip-synced face clips**: every fixed line has a stable clip id, and a video saved as `line_clips/<id>.mp4` plays on the face whenever that line is spoken. Clips use the same off-page, canvas-painted playback as the other face clips.
+- Every greeting is pre-recorded, so each always plays the same take.
+
+### Changed
+- Personality-core voice effects are much gentler; every word stays understandable.
+- Face color tints for the cores are muted, and the talking overlay is a faint wash.
+- Failed replies are spoken ("My apologies. I was unable to complete that request.") instead of leaving the page waiting.
+
+### Fixed
+- **Backend crash during speech synthesis**: F5-TTS now runs on one dedicated thread; on ROCm, synthesis started on a fresh worker thread could segfault in the flash-attention GPU check.
+- **The page stuck on "processing"**: the web UI reconnects when the link drops and clears the thinking indicator.
+
+---
+
 ## [1.6.1] — 2026-10-24
 
 ### Changed

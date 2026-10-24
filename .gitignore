@@ -13,6 +13,9 @@ __pycache__/
 # Audio output (generated at runtime)
 audio_output/
 
+# Lip-synced face clips for pre-recorded lines (user-made, large)
+line_clips/
+
 # F5-TTS model weights (download separately — too large for git)
 checkpoints/
 

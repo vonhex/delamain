@@ -47,6 +47,9 @@ class F5TTSEngine:
             remove_silence=False,
         )
 
+    def is_cached(self, text: str) -> bool:
+        return os.path.exists(os.path.join(CACHE_DIR, f"{_cache_key(text)}.wav"))
+
     def pre_cache(self, texts: list[str]) -> None:
         """Pre-synthesize a list of static phrases and store them in CACHE_DIR."""
         ok = 0
@@ -62,7 +65,8 @@ class F5TTSEngine:
                 ok += 1
             except Exception as e:
                 print(f"Pre-cache failed for '{text[:40]}': {e}")
-        print(f"Pre-cache complete ({ok}/{len(texts)} phrases ready).")
+        if len(texts) > 1:
+            print(f"Pre-cache complete ({ok}/{len(texts)} phrases ready).")
 
     def synthesize(self, text: str, ref_audio_path: str = REF_AUDIO_PATH) -> str | None:
         # Return cached file if this exact phrase was pre-synthesized.

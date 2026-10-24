@@ -4,6 +4,9 @@ interface DelamainFaceProps {
   isTalking: boolean;
   mood?: 'idle' | 'angry';
   size?: 'normal' | 'large';
+  // A lip-synced clip for the line being spoken; a new object plays it from the start.
+  // Like every clip it plays muted in an off-page video (the sound is the line's audio).
+  lineClip?: { url: string; n: number } | null;
 }
 
 const COLOR = {
@@ -123,7 +126,7 @@ function computeColor(idleMs: number): string {
   return COLOR.cyan;
 }
 
-const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', size = 'normal' }) => {
+const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', size = 'normal', lineClip = null }) => {
   const [offscreen] = useState(() => [makeOffscreenVideo(), makeOffscreenVideo()] as const);
   const videoA = useRef<HTMLVideoElement | null>(offscreen[0]);
   const videoB = useRef<HTMLVideoElement | null>(offscreen[1]);
@@ -134,6 +137,8 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   const isTalkingRef = useRef(isTalking);
   const pendingFlip = useRef(false);
   const isFlipPlaying = useRef(false);  // true while flip anim is the active video
+  const pendingLine = useRef<string | null>(null); // lip-synced clip waiting to play
+  const lineActive = useRef(false);     // true from a line clip's request until it ends
   const angryUntilMs = useRef(0);       // wall-clock ms; hold red until this time
   const sessionStartMs = useRef(Date.now());
   const lastInteractionMs = useRef(Date.now()); // resets on each user message
@@ -157,6 +162,14 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
 
   // ── pick next video ────────────────────────────────────────────────────────
   const getNext = useCallback((): string => {
+    if (pendingLine.current) {
+      const clip = pendingLine.current;
+      pendingLine.current = null;
+      isFlipPlaying.current = false;
+      return clip;
+    }
+    lineActive.current = false;
+
     // Flip takes priority unless talking needs to resume after flip finishes
     if (pendingFlip.current) {
       pendingFlip.current = false;
@@ -237,6 +250,16 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── line clip: cut straight to it ─────────────────────────────────────────
+  // Declared before the talking effect: both fire when a line starts, and this one
+  // must win so the talking effect does not load a generic loop over it.
+  useEffect(() => {
+    if (!lineClip) return;
+    pendingLine.current = lineClip.url;
+    lineActive.current = true;
+    advance();
+  }, [lineClip, advance]);
+
   // ── talking: advance ONLY when talking STARTS ──────────────────────────────
   // When talking ends, the current animation plays to completion; onEnded handles the rest.
   useEffect(() => {
@@ -244,7 +267,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     prevTalking.current = isTalking;
     if (justStarted) {
       lastInteractionMs.current = Date.now(); // user sent a message — reset bored clock
-      if (!isFlipPlaying.current) advance();
+      if (!isFlipPlaying.current && !lineActive.current) advance();
     }
   }, [isTalking, advance]);
 

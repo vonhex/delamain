@@ -11,6 +11,7 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:8888', ws: true, changeOrigin: true },
       '/api': { target: 'http://localhost:8888', changeOrigin: true },
       '/audio': { target: 'http://localhost:8888', changeOrigin: true },
+      '/lines': { target: 'http://localhost:8888', changeOrigin: true },
       '/health': { target: 'http://localhost:8888', changeOrigin: true },
     },
   },
