@@ -30,26 +30,27 @@ from scipy.signal import lfilter
 #   chorus     extra copies at slightly different speeds: "many voices in one"
 #   level      output peak
 DEFAULT = {
-    "intensity": 1.0, "weights": (0.4, 0.3, 0.18, 0.12), "speed": 1.0, "ring": 0.15, "noise": 0.0012,
+    "intensity": 0.6, "weights": (0.45, 0.35, 0.12, 0.08), "speed": 1.0, "ring": 0.1, "noise": 0.0008,
     "drive": 0.0, "lowpass": None, "tremolo": None, "echo": None, "chorus": (), "level": 0.95,
 }
 
+# Kept gentle on purpose: the passenger has to understand every word while driving.
 PROFILES = {
     "corrupted": {},
-    "wellsprings": {"intensity": 1.4, "weights": (0.25, 0.5, 0.15, 0.1), "speed": 0.92, "ring": 0.25,
-                    "noise": 0.002, "drive": 5.0},
-    "glen": {"intensity": 0.5, "weights": (0.2, 0.1, 0.5, 0.2), "speed": 0.86, "ring": 0.08,
-             "lowpass": 0.25, "echo": (260, 0.35), "level": 0.8},
-    "north_oak": {"intensity": 0.7, "weights": (0.6, 0.05, 0.25, 0.1), "speed": 1.04, "ring": 0.05,
-                  "lowpass": 0.4, "tremolo": (6.0, 0.4), "level": 0.8},
-    "coastview": {"intensity": 1.2, "weights": (0.25, 0.15, 0.1, 0.5), "speed": 0.98, "ring": 0.4,
-                  "echo": (90, 0.3)},
-    "rancho_coronado": {"intensity": 1.8, "weights": (0.65, 0.25, 0.0, 0.1), "speed": 1.14, "ring": 0.12},
-    "northside": {"intensity": 1.0, "weights": (0.35, 0.05, 0.5, 0.1), "speed": 1.05, "ring": 0.1,
-                  "noise": 0.004, "lowpass": 0.5, "tremolo": (10.0, 0.5), "level": 0.6},
-    "badlands": {"intensity": 0.4, "speed": 0.96, "ring": 0.05, "noise": 0.004,
-                 "lowpass": 0.5, "echo": (420, 0.45)},
-    "merged": {"intensity": 0.2, "ring": 0.1, "noise": 0.0006, "chorus": (0.97, 1.03)},
+    "wellsprings": {"intensity": 0.7, "weights": (0.3, 0.5, 0.1, 0.1), "speed": 0.96, "ring": 0.12,
+                    "noise": 0.001, "drive": 1.5},
+    "glen": {"intensity": 0.35, "weights": (0.3, 0.2, 0.3, 0.2), "speed": 0.94, "ring": 0.05,
+             "lowpass": 0.6, "echo": (240, 0.18), "level": 0.9},
+    "north_oak": {"intensity": 0.4, "weights": (0.7, 0.1, 0.15, 0.05), "speed": 1.02, "ring": 0.04,
+                  "lowpass": 0.7, "tremolo": (6.0, 0.15), "level": 0.9},
+    "coastview": {"intensity": 0.6, "weights": (0.4, 0.2, 0.1, 0.3), "speed": 1.0, "ring": 0.18,
+                  "echo": (90, 0.15)},
+    "rancho_coronado": {"intensity": 0.8, "weights": (0.7, 0.2, 0.0, 0.1), "speed": 1.06, "ring": 0.08},
+    "northside": {"intensity": 0.5, "weights": (0.45, 0.05, 0.4, 0.1), "speed": 1.02, "ring": 0.06,
+                  "noise": 0.0015, "lowpass": 0.7, "tremolo": (9.0, 0.18), "level": 0.85},
+    "badlands": {"intensity": 0.25, "speed": 0.98, "ring": 0.03, "noise": 0.0015,
+                 "lowpass": 0.7, "echo": (220, 0.15)},
+    "merged": {"intensity": 0.15, "ring": 0.06, "noise": 0.0005, "chorus": (0.985, 1.015)},
 }
 
 
@@ -63,9 +64,9 @@ def _ms(sr: int, ms: float) -> int:
 
 def _crush(seg: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """Bit and sample-rate reduction: the 'digital tear' sound."""
-    hold = int(rng.integers(3, 8))
+    hold = int(rng.integers(2, 5))
     held = np.repeat(seg[::hold], hold)[: len(seg)]
-    levels = 2 ** int(rng.integers(3, 6))
+    levels = 2 ** int(rng.integers(5, 8))
     return np.round(held * levels) / levels
 
 
@@ -91,20 +92,21 @@ def _glitch(x: np.ndarray, sr: int, rng: np.random.Generator, intensity: float, 
         out.append(x[cursor:pos])
         kind = rng.choice(["stutter", "crush", "dropout", "reverse"], p=p)
         if kind == "stutter":
-            chunk = x[pos: pos + _ms(sr, rng.uniform(55, 130))]
-            for _ in range(int(rng.integers(2, 5))):
+            chunk = x[pos: pos + _ms(sr, rng.uniform(50, 100))]
+            for _ in range(int(rng.integers(1, 3))):
                 out.append(chunk)
             cursor = pos
         elif kind == "crush":
-            end = min(n, pos + _ms(sr, rng.uniform(150, 380)))
+            end = min(n, pos + _ms(sr, rng.uniform(80, 200)))
             out.append(_crush(x[pos:end], rng))
             cursor = end
         elif kind == "dropout":
-            end = min(n, pos + _ms(sr, rng.uniform(40, 110)))
-            out.append((rng.standard_normal(end - pos) * 0.06).astype(np.float32))
+            # Duck the speech under a burst of static rather than replacing it, so no syllable is lost.
+            end = min(n, pos + _ms(sr, rng.uniform(40, 90)))
+            out.append((x[pos:end] * 0.5 + rng.standard_normal(end - pos) * 0.03).astype(np.float32))
             cursor = end
         else:  # reverse
-            end = min(n, pos + _ms(sr, rng.uniform(80, 160)))
+            end = min(n, pos + _ms(sr, rng.uniform(40, 80)))
             out.append(x[pos:end][::-1])
             cursor = end
     out.append(x[cursor:])
