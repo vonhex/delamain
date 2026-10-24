@@ -4,6 +4,18 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.6.0] — 2026-10-24
+
+### Added
+- **The rogue Delamain cabs as personality cores**: Wellsprings (furious), The Glen (despairing), North Oak (sensitive), Coastview (trickster), Rancho Coronado (manic, hates flamingos), Northside (frightened) and Badlands (free spirit), plus a **Merged** core that has taken every fragment back in. Each has its own temperament, greetings, "one moment" and reminder lines, voice profile and face color and animation. The existing corrupted core is now called **Fractured**.
+- Per-core voice profiles in `voice_glitch.py`: speed and pitch, distortion, muffling, tremolo, echo and chorus on top of the glitches.
+
+### Changed
+- Rogue cores replace the original's formal speech rules with their own identity, so they stay in character. Facts, navigation and safety rules are shared by every core, and a rogue core drops the act when the passenger sounds genuinely upset.
+- The conversation log records which core spoke each line. A reconnect shows the whole recent conversation but only resumes the model on lines from the current core.
+
+---
+
 ## [1.5.0] — 2026-10-23
 
 ### Added

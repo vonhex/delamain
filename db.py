@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     ts        REAL NOT NULL,
     role      TEXT NOT NULL,
     content   TEXT NOT NULL,
-    audio_url TEXT
+    audio_url TEXT,
+    persona   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_ts ON conversations(ts);
@@ -49,6 +50,9 @@ def init_db() -> None:
     with _lock:
         _conn = _connect()
         _conn.executescript(_SCHEMA)
+        cols = {r["name"] for r in _conn.execute("PRAGMA table_info(conversations)")}
+        if "persona" not in cols:  # databases from before personality cores
+            _conn.execute("ALTER TABLE conversations ADD COLUMN persona TEXT")
         _conn.commit()
 
 
@@ -60,11 +64,11 @@ def _db() -> sqlite3.Connection:
 
 # ── Write helpers ─────────────────────────────────────────────────────────────
 
-def log_conversation(role: str, content: str, audio_url: str | None = None) -> None:
+def log_conversation(role: str, content: str, audio_url: str | None = None, persona: str | None = None) -> None:
     with _lock:
         _db().execute(
-            "INSERT INTO conversations(ts,role,content,audio_url) VALUES(?,?,?,?)",
-            (time.time(), role, content, audio_url),
+            "INSERT INTO conversations(ts,role,content,audio_url,persona) VALUES(?,?,?,?,?)",
+            (time.time(), role, content, audio_url, persona),
         )
         _db().commit()
 
@@ -95,7 +99,7 @@ def cancel_reminder(reminder_id: int) -> bool:
 def query_conversations(since: float = 0, limit: int = 200) -> list[dict]:
     with _lock:
         rows = _db().execute(
-            "SELECT ts,role,content,audio_url FROM conversations"
+            "SELECT ts,role,content,audio_url,persona FROM conversations"
             " WHERE ts>=? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         ).fetchall()

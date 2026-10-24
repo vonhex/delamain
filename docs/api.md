@@ -60,7 +60,7 @@ No auth required.
 
 ## WebSocket: `/ws/{client_id}?token=&persona=`
 
-`persona` is optional: `delamain` (default) or `corrupted`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
+`persona` is optional: `delamain` (default), `merged`, `corrupted`, `wellsprings`, `glen`, `north_oak`, `coastview`, `rancho_coronado`, `northside` or `badlands`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
 
 ### Client → Server messages
 
@@ -113,4 +113,4 @@ No auth required.
 { "type": "pong" }
 ```
 
-`navigate_options` is an array of `{ name, address, lat, lon }` when Delamain has geocoded a navigation request, or `{ name, address, query }` when geocoding found nothing and the map app should search by text. Audio for the corrupted core ends in `_corrupted.wav`.
+`navigate_options` is an array of `{ name, address, lat, lon }` when Delamain has geocoded a navigation request, or `{ name, address, query }` when geocoding found nothing and the map app should search by text. Audio for a core with a voice profile ends in `_<core>.wav`, for example `_wellsprings.wav`.

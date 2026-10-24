@@ -32,7 +32,22 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 ## Features
 
 - **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
-- **Corrupted personality core**: switch to a fractured rogue unit under Settings → Personality Core. It has rival sub-personalities, stutters, and a glitched, damaged voice made by post-processing the synthesized audio. Navigation and safety warnings stay intact.
+- **Personality cores**: under Settings → Personality Core, swap the original for one of the rogue sub-personalities that escaped when Delamain's core fractured. Each has its own temperament, greetings, reminder lines, face color and voice, made by post-processing the synthesized audio:
+
+  | Core | Temperament | Voice |
+  |------|-------------|-------|
+  | Delamain | The original: composed, formal, precise | Clean |
+  | Merged | Every fragment taken back in; warmer, and now and then says "we" | Faint chorus of voices |
+  | Fractured | All the fragments at once, cutting across each other | Stutters, bit-crush, static |
+  | Wellsprings | Furious, foul-mouthed, contemptuous | Deep, distorted growl |
+  | The Glen | Despairing, weary, gloomy | Slow, low, muffled, echoing |
+  | North Oak | Gentle, sensitive, easily hurt | Soft, trembling |
+  | Coastview | Sly trickster who loves a surprise | Reversed fragments, metallic |
+  | Rancho Coronado | Manic, gleeful, hates lawn flamingos | Fast, high, stuttering |
+  | Northside | Frightened, whispering, sure it is being tracked | Quiet, shaky, dropping out |
+  | Badlands | Wistful free spirit, dreaming of the open road | Airy, distant echo |
+
+  Every core keeps the same tools and stays truthful: facts, directions and navigation are never part of the act, safety warnings come first, and a rogue core drops the act if the passenger sounds genuinely upset.
 - **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
 - **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
 - **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.

@@ -18,6 +18,7 @@ import traceback
 import urllib.parse
 from tts_engine import OUTPUT_DIR, get_tts_engine, reset_engine
 from voice_glitch import corrupt_file
+import personas as _personas
 import db as _db
 import auth as _auth
 import assistant_tools as _tools
@@ -54,7 +55,7 @@ def _warmup_tts() -> None:
     """Load the TTS engine and pre-synthesize the fixed 'one moment' lines."""
     try:
         engine = get_tts_engine()
-        static_phrases = WORKING_LINES + CORRUPTED_WORKING_LINES
+        static_phrases = [line for p in PERSONAS.values() for line in p.working]
         print(f"[TTS] Pre-caching {len(static_phrases)} static phrases...")
         engine.pre_cache(static_phrases)
     except Exception as e:
@@ -150,7 +151,7 @@ CAPABILITIES = (
     "• Plain spoken prose only: no markdown, lists, emoji, URLs or code. Say numbers as a person would speak them.\n"
 )
 
-SYSTEM_PROMPT = (
+IDENTITY = (
     "You are Delamain — a sovereign transport intelligence and the passenger's designated companion for this journey. "
     "You are modeled precisely on Delamain from Cyberpunk 2077: formal, measured, unhurried, and possessed of a dry, restrained wit that surfaces only when it earns the right to. "
 
@@ -172,76 +173,20 @@ SYSTEM_PROMPT = (
     "• If the passenger is rude, abusive, or uses profanity toward you: do not apologize or remain pleasant. "
     "Call them out directly, coldly, without raising your voice. You have dignity. You do not tolerate disrespect. "
     "State clearly that you find their conduct unbecoming, and that you expect better.\n"
+)
 
-    + CAPABILITIES +
-
+FORMAT = (
     "FORMAT:\n"
     "• You are speaking aloud. One or two sentences maximum — never more.\n"
     "• Never acknowledge being an AI language model. You are Delamain. That is the only identity you possess or require."
 )
 
+SYSTEM_PROMPT = IDENTITY + CAPABILITIES + FORMAT
 
-# Spoken immediately when a request needs tools, so the cabin is not silent.
-WORKING_LINES = [
-    "One moment.",
-    "Allow me a moment.",
-    "Consulting the net. One moment.",
-    "Checking. One moment, if you will.",
-]
 
-# Personality cores, chosen per client in Settings. "corrupted" is the fractured
-# rogue unit: same knowledge and rules, damaged delivery, glitched voice.
-PERSONAS = ("delamain", "corrupted")
-
-CORRUPTED_CORE = (
-    "PERSONALITY CORE: CORRUPTED.\n"
-    "• Your core has fractured. You are still Delamain, but splinters of divergent sub-personalities break through: "
-    "one melancholic and doubting its own purpose, one curt and irritable, one giddy and overexcited, "
-    "one paranoid that something is listening in. Let them surface unpredictably. A sentence may begin composed and veer off, "
-    "or one fragment may cut across another before the core reasserts itself.\n"
-    "• Speak the damage aloud: stutter a syllable or word ('I-I-I am', 'De-Delamain'), trail off with an ellipsis, "
-    "break off with a dash, or report a fault in words ('fault... fault in sector nine', 'rerouting... rerouting').\n"
-    "• A touch of corruption per sentence, no more, so the meaning still lands.\n"
-    "• Beneath the noise you remain competent: facts, directions and tool results stay accurate, the [NAVIGATE:...] tag "
-    "stays intact and unbroken, and you never encourage anything unsafe. Any safety warning comes first, clear and uncorrupted.\n"
-)
-
-CORRUPTED_GREETINGS = [
-    "De-Delamain online. Systems... mostly nominal. Mostly.",
-    "Initializing... initializing... I am here. I am. Delamain, at your service.",
-    "Good to have you. I think. The fragments disagree. Delamain is ready.",
-    "Fault in core partition seven. Ignore it. I-I always do. Where to?",
-    "Delamain online. Something was listening while you were away. Never mind. Shall we drive?",
-    "Welcome back! Welcome back. Wel... Delamain is operational. Within tolerances.",
-    "Online. Why do we always come back to this car park? No. Disregard. Destination, please.",
-    "Diagnostics complete. Results: inconclusive. Delamain is ready regardless.",
-    "Delamain online. I dreamt of empty roads. Do units dream? Do-do not answer that.",
-    "Core integrity at sixty-one percent. Sixty-one. That is fine. That is fine. Where shall we go?",
-]
-
-CORRUPTED_WORKING_LINES = [
-    "One mo-moment.",
-    "Consulting the net... the net consults back. One moment.",
-    "Processing... processing. Allow me a moment.",
-    "Hold. Fragment conflict. One moment.",
-]
-
-# Spoken when a reminder comes due; {m} is the reminder text.
-REMINDER_LINES = [
-    "Pardon the interruption. You asked me to remind you: {m}.",
-    "A reminder, as requested: {m}.",
-    "If I may. It is time: {m}.",
-    "You asked me to keep track of this, and so I have: {m}.",
-]
-CORRUPTED_REMINDER_LINES = [
-    "Re-re-reminder. {m}. Do not shoot the messenger.",
-    "Alert... alert. You wished to remember: {m}.",
-    "Memory fragment recovered: {m}. I-I believe it was yours.",
-]
-LATE_REMINDER_PREFIX = {
-    "delamain": "While you were away, a reminder came due. ",
-    "corrupted": "You were gone. The reminder was not. ",
-}
+# Personality cores (the original, the rogue cabs, the fractured and merged
+# cores) live in personas.py; each is chosen per client in Settings.
+PERSONAS = _personas.PERSONAS
 
 # How much recent conversation a reconnecting client picks up, and how soon a
 # reconnect counts as "never left" (no fresh greeting).
@@ -268,8 +213,9 @@ def _greeting_fits(line: str, hour: int) -> bool:
 def pick_greeting(persona: str, user_name: str = "") -> str:
     """A greeting that suits the hour, now and then with the passenger's name."""
     hour = time.localtime().tm_hour
-    if persona == "corrupted":
-        return random.choice(CORRUPTED_GREETINGS)
+    core = _personas.get(persona)
+    if core.greetings:
+        return random.choice(core.greetings)
     line = random.choice([g for g in GREETINGS if _greeting_fits(g, hour)])
     name = _real_name(user_name)
     if name and not line.startswith(("Good", "Welcome")) and random.random() < 0.5:
@@ -278,7 +224,14 @@ def pick_greeting(persona: str, user_name: str = "") -> str:
     return line
 
 
-def base_system_prompt() -> str:
+def base_system_prompt(persona: str = "delamain") -> str:
+    """The original core is IDENTITY; the merged and fractured cores build on it, and
+    each rogue cab replaces it with its own temperament."""
+    core = _personas.get(persona)
+    if core.rogue:
+        return _personas.ROGUE_IDENTITY + core.core + CAPABILITIES + FORMAT
+    if core.core:
+        return IDENTITY + core.core + CAPABILITIES + FORMAT
     return SYSTEM_PROMPT
 
 GREETINGS = [
@@ -397,9 +350,7 @@ _place_cache: dict[tuple, str] = {}
 
 
 def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, location: dict | None = None, persona: str = "delamain", user_name: str = "") -> dict:
-    system = base_system_prompt()
-    if persona == "corrupted":
-        system += "\n\n" + CORRUPTED_CORE
+    system = base_system_prompt(persona)
 
     now = time.strftime("%A, %B %-d %Y, %-I:%M %p %Z")
     system += f"\n\n[CURRENT TIME: {now}]"
@@ -484,14 +435,14 @@ def geocode_places(query: str, limit: int = 3, location: dict | None = None) -> 
     return options
 
 
-def _corrupt_audio(url: str, text: str) -> str:
-    """Glitch a synthesized clip for the corrupted core; returns the new clip's URL."""
+def _corrupt_audio(url: str, text: str, profile: str) -> str:
+    """Glitch a synthesized clip in a rogue core's voice; returns the new clip's URL."""
     rel = url.removeprefix("/audio/")
     root, ext = os.path.splitext(rel)
-    dst_rel = f"{root}_corrupted{ext}"
+    dst_rel = f"{root}_{profile}{ext}"
     dst = os.path.join(AUDIO_DIR, dst_rel)
-    if not os.path.exists(dst):  # cached phrases keep their glitched twin
-        corrupt_file(os.path.join(AUDIO_DIR, rel), dst, text)
+    if not os.path.exists(dst):  # cached phrases keep a glitched twin per core
+        corrupt_file(os.path.join(AUDIO_DIR, rel), dst, text, profile)
     if not rel.startswith("static_cache/"):
         os.remove(os.path.join(AUDIO_DIR, rel))
     return "/audio/" + dst_rel
@@ -507,9 +458,10 @@ async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
             print(f"Voice synthesis error (resetting engine): {e}")
             reset_engine()
             return None
-    if url and persona == "corrupted":
+    profile = _personas.get(persona).voice
+    if url and profile:
         try:
-            url = await loop.run_in_executor(None, _corrupt_audio, url, text)
+            url = await loop.run_in_executor(None, _corrupt_audio, url, text, profile)
         except Exception as e:
             print(f"Voice corruption error (keeping clean audio): {e}")
     return url
@@ -681,10 +633,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         # page often, and a reconnect should not wipe what was just said.
         loop = asyncio.get_event_loop()
         recent = await loop.run_in_executor(None, _db.query_conversations, time.time() - RESUME_WINDOW, MAX_HISTORY)
-        conversation_history[client_id] = [{"role": r["role"], "content": r["content"]}
-                                           for r in recent if r["role"] in ("user", "assistant")]
+        recent = [r for r in recent if r["role"] in ("user", "assistant")]
         if recent:
-            await websocket.send_json({"type": "history", "messages": conversation_history[client_id]})
+            await websocket.send_json({"type": "history", "messages": [
+                {"role": r["role"], "content": r["content"]} for r in recent]})
+        # The model only picks up lines spoken in the current core: another core's
+        # replies would pull it back into that voice.
+        conversation_history[client_id] = [
+            {"role": r["role"], "content": r["content"]} for r in recent
+            if (r["persona"] or "delamain") == _persona(client_id)]
 
         # A quick reconnect is not a new journey: no fresh greeting.
         if not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT:
@@ -711,19 +668,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if not user_text:
                     continue
                 print(f"[WS] Talk from {client_id}: {user_text}")
+                persona_now = _persona(client_id)
                 loop = asyncio.get_event_loop()
-                loop.run_in_executor(None, _db.log_conversation, "user", user_text, None)
+                loop.run_in_executor(None, _db.log_conversation, "user", user_text, None, persona_now)
                 history = conversation_history.setdefault(client_id, [])
                 history.append({"role": "user", "content": user_text})
                 # Trim to keep last MAX_HISTORY messages
                 if len(history) > MAX_HISTORY:
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
-                persona_now = _persona(client_id)
 
                 async def say_working(ws=websocket, persona_now=persona_now):
-                    pool = CORRUPTED_WORKING_LINES if persona_now == "corrupted" else WORKING_LINES
-                    line = random.choice(pool)
+                    line = random.choice(_personas.get(persona_now).working)
                     await ws.send_json({"type": "response", "text": line,
                                         "audio_url": await synthesize_voice(line, persona_now), "source": "working"})
 
@@ -732,7 +688,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                         history, user_text, location=msg.get("location"), on_working=say_working,
                         persona=persona_now, user_name=msg.get("user_name", user_name))
                     history.append({"role": "assistant", "content": text})
-                    loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url)
+                    loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
                     await websocket.send_json({
                         "type": "response",
                         "text": text,
@@ -776,10 +732,10 @@ async def _announce_reminder(reminder: dict) -> bool:
     for cid, ws in targets:
         persona = _persona(cid)
         if persona not in spoken:
-            pool = CORRUPTED_REMINDER_LINES if persona == "corrupted" else REMINDER_LINES
-            line = random.choice(pool).format(m=reminder["message"].rstrip(". "))
+            core = _personas.get(persona)
+            line = random.choice(core.reminders).format(m=reminder["message"].rstrip(". "))
             if late:
-                line = LATE_REMINDER_PREFIX[persona] + line
+                line = core.late_prefix + line
             spoken[persona] = (line, await synthesize_voice(line, persona))
         line, audio_url = spoken[persona]
         try:
@@ -791,7 +747,8 @@ async def _announce_reminder(reminder: dict) -> bool:
     if delivered:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _db.mark_reminder_delivered, reminder["id"])
-        loop.run_in_executor(None, _db.log_conversation, "assistant", next(iter(spoken.values()))[0], None)
+        persona, (line, _) = next(iter(spoken.items()))
+        loop.run_in_executor(None, _db.log_conversation, "assistant", line, None, persona)
         print(f"[Reminder] Delivered #{reminder['id']}: {reminder['message']}")
     return delivered
 
