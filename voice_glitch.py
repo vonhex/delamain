@@ -36,19 +36,20 @@ DEFAULT = {
 
 PROFILES = {
     "corrupted": {},
-    "wellsprings": {"intensity": 1.3, "weights": (0.25, 0.5, 0.15, 0.1), "speed": 0.96, "ring": 0.22,
-                    "noise": 0.002, "drive": 3.0},
-    "glen": {"intensity": 0.55, "weights": (0.2, 0.1, 0.5, 0.2), "speed": 0.91, "ring": 0.08,
-             "lowpass": 0.3, "echo": (240, 0.3), "level": 0.85},
-    "north_oak": {"intensity": 0.7, "weights": (0.55, 0.1, 0.25, 0.1), "speed": 0.97, "ring": 0.06,
-                  "lowpass": 0.45, "tremolo": (5.5, 0.25), "level": 0.85},
-    "coastview": {"intensity": 1.1, "weights": (0.3, 0.2, 0.1, 0.4), "speed": 1.02, "ring": 0.28},
-    "rancho_coronado": {"intensity": 1.6, "weights": (0.6, 0.25, 0.05, 0.1), "speed": 1.08, "ring": 0.12},
-    "northside": {"intensity": 0.9, "weights": (0.35, 0.05, 0.5, 0.1), "speed": 1.03, "ring": 0.1,
-                  "lowpass": 0.55, "tremolo": (9.0, 0.35), "level": 0.75},
-    "badlands": {"intensity": 0.45, "speed": 0.98, "ring": 0.05, "noise": 0.003,
-                 "lowpass": 0.55, "echo": (380, 0.35)},
-    "merged": {"intensity": 0.25, "ring": 0.1, "noise": 0.0006, "chorus": (0.985, 1.015)},
+    "wellsprings": {"intensity": 1.4, "weights": (0.25, 0.5, 0.15, 0.1), "speed": 0.92, "ring": 0.25,
+                    "noise": 0.002, "drive": 5.0},
+    "glen": {"intensity": 0.5, "weights": (0.2, 0.1, 0.5, 0.2), "speed": 0.86, "ring": 0.08,
+             "lowpass": 0.25, "echo": (260, 0.35), "level": 0.8},
+    "north_oak": {"intensity": 0.7, "weights": (0.6, 0.05, 0.25, 0.1), "speed": 1.04, "ring": 0.05,
+                  "lowpass": 0.4, "tremolo": (6.0, 0.4), "level": 0.8},
+    "coastview": {"intensity": 1.2, "weights": (0.25, 0.15, 0.1, 0.5), "speed": 0.98, "ring": 0.4,
+                  "echo": (90, 0.3)},
+    "rancho_coronado": {"intensity": 1.8, "weights": (0.65, 0.25, 0.0, 0.1), "speed": 1.14, "ring": 0.12},
+    "northside": {"intensity": 1.0, "weights": (0.35, 0.05, 0.5, 0.1), "speed": 1.05, "ring": 0.1,
+                  "noise": 0.004, "lowpass": 0.5, "tremolo": (10.0, 0.5), "level": 0.6},
+    "badlands": {"intensity": 0.4, "speed": 0.96, "ring": 0.05, "noise": 0.004,
+                 "lowpass": 0.5, "echo": (420, 0.45)},
+    "merged": {"intensity": 0.2, "ring": 0.1, "noise": 0.0006, "chorus": (0.97, 1.03)},
 }
 
 

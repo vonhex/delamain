@@ -4,6 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [1.6.1] — 2026-10-24
+
+### Changed
+- **Personality cores are easier to tell apart**: each core now has a signature way of speaking that must show in every reply (Wellsprings opens with an insult, The Glen with a weary sigh-word, Northside with a whisper, Rancho Coronado in exclamations), sample lines to imitate, and its own sampling temperature. The core's section now comes last in the prompt, and rogue cores must be in character from the first word.
+- Stronger voice profiles: Rancho Coronado is faster and higher, The Glen slower and lower, Wellsprings more distorted, Northside quieter and shakier, Badlands more distant, Coastview more metallic.
+
+---
+
 ## [1.6.0] — 2026-10-24
 
 ### Added
