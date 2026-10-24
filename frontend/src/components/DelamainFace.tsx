@@ -324,9 +324,9 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
 
           <div
             className="absolute inset-0 pointer-events-none transition-opacity duration-300 z-10"
-            style={{ background: hexAlpha(ac, 0.1), opacity: isTalking ? 1 : 0 }}
+            style={{ background: hexAlpha(ac, 0.04), opacity: isTalking ? 1 : 0 }}
           >
-            <div className="absolute inset-0 animate-[glitch_0.2s_infinite] opacity-30 mix-blend-overlay"
+            <div className="absolute inset-0 animate-[glitch_0.2s_infinite] opacity-[0.08] mix-blend-soft-light"
               style={{ background: ac }} />
           </div>
 
