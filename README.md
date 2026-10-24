@@ -48,6 +48,9 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
   | Badlands | Wistful free spirit, dreaming of the open road | Airy, distant echo |
 
   Every core keeps the same tools and stays truthful: facts, directions and navigation are never part of the act, safety warnings come first, and a rogue core drops the act if the passenger sounds genuinely upset.
+- **Instant pre-recorded replies**: everyday messages such as "thanks", "how are you", "who are you", "tell me a joke", "good night", "I love you", "never mind" and "combat mode" are answered at once from about 470 fixed lines written for every core, with no model call and the audio already recorded. Only short messages that are nothing but one of these get a fixed reply; anything with a real question goes to the model.
+- **Combat mode**: ask him to initiate it and he answers as he did Jackie: "My apologies, but you do not appear to be in any sort of imminent danger." If you say you are being followed or threatened, he drops the joke and helps.
+- **Lip-synced face clips**: every fixed line (greetings, "one moment", the pre-recorded replies) has a stable id such as `04_glen/greeting_01`. Save a lip-synced video as `line_clips/<id>.mp4` and the face plays it whenever that line is spoken; lines without a clip use the talking loops. Clips play muted in off-page videos painted onto the face canvas, like every other clip, so Android Auto WebViews cannot pull them fullscreen.
 - **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
 - **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
 - **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.
@@ -192,6 +195,7 @@ Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:lat
 | `OBSIDIAN_VAULT_PATH` | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
 | `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
 | `DELAMAIN_UNITS` | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
+| `DELAMAIN_LINES_DIR` | `<repo>/line_clips` | Lip-synced face clips for pre-recorded lines, as `<clip id>.mp4` |
 | `OSRM_URL` | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
 | `ALLOWED_ORIGINS` | `https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
 

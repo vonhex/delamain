@@ -88,7 +88,7 @@ No auth required.
 
 **Greeting** (on connect; skipped when the last message was under 10 minutes ago):
 ```json
-{ "type": "greeting", "text": "Delamain online...", "audio_url": "/audio/xyz.wav" }
+{ "type": "greeting", "text": "Delamain online...", "audio_url": "/audio/xyz.wav", "video_url": null }
 ```
 
 **Response** (to talk). While tools run, a short line with `"source": "working"` ("One moment.") arrives first, then the reply:
@@ -101,12 +101,13 @@ No auth required.
 }
 ```
 
+**Pre-recorded reply**: everyday messages ("thanks", "tell me a joke", "combat mode") get a fixed line at once, as a `response` with `"source": "canned"`.
+
 **Reminder** (unprompted, when a reminder is due): a `response` with `"source": "reminder"`.
 
-**Error:**
-```json
-{ "type": "error", "detail": "..." }
-```
+**Error**: when a reply fails, a spoken apology arrives as a `response` with `"source": "error"`.
+
+`video_url` is set on greetings, "one moment" lines, pre-recorded replies and error lines when a lip-synced clip exists for that exact line (`/lines/<clip id>.mp4`), and is `null` otherwise.
 
 **Pong:**
 ```json
