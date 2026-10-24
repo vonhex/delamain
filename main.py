@@ -55,7 +55,9 @@ def _warmup_tts() -> None:
     """Load the TTS engine and pre-synthesize the fixed 'one moment' lines."""
     try:
         engine = get_tts_engine()
-        static_phrases = [line for p in PERSONAS.values() for line in p.working]
+        # Greetings are cached too, so each one always plays the same take and can
+        # have a lip-synced face clip made for it.
+        static_phrases = [line for p in PERSONAS.values() for line in p.working + p.greetings] + GREETINGS
         print(f"[TTS] Pre-caching {len(static_phrases)} static phrases...")
         engine.pre_cache(static_phrases)
     except Exception as e:
