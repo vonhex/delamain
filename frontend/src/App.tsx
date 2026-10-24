@@ -5,6 +5,7 @@ import DelamainFace from './components/DelamainFace';
 import { DataDashboard } from './components/DataDashboard';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing } from './utils/sounds';
+import { PERSONAS, isPersona, type PersonaKey } from './personas';
 
 interface NavOption {
   name: string;
@@ -36,7 +37,7 @@ interface AppSettings {
   systemPrompt: string;
   temperature: number;
   maxTokens: number;
-  persona: 'delamain' | 'corrupted';
+  persona: PersonaKey;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -74,7 +75,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('delamain_settings');
     if (saved) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      const merged = { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      return isPersona(merged.persona) ? merged : { ...merged, persona: DEFAULT_SETTINGS.persona };
     }
     return DEFAULT_SETTINGS;
   });
@@ -435,25 +437,26 @@ function MainApp({ token, onLogout }: MainAppProps) {
               <div className="space-y-2">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Personality Core</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['delamain', 'corrupted'] as const).map(core => (
-                    <button
-                      key={core}
-                      onClick={() => setTempSettings({...tempSettings, persona: core})}
-                      className={`py-2 px-3 rounded border text-xs font-bold uppercase tracking-wider transition-colors ${
-                        tempSettings.persona === core
-                          ? core === 'corrupted'
-                            ? 'bg-cyber-red/20 border-cyber-red text-cyber-red'
-                            : 'bg-cyber-blue/20 border-cyber-blue text-cyber-blue'
-                          : 'bg-cyber-gray/30 border-cyber-blue/10 text-gray-500 hover:border-cyber-blue/30 hover:text-gray-300'
-                      }`}
-                    >
-                      {core}
-                    </button>
-                  ))}
+                  {PERSONAS.map(core => {
+                    const active = tempSettings.persona === core.key;
+                    return (
+                      <button
+                        key={core.key}
+                        onClick={() => setTempSettings({...tempSettings, persona: core.key})}
+                        style={active ? { color: core.color, borderColor: core.color, backgroundColor: `${core.color}22` } : undefined}
+                        className={`py-2 px-3 rounded border text-left transition-colors ${
+                          active ? '' : 'bg-cyber-gray/30 border-cyber-blue/10 text-gray-500 hover:border-cyber-blue/30 hover:text-gray-300'
+                        }`}
+                      >
+                        <span className="block text-xs font-bold uppercase tracking-wider">{core.name}</span>
+                        <span className="block text-[8px] uppercase tracking-[0.2em] opacity-60">{core.origin}</span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className="text-[9px] text-gray-500 leading-relaxed">
-                  {tempSettings.persona === 'delamain' && 'The original core — composed, formal, precise.'}
-                  {tempSettings.persona === 'corrupted' && 'A fractured core — stutters, rival sub-personalities and a damaged voice. Still drives you safely.'}
+                  {PERSONAS.find(p => p.key === tempSettings.persona)?.blurb}
+                  {tempSettings.persona !== 'delamain' && tempSettings.persona !== 'merged' && ' Still drives you safely and tells you the truth.'}
                 </p>
               </div>
             </div>
@@ -498,7 +501,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             </div>
           </div>
 
-          <div className={settings.persona === 'corrupted' ? 'corrupted-core' : undefined}>
+          <div className={settings.persona === 'delamain' ? undefined : `core-${settings.persona}`}>
             <DelamainFace isTalking={isTalking} mood={faceMode} size="large" />
           </div>
 

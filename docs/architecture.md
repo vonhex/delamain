@@ -16,7 +16,7 @@
 - **FastAPI** with one WebSocket per browser tab (`/ws/{client_id}`), plus a few REST endpoints
 - **LLM**: any OpenAI-compatible chat endpoint (`LLM_URL`). The system prompt carries Delamain's character, the current time, the passenger's rough location (reverse-geocoded from the browser), and long-term memory.
 - **Tool loop**: when `TOOLS_ENABLED`, the model can call the tools in `assistant_tools.py`, up to six rounds per reply. A spoken "One moment." covers the wait.
-- **Personality cores**: `delamain` (default) or `corrupted`, chosen per client. Corrupted adds a fractured-core section to the prompt and glitches the audio (`voice_glitch.py`).
+- **Personality cores** (`personas.py`): the original, the merged and fractured cores, and the seven rogue cabs, chosen per client. Each core has its own prompt section, greetings, "one moment" and reminder lines, and a voice profile in `voice_glitch.py`. A rogue cab replaces the original's speech rules with its own identity; the capability and safety rules are shared by all. Logged lines carry their core, so a reconnect only resumes the model on lines from the same core.
 - **F5-TTS** (`tts_engine.py`): voice cloning from a 10-second reference clip. The fixed "one moment" lines are pre-cached at startup.
 - **SQLite** (`db.py`): conversation log and reminders
 - **Resume**: a connecting client gets the last 30 minutes of conversation back, so Android Auto reconnects keep the thread
@@ -33,7 +33,7 @@
 ### Frontend (`frontend/`)
 - **React + Vite**, Tailwind CSS v4 cyber theme
 - `App.tsx`: WebSocket client, audio queue, push-to-talk, chat panel, settings and navigation hand-off
-- `DelamainFace`: animated face; it tints red and tears when the corrupted core is active
+- `DelamainFace`: animated face; each personality core tints and animates it differently (`index.css`, `core-*` classes)
 - `DataDashboard`: conversation log
 
 ## Conversation flow
@@ -43,5 +43,5 @@
 3. The backend builds the prompt (character, personality core, time, location, memory) and runs the tool loop.
 4. If tools run, a "One moment." line is spoken first.
 5. The reply text is checked for a `[NAVIGATE:destination]` tag; destinations are geocoded with Nominatim.
-6. F5-TTS synthesizes the reply (then glitches it for the corrupted core) and the backend sends `{"type": "response", "text": ..., "audio_url": ..., "navigate_options": [...]}`.
+6. F5-TTS synthesizes the reply (then applies the core's voice profile) and the backend sends `{"type": "response", "text": ..., "audio_url": ..., "navigate_options": [...]}`.
 7. The frontend queues and plays the audio, and opens the map app for a single navigation result.
