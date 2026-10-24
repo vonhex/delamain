@@ -25,6 +25,9 @@ if (typeof navigator !== 'undefined' && navigator.geolocation) {
   );
 }
 
+// An Android app's embedded browser (Fermata, for one) marks its user agent with "; wv)".
+const IN_APP_WEBVIEW = /Android.*; wv\)/.test(navigator.userAgent);
+
 interface Message {
   role: 'user' | 'delamain';
   content: string;
@@ -92,7 +95,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
   // Audio queue — keeps spoken replies from overlapping
   const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string }>>([]);
-  const [lineClip, setLineClip] = useState<{ url: string; n: number } | null>(null);
+  const [lineClip, setLineClip] = useState<{ url: string; audioTime: () => number } | null>(null);
   const audioPlayingRef = useRef(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -135,15 +138,16 @@ function MainApp({ token, onLogout }: MainAppProps) {
       if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
       const { url: audioUrl, text, video } = item;
       // A pre-recorded line with its own lip-synced clip: the face cuts to it as the audio starts.
-      const showClip = () => { if (video) setLineClip({ url: video, n: Date.now() }); };
+      const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
-      audio.onplay  = () => { showClip(); setIsTalking(true); };
+      audio.onplay  = () => { showClip(() => audio.currentTime); setIsTalking(true); };
       audio.onended = () => { playNext(); };
       audio.onerror = () => { playNext(); };
       audio.play().catch(() => {
         if (text) {
-          showClip();
+          const t0 = performance.now();
+          showClip(() => (performance.now() - t0) / 1000);
           setIsTalking(true);
           setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
         } else { playNext(); }
@@ -151,6 +155,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
     };
 
     const playAudio = (audioUrl: string, text?: string, video?: string) => {
+      // Fetch the lip-synced clip now, so it is cached by the time its audio starts.
+      if (video) fetch(video).catch(() => {});
       audioQueueRef.current.push({ url: audioUrl, text, video });
       if (!audioPlayingRef.current) {
         audioPlayingRef.current = true;
@@ -322,6 +328,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
   const navigateToCoords = (opt: NavOption) => {
     setNavOptions([]);
+    // Inside an app's embedded browser (Fermata on Android Auto) there is no way to
+    // open the Maps app, so say where the destination is instead of failing silently.
+    if (IN_APP_WEBVIEW) {
+      const where = [opt.name, opt.address].filter(Boolean).join(', ');
+      setMessages(prev => [...prev, { role: 'delamain', content:
+        `I cannot open your maps app from inside this player. Destination: ${where}. Open Delamain in your phone's browser to navigate.` }]);
+      return;
+    }
     // Google Maps directions URL: Android hands it to the Maps app (and Android Auto).
     const destination = opt.lat && opt.lon ? `${opt.lat},${opt.lon}` : (opt.query ?? `${opt.name} ${opt.address}`);
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`, '_blank');
