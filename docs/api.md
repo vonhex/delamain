@@ -60,7 +60,7 @@ No auth required.
 
 ## WebSocket: `/ws/{client_id}?token=&persona=`
 
-`persona` is optional: `delamain` (default), `merged`, `corrupted`, `wellsprings`, `glen`, `north_oak`, `coastview`, `rancho_coronado`, `northside` or `badlands`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
+`resume=1` marks an automatic reconnect after the link dropped: no greeting is sent. `persona` is optional: `delamain` (default), `merged`, `corrupted`, `wellsprings`, `glen`, `north_oak`, `coastview`, `rancho_coronado`, `northside` or `badlands`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
 
 ### Client → Server messages
 
