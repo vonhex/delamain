@@ -661,7 +661,7 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain",
-                             user_name: str = ""):
+                             user_name: str = "", resume: int = 0):
     if not _auth.verify_token(token):
         await websocket.close(code=4001)
         return
@@ -686,8 +686,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
             {"role": r["role"], "content": r["content"]} for r in recent
             if (r["persona"] or "delamain") == _persona(client_id)]
 
-        # A quick reconnect is not a new journey: no fresh greeting.
-        if not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT:
+        # A quick reconnect is not a new journey: no fresh greeting. Nor is the page
+        # reconnecting on its own after the link dropped (resume=1).
+        if not resume and (not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT):
             greeting = pick_greeting(_persona(client_id), user_name)
             greeting_audio = await synthesize_voice(greeting, _persona(client_id))
             await websocket.send_json({

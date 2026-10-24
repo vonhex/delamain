@@ -132,6 +132,11 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     let stopped = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnecting = false;
+    // Proxies and Cloudflare close a WebSocket that sits idle, so send a ping now and then.
+    const heartbeat = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: 'ping' }));
+    }, 20_000);
 
     const playNext = () => {
       const item = audioQueueRef.current.shift();
@@ -197,14 +202,15 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const connect = () => {
       const clientId = `web-${Date.now()}`;
       // The core travels in the URL so the greeting is already spoken in the right voice.
-      const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}`);
+      // resume=1 on an automatic reconnect: the conversation carries on, with no fresh greeting.
+      const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}&resume=${reconnecting ? 1 : 0}`);
       wsRef.current = ws;
       ws.onmessage = onMessage;
       ws.onclose = (e) => {
         if (wsRef.current === ws) wsRef.current = null;
         setIsLoading(false);
         if (e.code === 4001) { onLogout(); return; }
-        if (!stopped) retryTimer = setTimeout(connect, 3000);
+        if (!stopped) { reconnecting = true; retryTimer = setTimeout(connect, 3000); }
       };
     };
     connect();
@@ -212,6 +218,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     return () => {
       stopped = true;
       clearTimeout(retryTimer);
+      clearInterval(heartbeat);
       wsRef.current?.close();
       wsRef.current = null;
     };

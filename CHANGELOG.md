@@ -7,6 +7,7 @@ All notable changes to Delamain are documented here.
 ## [Unreleased] — Delamain V2
 
 ### Fixed
+- **Greeting repeated every few minutes**: the WebSocket sat idle and Cloudflare closed it, the page reconnected, and each reconnect was greeted as a new trip. The page now sends a heartbeat every 20 seconds, and an automatic reconnect resumes the conversation without a greeting.
 - **Navigation inside Fermata**: an app's embedded browser cannot open the Maps app, so instead of failing silently Delamain now names the destination and says to open him in the phone's browser to navigate.
 - **Lip-synced clips stay on the words**: a clip starts at the audio's current position, read from the audio itself, plus a 65 ms lead for the seek, and is fetched as soon as the reply arrives. Measured within 100 ms of the audio throughout, including with clips loading 700 ms late.
 
