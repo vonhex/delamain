@@ -4,9 +4,10 @@ interface DelamainFaceProps {
   isTalking: boolean;
   mood?: 'idle' | 'angry';
   size?: 'normal' | 'large';
-  // A lip-synced clip for the line being spoken; a new object plays it from the start.
-  // Like every clip it plays muted in an off-page video (the sound is the line's audio).
-  lineClip?: { url: string; n: number } | null;
+  // A lip-synced clip for the line being spoken. Like every clip it plays muted in an
+  // off-page video; the sound is the line's audio, and audioTime() reports how far
+  // into it playback is, so the clip starts at the same point.
+  lineClip?: { url: string; audioTime: () => number } | null;
 }
 
 const COLOR = {
@@ -94,6 +95,9 @@ function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number): 
 // painted onto canvases inside the circle. Some Android WebViews (Fermata on
 // Android Auto, for one) hand any on-page video to a native fullscreen player,
 // which pulled Delamain out of his circle; an off-page video gives them nothing to grab.
+// How far ahead of the audio a lip-synced clip is started, in seconds.
+const SEEK_LEAD = 0.065;
+
 function makeOffscreenVideo(): HTMLVideoElement {
   const v = document.createElement('video');
   v.muted = true;
@@ -137,7 +141,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   const isTalkingRef = useRef(isTalking);
   const pendingFlip = useRef(false);
   const isFlipPlaying = useRef(false);  // true while flip anim is the active video
-  const pendingLine = useRef<string | null>(null); // lip-synced clip waiting to play
+  const pendingLine = useRef<{ url: string; audioTime: () => number } | null>(null); // lip-synced clip waiting to play
   const lineActive = useRef(false);     // true from a line clip's request until it ends
   const angryUntilMs = useRef(0);       // wall-clock ms; hold red until this time
   const sessionStartMs = useRef(Date.now());
@@ -161,12 +165,16 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   }, []);
 
   // ── pick next video ────────────────────────────────────────────────────────
+  const lineAudioTime = useRef<(() => number) | null>(null); // set while the clip being loaded is a line clip
+
   const getNext = useCallback((): string => {
+    lineAudioTime.current = null;
     if (pendingLine.current) {
       const clip = pendingLine.current;
       pendingLine.current = null;
       isFlipPlaying.current = false;
-      return clip;
+      lineAudioTime.current = clip.audioTime;
+      return clip.url;
     }
     lineActive.current = false;
 
@@ -198,8 +206,16 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     incoming.src = next;
     incoming.load();
 
+    const audioTime = lineAudioTime.current;
     const onReady = () => {
       incoming.removeEventListener('canplay', onReady);
+      // A line clip that took a moment to load joins the audio where it is now,
+      // so the lips stay on the words instead of lagging behind them.
+      // SEEK_LEAD covers the time the seek and start take, measured at about 65 ms.
+      if (audioTime) {
+        const offset = audioTime() + SEEK_LEAD;
+        if (offset < (incoming.duration || Infinity)) incoming.currentTime = offset;
+      }
       incoming.play().catch(() => {});
       const nextSlot = activeSlot.current === 'a' ? 'b' : 'a';
       activeSlot.current = nextSlot;
@@ -255,7 +271,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   // must win so the talking effect does not load a generic loop over it.
   useEffect(() => {
     if (!lineClip) return;
-    pendingLine.current = lineClip.url;
+    pendingLine.current = lineClip;
     lineActive.current = true;
     advance();
   }, [lineClip, advance]);

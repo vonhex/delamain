@@ -18,6 +18,8 @@ All notable changes to Delamain are documented here.
 - Failed replies are spoken ("My apologies. I was unable to complete that request.") instead of leaving the page waiting.
 
 ### Fixed
+- **Navigation inside Fermata**: an app's embedded browser cannot open the Maps app, so instead of failing silently Delamain now names the destination and says to open him in the phone's browser to navigate.
+- **Lip-synced clips stay on the words**: a clip starts at the audio's current position, read from the audio itself, plus a 65 ms lead for the seek, and is fetched as soon as the reply arrives. Measured within 100 ms of the audio throughout, including with clips loading 700 ms late.
 - **Backend crash during speech synthesis**: F5-TTS now runs on one dedicated thread; on ROCm, synthesis started on a fresh worker thread could segfault in the flash-attention GPU check.
 - **The page stuck on "processing"**: the web UI reconnects when the link drops and clears the thinking indicator.
 

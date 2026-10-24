@@ -60,6 +60,8 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 - **Web search**: traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
 - **Notes and memory**: lists, reminders and notes go into your Obsidian vault under `Delamain/`. Lasting facts about you and the people and places in your life are kept in `Delamain/Memory/`, one Markdown note per topic, and you can read and edit them in Obsidian.
 - **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route.
+
+  > **Navigation needs Delamain open in your phone's browser.** Inside an app's embedded browser, such as Fermata on Android Auto, a web page cannot open the Maps app. There Delamain still finds the place and tells you the destination, but you have to start the route yourself, or open Delamain in Chrome on the phone instead.
 - **Voice input**: a push-to-talk microphone button using the browser's speech recognition, plus a text chat panel.
 - **Conversation log**: a history panel of everything you and Delamain have said.
 - **JWT authentication**: a single shared password, rate-limited login and 30-day tokens.
