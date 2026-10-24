@@ -16,6 +16,7 @@ import re
 import time
 import traceback
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 from tts_engine import OUTPUT_DIR, get_tts_engine, reset_engine
 from voice_glitch import corrupt_file
 import personas as _personas
@@ -51,6 +52,11 @@ def web_search(query: str, max_results: int = 5) -> str:
         print(f"[Search] Error: {e}")
         return "Search unavailable."
 
+# Every GPU call for TTS runs on this one thread. On ROCm, starting synthesis on a
+# fresh worker thread can segfault inside the flash-attention GPU check.
+_tts_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts")
+
+
 def _warmup_tts() -> None:
     """Load the TTS engine and pre-synthesize the fixed 'one moment' lines."""
     try:
@@ -70,7 +76,7 @@ async def lifespan(app: FastAPI):
     # Load TTS and pre-cache the fixed phrases in background so the server
     # starts accepting requests immediately.
     _db.init_db()
-    warmup_task = loop.run_in_executor(None, _warmup_tts)
+    warmup_task = loop.run_in_executor(_tts_executor, _warmup_tts)
     reminder_task = asyncio.create_task(_reminder_loop())
     yield
     reminder_task.cancel()
@@ -454,8 +460,8 @@ async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
     async with _tts_lock:
         try:
             loop = asyncio.get_event_loop()
-            engine = get_tts_engine()
-            url = await loop.run_in_executor(None, engine.synthesize, text)
+            # get_tts_engine runs on the TTS thread too: after a reset it reloads the model.
+            url = await loop.run_in_executor(_tts_executor, lambda: get_tts_engine().synthesize(text))
         except Exception as e:
             print(f"Voice synthesis error (resetting engine): {e}")
             reset_engine()

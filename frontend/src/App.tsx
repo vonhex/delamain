@@ -126,10 +126,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   // WebSocket: connect on mount to receive greeting + voice responses
   useEffect(() => {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const clientId = `web-${Date.now()}`;
-    // The core travels in the URL so the greeting is already spoken in the right voice.
-    const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}`);
-    wsRef.current = ws;
+    let stopped = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const playNext = () => {
       const item = audioQueueRef.current.shift();
@@ -156,7 +154,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
       }
     };
 
-    ws.onmessage = (event) => {
+    const onMessage = (event: MessageEvent) => {
       const msg = JSON.parse(event.data);
       if (msg.type === 'history') {
         // Reconnected mid-conversation: show what was said, unless this tab already has it.
@@ -178,14 +176,35 @@ function MainApp({ token, onLogout }: MainAppProps) {
         } else if (msg.navigate_options?.length > 1) {
           setNavOptions(msg.navigate_options);
         }
+      } else if (msg.type === 'error') {
+        setIsLoading(false);
+        setMessages(prev => [...prev, { role: 'delamain', content: 'I could not complete that request. Please try again.' }]);
       }
     };
 
-    ws.onclose = (e) => {
-      if (e.code === 4001) onLogout();
+    // Reconnect whenever the link drops (backend restart, network change); a quick
+    // reconnect resumes the conversation without a fresh greeting.
+    const connect = () => {
+      const clientId = `web-${Date.now()}`;
+      // The core travels in the URL so the greeting is already spoken in the right voice.
+      const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}`);
+      wsRef.current = ws;
+      ws.onmessage = onMessage;
+      ws.onclose = (e) => {
+        if (wsRef.current === ws) wsRef.current = null;
+        setIsLoading(false);
+        if (e.code === 4001) { onLogout(); return; }
+        if (!stopped) retryTimer = setTimeout(connect, 3000);
+      };
     };
+    connect();
 
-    return () => { ws.close(); wsRef.current = null; };
+    return () => {
+      stopped = true;
+      clearTimeout(retryTimer);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
   }, [token]);
 
   const scrollToBottom = () => {
