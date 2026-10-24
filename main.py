@@ -229,9 +229,9 @@ def base_system_prompt(persona: str = "delamain") -> str:
     each rogue cab replaces it with its own temperament."""
     core = _personas.get(persona)
     if core.rogue:
-        return _personas.ROGUE_IDENTITY + core.core + CAPABILITIES + FORMAT
+        return _personas.ROGUE_IDENTITY + CAPABILITIES + FORMAT + "\n\n" + core.prompt()
     if core.core:
-        return IDENTITY + core.core + CAPABILITIES + FORMAT
+        return SYSTEM_PROMPT + "\n\n" + core.prompt()
     return SYSTEM_PROMPT
 
 GREETINGS = [
@@ -539,7 +539,8 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
-    payload = build_llm_payload(history, search_context, location=location, persona=persona, user_name=user_name)
+    payload = build_llm_payload(history, search_context, temperature=_personas.get(persona).temperature,
+                                 location=location, persona=persona, user_name=user_name)
     if TOOLS_ENABLED:
         raw = await _run_tool_loop(payload, on_working, location)
     else:
