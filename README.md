@@ -17,13 +17,26 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 
 ## Screenshots
 
+<img src="Screenshots/main.png" alt="Delamain mid-sentence, lip-synced, with the conversation panel open" />
+
 <table>
   <tr>
-    <td><img src="Screenshots/main.png" alt="Main interface — Delamain face and chat panel" /></td>
-    <td><img src="Screenshots/login.png" alt="Login page" /></td>
+    <td width="30%"><img src="Screenshots/mobile.png" alt="On a phone" /><br><sub>On a phone</sub></td>
+    <td><img src="Screenshots/car.png" alt="On a wide car display" /><br><sub>On a car display (Android Auto, through Fermata)</sub></td>
+  </tr>
+</table>
+
+<img src="Screenshots/cores.png" alt="The ten personality cores" />
+<sub>The ten personality cores, each with its own face tint, voice and temperament</sub>
+
+<table>
+  <tr>
+    <td><img src="Screenshots/settings.png" alt="Settings: personality cores" /><br><sub>Settings: pick a core</sub></td>
+    <td><img src="Screenshots/integrations.png" alt="Settings: integrations" /><br><sub>Settings: LLM, search, Obsidian and more, saved on the server</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="Screenshots/settings.png" alt="System configuration panel" /></td>
+    <td><img src="Screenshots/login.png" alt="First start: choose a password" /><br><sub>First start: choose a password</sub></td>
+    <td><img src="Screenshots/data-explorer.png" alt="Conversation log" /><br><sub>Conversation log</sub></td>
   </tr>
 </table>
 
@@ -50,7 +63,8 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
   Every core keeps the same tools and stays truthful: facts, directions and navigation are never part of the act, safety warnings come first, and a rogue core drops the act if the passenger sounds genuinely upset.
 - **Instant pre-recorded replies**: everyday messages such as "thanks", "how are you", "who are you", "tell me a joke", "good night", "I love you", "never mind" and "combat mode" are answered at once from about 470 fixed lines written for every core, with no model call and the audio already recorded. Only short messages that are nothing but one of these get a fixed reply; anything with a real question goes to the model.
 - **Combat mode**: ask him to initiate it and he answers as he did Jackie: "My apologies, but you do not appear to be in any sort of imminent danger." If you say you are being followed or threatened, he drops the joke and helps.
-- **Lip-synced face clips**: every fixed line (greetings, "one moment", the pre-recorded replies) has a stable id such as `04_glen/greeting_01`. Run `python import_clips.py <folder>` on a folder of finished videos (`<id>.mp4`, laid out as in the audio export) and the face plays each clip whenever its line is spoken; lines without a clip use the talking loops. Idle loops in the folder's `idle/` go into `frontend/public/` and are picked up by name (`delamain_blink_<n>`, `delamain_listen_<n>`, `delamain_think_<n>`, `delamain_angry_<n>`, `delamain_night_<n>`, `<core>_idle_<n>` and so on; see the changelog); rebuild the web app afterwards. The import keeps each video's soundtrack as `line_clips/<id>.wav` and plays that instead of the original recording, because the lips follow the generator's re-rendered voice. Clips play muted in off-page videos painted onto the face canvas, like every other clip, so Android Auto WebViews cannot pull them fullscreen.
+- **Lip-synced face**: 507 of the fixed lines play a lip-synced clip of Delamain saying them, made with MiniMax H3; the rest use the talking loops. The clips are published as a release download, and a new install fetches them by itself on first start. The face also idles: blinks, glances, fidgets, gets bored when left alone, and listens, thinks and glares when it should. It fits any screen, from a phone to a wide car display.
+- **Set up from the browser**: on first start the page asks you to choose a password, and Settings → Integrations sets the LLM endpoint and model, SearXNG, the Obsidian vault, news, routing and units. They are saved on the server, so `.env` is optional.
 - **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
 - **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
 - **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.
@@ -64,7 +78,7 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
   > **Navigation needs Delamain open in your phone's browser.** Inside an app's embedded browser, such as Fermata on Android Auto, a web page cannot open the Maps app. There Delamain still finds the place and tells you the destination, but you have to start the route yourself, or open Delamain in Chrome on the phone instead.
 - **Voice input**: a push-to-talk microphone button using the browser's speech recognition, plus a text chat panel.
 - **Conversation log**: a history panel of everything you and Delamain have said.
-- **JWT authentication**: a single shared password, rate-limited login and 30-day tokens.
+- **JWT authentication**: a single shared password, chosen on first start, rate-limited login and 30-day tokens.
 
 ---
 
@@ -91,15 +105,16 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 - Python 3.11+
 - A GPU is recommended for F5-TTS (NVIDIA CUDA or AMD ROCm). CPU works, but uncached phrases take noticeably longer to speak.
 - Node.js 20+ to build the frontend
+- ffmpeg
 - An OpenAI-compatible LLM endpoint with tool calling (llama.cpp server, vLLM, Halogen, …)
 - SearXNG (optional; used for web search and as the news fallback)
 - An Obsidian vault (optional; used for notes and memory)
 
+Everything else comes with the repository or downloads itself on first start: the Delamain reference voice is included, the F5-TTS weights (about 1.3 GB) come from Hugging Face, and the lip-synced clips (about 240 MB) from this repository's `line-clips` release. The first start also records every fixed line once in the background, which takes a while on a GPU and longer on a CPU; Delamain answers in the meantime.
+
 ---
 
 ## Installation
-
-### 1. Clone and install dependencies
 
 ```bash
 git clone https://github.com/vonhex/delamain.git
@@ -107,56 +122,24 @@ cd delamain
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+(cd frontend && npm ci && npm run build)
+./start.sh
 ```
 
-### 2. Download F5-TTS model weights
+Open `http://localhost:8888`, choose a password, and point Settings → Integrations at your LLM (and SearXNG and Obsidian vault, if you use them). That's all; the backend serves the web UI, and the voice model and lip-synced clips download on the first start.
 
-```bash
-mkdir -p checkpoints/F5TTS_Base
-huggingface-cli download SWivid/F5-TTS \
-  F5TTS_Base/model_1200000.pt \
-  F5TTS_Base/vocab.txt \
-  --local-dir checkpoints
-```
+- **Change the password** later with `python auth.py set-password <new-password>`.
+- **Environment variables** still work and are used for anything not set in Settings: copy `.env.example` to `.env`.
+- **Your own voice**: replace `delamain_ref_10s.wav` (or set `DELAMAIN_REF_AUDIO`) and edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken. See [docs/f5-tts.md](docs/f5-tts.md).
+- **Frontend development**: `cd frontend && npm run dev` serves the UI with hot reload on `http://localhost:5173`, proxying to the backend.
 
-### 3. Prepare your reference audio
+The full guide is in [docs/setup.md](docs/setup.md).
 
-F5-TTS clones the voice from a reference clip. Provide a clean 10-second WAV of the voice you want to clone:
+### Making more lip-synced clips
 
-```bash
-cp your_voice_reference.wav delamain_ref_10s.wav
-```
+Every fixed line has a stable id such as `04_glen/greeting_01`. Run `python import_clips.py <folder>` on a folder of finished videos (`<id>.mp4`, laid out as in the audio export) to install them. The import keeps each video's soundtrack as `line_clips/<id>.wav` and plays that instead of the original recording, because the lips follow the generator's re-rendered voice. Idle loops in the folder's `idle/` go into `frontend/public/` and are picked up by name (`delamain_blink_<n>`, `delamain_listen_<n>`, `delamain_think_<n>`, `delamain_angry_<n>`, `delamain_night_<n>`, `<core>_idle_<n>` and so on; see the changelog); rebuild the web app afterwards. Clips play muted in off-page videos painted onto the face canvas, so Android Auto WebViews cannot pull them fullscreen.
 
-Edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken in that clip. See [docs/f5-tts.md](docs/f5-tts.md).
-
-### 4. Configure environment
-
-```bash
-cp .env.example .env
-# Set LLM_URL, LLM_MODEL, SEARXNG_URL, OBSIDIAN_VAULT_PATH and ALLOWED_ORIGINS
-```
-
-### 5. Set a password
-
-```bash
-python auth.py set-password <your-password>
-```
-
-### 6. Start the backend
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8888 --ws-ping-interval 0
-```
-
-### 7. Start the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Visit `http://localhost:5173` and log in with your password. For production, run `npm run build` and serve `frontend/dist`. The full guide is in [docs/setup.md](docs/setup.md).
+To publish them for everyone, zip `line_clips/` and replace the release asset: `cd line_clips && zip -r ../delamain-line-clips.zip . -i '*.mp4' '*.wav' && gh release upload line-clips ../delamain-line-clips.zip --clobber`. Installs that downloaded the clips pick up the new archive on their next start; clips imported by hand are never replaced.
 
 ---
 
@@ -165,40 +148,38 @@ Visit `http://localhost:5173` and log in with your password. For production, run
 The image bundles the web UI, so one container serves everything on port 8888.
 
 ```bash
-cp .env.example .env   # edit .env first
-mkdir -p checkpoints data
-cp your_voice_reference.wav data/delamain_ref_10s.wav
 docker compose up -d
-docker compose exec delamain python auth.py set-password <your-password>
 ```
 
-Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
+Then open `http://<server>:8888`, choose a password and fill in Settings → Integrations. A `.env` next to `docker-compose.yml` is optional and sets the same values. In the container, the Obsidian vault is mounted at `/vault` (set `OBSIDIAN_VAULT_PATH` before `docker compose up` to choose the folder on the host). Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
 
 | Volume | Holds |
 |---|---|
-| `/app/checkpoints` | F5-TTS model weights (`F5TTS_Base/model_1200000.pt`, `vocab.txt`) |
-| `/app/data` | Database, voice clips, and your reference clip `delamain_ref_10s.wav` |
+| `/app/checkpoints` | F5-TTS model weights, downloaded on first start |
+| `/app/data` | Database, settings, recorded audio and the lip-synced clips (downloaded on first start) |
 | `/vault` | Optional Obsidian vault for notes and memory |
-
-> F5-TTS model weights and the reference audio are not included in the image.
 
 ---
 
 ## Environment Variables
 
+All optional. The ones marked ⚙ can also be set in Settings → Integrations, which takes precedence.
+
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_URL` | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible chat completions endpoint |
-| `LLM_MODEL` | `gpt-4-vision-preview` | Model id sent to the endpoint (check its `/v1/models`) |
-| `LLM_REASONING_EFFORT` | *(unset)* | For reasoning models: `none` turns thinking off so the whole reply budget goes to speech |
-| `TOOLS_ENABLED` | `true` | Let the LLM call web search, news, notes and memory |
-| `SEARXNG_URL` | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |
-| `NEWS_RSS_URL` | `https://news.google.com/rss` | Google News RSS base used by the news tool |
-| `OBSIDIAN_VAULT_PATH` | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
+| `LLM_URL` ⚙ | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible chat completions endpoint |
+| `LLM_MODEL` ⚙ | `gpt-4-vision-preview` | Model id sent to the endpoint (check its `/v1/models`) |
+| `LLM_REASONING_EFFORT` ⚙ | *(unset)* | For reasoning models: `none` turns thinking off so the whole reply budget goes to speech |
+| `TOOLS_ENABLED` ⚙ | `true` | Let the LLM call web search, news, notes and memory |
+| `SEARXNG_URL` ⚙ | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |
+| `NEWS_RSS_URL` ⚙ | `https://news.google.com/rss` | Google News RSS base used by the news tool |
+| `OBSIDIAN_VAULT_PATH` ⚙ | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
 | `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
-| `DELAMAIN_UNITS` | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
+| `DELAMAIN_UNITS` ⚙ | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
 | `DELAMAIN_LINES_DIR` | `<repo>/line_clips` | Lip-synced face clips for pre-recorded lines, as `<clip id>.mp4` with their soundtrack as `<clip id>.wav` |
-| `OSRM_URL` | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
+| `OSRM_URL` ⚙ | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
+| `DELAMAIN_CLIPS_URL` | the `line-clips` release | Where a new install downloads the lip-synced clips from; empty to skip |
+| `DELAMAIN_REF_AUDIO` | `delamain_ref_10s.wav` | Reference clip the voice is cloned from |
 | `ALLOWED_ORIGINS` | `https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
 
 ---
@@ -207,7 +188,9 @@ Then open `http://<server>:8888`. Pre-built images: `ghcr.io/vonhex/delamain:lat
 
 | Endpoint | Auth | Description |
 |---|---|---|
+| `GET /api/setup`, `POST /api/setup` | — | First start: whether a password is needed, and set it (only while none is set) |
 | `POST /api/login` | — | Authenticate, receive JWT |
+| `GET /api/config`, `PUT /api/config` | JWT | Server settings (Settings → Integrations) and what is installed |
 | `GET /health` | — | Health check |
 | `WS /ws/{client_id}?token=&persona=&user_name=` | JWT | Main WebSocket: talk, replies, reminders, audio |
 | `GET /api/data/conversations` | JWT | Conversation history |

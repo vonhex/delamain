@@ -27,20 +27,20 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # App source and the built web UI
-COPY *.py ./
+COPY *.py delamain_ref_10s.wav ./
 COPY --from=frontend /frontend/dist /app/frontend_dist
 
 # Directories mounted at runtime via volumes:
-#   /app/checkpoints  — F5-TTS model weights
-#   /app/data         — database, voice clips, reference audio (delamain_ref_10s.wav)
+#   /app/checkpoints  — F5-TTS model weights, downloaded on first start
+#   /app/data         — database, settings, recorded audio and lip-synced clips (downloaded on first start)
 #   /vault            — optional Obsidian vault for notes and memory
+# The bundled reference voice is used unless DELAMAIN_REF_AUDIO points at another clip.
 RUN mkdir -p /app/checkpoints /app/data
 
 ENV PYTHONUNBUFFERED=1 \
     DELAMAIN_DB=/app/data/delamain.db \
     DELAMAIN_AUDIO_DIR=/app/data/audio_output \
     DELAMAIN_LINES_DIR=/app/data/line_clips \
-    DELAMAIN_REF_AUDIO=/app/data/delamain_ref_10s.wav \
     FRONTEND_DIST=/app/frontend_dist \
     OBSIDIAN_VAULT_PATH=/vault
 

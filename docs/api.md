@@ -35,6 +35,22 @@ Tokens expire after 30 days.
 
 ---
 
+### `GET /api/setup`, `POST /api/setup`
+
+No auth. A fresh install has no password: `GET` returns `{ "needs_password": true }`, and `POST { "password": "..." }` (at least 8 characters, 5 requests/minute) sets it and returns `{ "token": "eyJ..." }`. Once a password is set, `POST` returns 409.
+
+---
+
+### `GET /api/config`, `PUT /api/config`
+
+JWT required. The server settings shown under Settings → Integrations.
+
+`GET` returns `settings` (per key: `value`, `source` of `settings`, `env` or `default`, `label`, `default`, `choices`) and `status` (`voice_model`, `voice_reference`, `line_clips`, `lines`).
+
+`PUT` takes `{ "<key>": "<value>", ... }` for any of `llm_url`, `llm_model`, `llm_reasoning_effort`, `tools_enabled`, `searxng_url`, `obsidian_vault_path`, `news_rss_url`, `osrm_url`, `units`, saves them to `settings.json` and returns the same shape as `GET`. An empty URL or path resets it to the environment value or the default. Invalid values return 400 with the reason in `detail`.
+
+---
+
 ### `GET /health`
 
 No auth required.

@@ -1,80 +1,68 @@
 # Setup Guide
 
-## 1. Install Python dependencies
+## 1. Install
 
 ```bash
+git clone https://github.com/vonhex/delamain.git
+cd delamain
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+(cd frontend && npm ci && npm run build)
 ```
 
-## 2. Download F5-TTS model weights
+You also need ffmpeg on the PATH.
+
+## 2. Start it
 
 ```bash
-mkdir -p checkpoints/F5TTS_Base
-pip install huggingface_hub
-huggingface-cli download SWivid/F5-TTS \
-  F5TTS_Base/model_1200000.pt \
-  F5TTS_Base/vocab.txt \
-  --local-dir checkpoints
+./start.sh        # or: uvicorn main:app --host 0.0.0.0 --port 8888 --ws-ping-interval 0
 ```
 
-## 3. Prepare your voice reference audio
+The backend serves the web UI on port 8888. On the first start it also:
 
-F5-TTS clones voice from a reference clip. You need a clean 10-second WAV file of the voice you want to use.
+- downloads the F5-TTS weights from Hugging Face (`SWivid/F5-TTS`, about 1.3 GB) into `checkpoints/`;
+- downloads the lip-synced clips from the repository's `line-clips` release (about 240 MB) into `line_clips/`;
+- records every fixed line once in the background, so pre-recorded replies are instant afterwards.
 
-1. Place it at `delamain_ref_10s.wav` in the project root
-2. Edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken in the clip
+Delamain answers while this runs; lines without their clip yet use the talking loops.
 
-For the authentic Cyberpunk 2077 Delamain voice, source a clean audio clip from the game and transcribe it.
+## 3. Choose a password
 
-## 4. Configure environment
+Open `http://<server>:8888`. A fresh install asks you to choose a password (at least 8 characters). Tokens last 30 days. To change the password later:
 
 ```bash
-cp .env.example .env
+python auth.py set-password <new-password>
 ```
 
-Edit `.env`:
+## 4. Connect your services
 
-| Variable | Required | Description |
+Open Settings (the gear) → Integrations:
+
+| Setting | Needed | What it is |
 |---|---|---|
-| `LLM_URL` | Yes | OpenAI-compatible chat endpoint with tool calling |
-| `LLM_MODEL` | Yes | Model id the endpoint serves (see its `/v1/models`) |
-| `LLM_REASONING_EFFORT` | No | `none` turns thinking off on reasoning models |
-| `SEARXNG_URL` | No | SearXNG instance for web search and the news fallback |
-| `OBSIDIAN_VAULT_PATH` | No | Vault for notes and memory |
-| `ALLOWED_ORIGINS` | Yes | Your domain/IP for CORS |
+| LLM endpoint | Yes | OpenAI-compatible chat completions URL with tool calling (llama.cpp, vLLM, Halogen, …) |
+| Model id | Usually | The model the endpoint serves (see its `/v1/models`); llama.cpp ignores it |
+| Reasoning effort | No | `none` turns thinking off on reasoning models |
+| Tools | No | Web search, news, weather, routes, notes and memory |
+| SearXNG search URL | No | Web search, and the news fallback |
+| Obsidian vault folder | No | A folder on the server with a `.obsidian` folder in it |
+| News RSS, OSRM, units | No | Defaults work |
 
-## 5. Set a password
+These are saved in `settings.json` next to the database and take effect at once. The same values can come from environment variables instead (copy `.env.example` to `.env`); a value saved in Settings wins.
+
+## 5. Use it in the car
+
+Open the address in the browser on your phone or on the Android Auto display, log in, and press the mic. Over the internet, put it behind HTTPS (for example a Cloudflare Tunnel) and add that origin to `ALLOWED_ORIGINS`. Browsers only allow the microphone and location on secure pages.
+
+## Your own voice
+
+The Delamain reference clip `delamain_ref_10s.wav` is included. To clone another voice, replace it (or set `DELAMAIN_REF_AUDIO`) with a clean 10-second WAV and edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken. Delete `audio_output/static_cache/` so the fixed lines are recorded again in the new voice. See [f5-tts.md](f5-tts.md).
+
+## Frontend development
 
 ```bash
-python auth.py set-password yourpassword
+cd frontend && npm run dev
 ```
 
-Tokens expire after 30 days. To show the current token:
-
-```bash
-python auth.py show-token
-```
-
-## 6. Start services
-
-**Backend:**
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8888 --ws-ping-interval 0
-```
-
-**Frontend (development):**
-```bash
-cd frontend && npm install && npm run dev
-```
-
-**Frontend (production build):**
-```bash
-cd frontend && npm run build
-# Serve dist/ with nginx or any static file server
-```
-
-## 7. Use it in the car
-
-Open the frontend's address in the browser on your phone or on the Android Auto display, log in, and press the mic. Over the internet, put it behind HTTPS (for example a Cloudflare Tunnel) and add that origin to `ALLOWED_ORIGINS`. Browsers only allow the microphone and location on secure pages.
+Serves the UI with hot reload on `http://localhost:5173`, proxying the API to the backend on 8888.

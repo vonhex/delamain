@@ -26,19 +26,19 @@ import lines as _lines
 import db as _db
 import auth as _auth
 import assistant_tools as _tools
+import config
 
-# TOOLS_ENABLED lets the LLM call web search, notes and memory (assistant_tools.py).
-TOOLS_ENABLED = os.environ.get("TOOLS_ENABLED", "true").lower() not in ("0", "false", "no")
+# The LLM endpoint, tools switch and search URL come from config (Settings panel, .env
+# or defaults) on every request. With tools on, the LLM can call web search, notes and
+# memory (assistant_tools.py).
 MAX_TOOL_ROUNDS = 6
-
-SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://localhost:8887/search")
 
 
 def web_search(query: str, max_results: int = 5) -> str:
     """Query SearXNG and return a compact text summary for the LLM."""
     try:
         params = {"q": query, "format": "json", "language": "en"}
-        resp = requests.get(SEARXNG_URL, params=params, timeout=8)
+        resp = requests.get(config.get("searxng_url"), params=params, timeout=8)
         resp.raise_for_status()
         data = resp.json()
         results = data.get("results", [])[:max_results]
@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI):
     # starts accepting requests immediately.
     _db.init_db()
     warmup_task = asyncio.create_task(_warmup_tts())
+    loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
     yield
     reminder_task.cancel()
@@ -131,6 +132,52 @@ LINES_DIR = os.environ.get("DELAMAIN_LINES_DIR", os.path.join(os.path.dirname(os
 os.makedirs(LINES_DIR, exist_ok=True)
 app.mount("/lines", StaticFiles(directory=LINES_DIR), name="lines")
 _line_ids: dict[tuple[str, str], str] = {}
+
+
+# A fresh install fetches the published clips in the background (lines play with the
+# talking loops until they arrive), and fetches them again when the published archive
+# changes. Clips imported by hand with import_clips.py are never replaced. Set
+# DELAMAIN_CLIPS_URL empty to skip it.
+CLIPS_URL = os.environ.get(
+    "DELAMAIN_CLIPS_URL", "https://github.com/vonhex/delamain/releases/download/line-clips/delamain-line-clips.zip")
+_CLIP_NAME = re.compile(r"^\d\d_[a-z_]+/[a-z_]+_\d\d\.(mp4|wav)$")
+
+
+def _download_line_clips() -> None:
+    import tempfile, zipfile
+    if not CLIPS_URL:
+        return
+    marker = os.path.join(LINES_DIR, ".published-version")
+    have = any(f.endswith(".mp4") for _, _, files in os.walk(LINES_DIR) for f in files)
+    if have and not os.path.exists(marker):
+        return  # installed by hand
+    try:
+        head = requests.head(CLIPS_URL, allow_redirects=True, timeout=20)
+        head.raise_for_status()
+        version = head.headers.get("ETag") or head.headers.get("Last-Modified") or head.headers.get("Content-Length", "")
+        if have and open(marker).read().strip() == version:
+            return
+        print(f"[Clips] Downloading lip-synced clips from {CLIPS_URL}")
+        with tempfile.TemporaryFile() as tmp:
+            with requests.get(CLIPS_URL, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                for chunk in r.iter_content(1 << 20):
+                    tmp.write(chunk)
+            with zipfile.ZipFile(tmp) as z:
+                # Only clip files by their expected names, so the archive cannot write elsewhere.
+                names = [n for n in z.namelist() if _CLIP_NAME.match(n)]
+                for n in names:
+                    dst = os.path.join(LINES_DIR, n)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    with z.open(n) as src, open(dst + ".part", "wb") as out:
+                        while chunk := src.read(1 << 20):
+                            out.write(chunk)
+                    os.replace(dst + ".part", dst)
+        with open(marker, "w") as f:
+            f.write(version)
+        print(f"[Clips] Installed {sum(n.endswith('.mp4') for n in names)} lip-synced clips in {LINES_DIR}")
+    except Exception as e:
+        print(f"[Clips] Download failed (lines use the talking loops): {e}")
 
 
 def _line_clip(persona: str, text: str) -> str | None:
@@ -180,15 +227,11 @@ async def line_voice(text: str, persona: str = "delamain") -> str | None:
     clip = _line_clip(persona, text)
     return f"/lines/{clip}.wav" if clip else await synthesize_voice(text, persona)
 
-LLM_URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
-LLM_MODEL = os.environ.get("LLM_MODEL") or "gpt-4-vision-preview"
 # Reasoning models (e.g. Halogen/Qwen) think by default; "none" keeps the whole
 # max_tokens budget for the spoken reply. Unset to send nothing.
-LLM_REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "")
-
-
 def llm_payload_extras() -> dict:
-    return {"reasoning_effort": LLM_REASONING_EFFORT} if LLM_REASONING_EFFORT else {}
+    effort = config.get("llm_reasoning_effort")
+    return {"reasoning_effort": effort} if effort else {}
 
 CAPABILITIES = (
     "CAPABILITIES:\n"
@@ -444,7 +487,7 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     if _real_name(user_name):
         system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
                    "driver who knows a regular passenger would; not in every reply.]")
-    if TOOLS_ENABLED:
+    if config.flag("tools_enabled"):
         memory = _tools.memory_context()
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
@@ -456,7 +499,7 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     messages = [{"role": "system", "content": system}] + history
 
     return {
-        "model": LLM_MODEL,
+        "model": config.get("llm_model"),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -563,7 +606,7 @@ _SAVE_CLAIM = re.compile(
 
 
 def _post_llm(payload: dict) -> requests.Response:
-    return requests.post(LLM_URL, json=payload, timeout=90)
+    return requests.post(config.get("llm_url"), json=payload, timeout=90)
 
 
 async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None) -> str:
@@ -618,14 +661,14 @@ async def generate_response(history: list[dict], latest_message: str, location: 
                             user_name: str = "") -> tuple[str, str | None, list[dict]]:
     loop = asyncio.get_event_loop()
     search_context = ""
-    if not TOOLS_ENABLED and should_search(latest_message):
+    if not config.flag("tools_enabled") and should_search(latest_message):
         print(f"[Search] Querying SearXNG for: {latest_message}")
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
     payload = build_llm_payload(history, search_context, temperature=_personas.get(persona).temperature,
                                  location=location, persona=persona, user_name=user_name)
-    if TOOLS_ENABLED:
+    if config.flag("tools_enabled"):
         raw = await _run_tool_loop(payload, on_working, location)
     else:
         response = await loop.run_in_executor(None, _post_llm, payload)
@@ -658,6 +701,54 @@ async def login(request: Request, body: LoginRequest):
     return {"token": _auth.create_token()}
 
 
+class SetupRequest(BaseModel):
+    password: str
+
+
+_setup_lock = asyncio.Lock()
+
+
+@app.get("/api/setup")
+async def setup_status():
+    """A fresh install has no password yet; the login page then asks for one."""
+    return {"needs_password": _auth.get_password_hash() is None}
+
+
+@app.post("/api/setup")
+@limiter.limit("5/minute")
+async def setup(request: Request, body: SetupRequest):
+    """Set the first password. Only works while none is set; after that, change it with auth.py."""
+    async with _setup_lock:
+        if _auth.get_password_hash() is not None:
+            raise HTTPException(status_code=409, detail="A password is already set")
+        if len(body.password) < 8:
+            raise HTTPException(status_code=400, detail="Use at least 8 characters")
+        _auth.set_password(body.password)
+    return {"token": _auth.create_token()}
+
+
+@app.get("/api/config")
+async def get_config(_=Depends(require_auth)):
+    return {"settings": config.public(), "status": install_status()}
+
+
+@app.put("/api/config")
+async def put_config(values: dict, _=Depends(require_auth)):
+    try:
+        settings = config.update(values)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"settings": settings, "status": install_status()}
+
+
+def install_status() -> dict:
+    """What this install has, for the Settings panel."""
+    from tts_engine import CHECKPOINT, REF_AUDIO_PATH
+    clips = sum(1 for r in _lines.registry() if _line_clip(r["core_key"], r["line"]))
+    return {"voice_model": os.path.exists(CHECKPOINT), "voice_reference": os.path.exists(REF_AUDIO_PATH),
+            "line_clips": clips, "lines": len(_lines.registry())}
+
+
 @app.get("/health")
 async def health():
     return {"status": "operational", "persona": "Delamain", "clients": len(connected_clients)}
@@ -674,9 +765,9 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
     try:
         # Always use the configured endpoint: a caller-supplied llm_url would let any
         # client make the server POST to arbitrary internal addresses (SSRF).
-        llm_url = LLM_URL
+        llm_url = config.get("llm_url")
         payload = {
-            "model": LLM_MODEL,
+            "model": config.get("llm_model"),
             "messages": [
                 {"role": "system", "content": request.system_prompt or SYSTEM_PROMPT},
                 {"role": "user", "content": request.message},
@@ -882,7 +973,8 @@ async def _reminder_loop() -> None:
 
 
 # The Docker image bundles the built web UI; serve it last so every route above wins.
-FRONTEND_DIST = os.environ.get("FRONTEND_DIST", "")
+# The built web UI (npm run build), so one server on one port runs everything.
+FRONTEND_DIST = os.environ.get("FRONTEND_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist"))
 if FRONTEND_DIST and os.path.isdir(FRONTEND_DIST):
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
