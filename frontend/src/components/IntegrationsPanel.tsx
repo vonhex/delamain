@@ -29,7 +29,7 @@ const ORDER: { title: string; keys: string[] }[] = [
 ];
 
 const HINT: Record<string, string> = {
-  llm_url: 'llama.cpp, vLLM, Halogen or any OpenAI-compatible server with tool calling',
+  llm_url: 'Ollama, LM Studio, llama.cpp, vLLM or any OpenAI-compatible server with tool calling',
   llm_model: 'As the server lists it at /v1/models; llama.cpp ignores it',
   llm_reasoning_effort: '"none" turns thinking off so the whole reply budget goes to speech',
   searxng_url: 'Web search, and the fallback for news',
