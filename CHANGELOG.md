@@ -7,6 +7,7 @@ All notable changes to Delamain are documented here.
 ## [Unreleased]
 
 ### Added
+- **Insult comeback song**: now and then (one insult in three by default) Delamain skips the comeback and plays a part of Harley Poe's "Whiny Bitch" from YouTube, in a small inline player that closes itself, while the face turns red. The song, start, length and how often are in Settings → Integrations (0 turns it off). Insults now also cover "bitch", "loser" and the like.
 - **One-step installer**: `./install.sh` (Linux, macOS) or `install.bat` (Windows) installs uv and its own Python, PyTorch for the machine's GPU (NVIDIA cu126, AMD ROCm 7.2, Apple, or CPU), the Python packages and a private Node.js if needed, builds the web UI and starts Delamain; `--service` installs a systemd user service. Tested from a clean Ubuntu 24.04 with nothing but wget: installed in 18 seconds, then started, downloaded the voice model and clips and recorded lines on CPU.
 - **Runs without FFmpeg**: the reference voice is loaded with soundfile instead of torchaudio, whose torchcodec backend needs FFmpeg's libraries.
 - `start.sh` reads `.env` as plain `KEY=value` (paths with spaces work) and takes `PORT`; `start.bat` for Windows.

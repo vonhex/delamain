@@ -19,7 +19,8 @@ import personas as _personas
 _INTENTS: list[tuple[str, str]] = [
     ("love", r"(i )?(love|adore) you( so much)?|marry me|will you marry me"),
     ("rude", r"shut up|(fuck|screw) (you|off)|go to hell|you suck|(you'?re|you are) (so )?(stupid|useless|an idiot|dumb|garbage|worthless|trash|annoying)"
-             r"|idiot|moron|stupid (car|machine|ai|cab)|piece of (shit|junk|crap)"),
+             r"|idiot|moron|stupid (car|machine|ai|cab)|piece of (shit|junk|crap)"
+             r"|(you'?re|you are) (a|such a) (\w+ )?(bitch|loser|jerk|asshole|dick|baby|crybaby)|(you )?(whiny )?bitch"),
     ("thanks", r"(thanks|thank you|thank you so much|thanks so much|thanks a lot|thank you very much|cheers|much appreciated|appreciate it|ty)"
                r"( (buddy|man|pal|friend|mate))?"),
     ("good_night", r"good ?night|night night|nighty night|(i'?m )?going to (bed|sleep)|time for bed"),
