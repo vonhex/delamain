@@ -107,7 +107,7 @@ No auth required.
 
 **Error**: when a reply fails, a spoken apology arrives as a `response` with `"source": "error"`.
 
-`video_url` is set on greetings, "one moment" lines, pre-recorded replies and error lines when a lip-synced clip exists for that exact line (`/lines/<clip id>.mp4`), and is `null` otherwise.
+`video_url` is set on greetings, "one moment" lines, pre-recorded replies and error lines when a lip-synced clip exists for that exact line (`/lines/<clip id>.mp4`), and is `null` otherwise. With a clip, `audio_url` is the clip's soundtrack (`/lines/<clip id>.wav`).
 
 **Pong:**
 ```json

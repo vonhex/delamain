@@ -22,7 +22,7 @@
 - **Resume**: a connecting client gets the last 30 minutes of conversation back, so Android Auto reconnects keep the thread
 - **Auth** (`auth.py`): bcrypt password and 30-day JWTs
 
-- **Pre-recorded replies** (`lines.py`): short everyday messages are matched to an intent (thanks, goodbye, how are you, joke, combat mode and so on) and answered with a fixed line in the current core's voice, skipping the model. Every fixed line has a stable clip id; `line_video()` returns `/lines/<id>.mp4` when that clip exists in `DELAMAIN_LINES_DIR`.
+- **Pre-recorded replies** (`lines.py`): short everyday messages are matched to an intent (thanks, goodbye, how are you, joke, combat mode and so on) and answered with a fixed line in the current core's voice, skipping the model. Every fixed line has a stable clip id; `line_video()` returns `/lines/<id>.mp4` when that clip exists in `DELAMAIN_LINES_DIR`, and `line_voice()` returns its soundtrack `/lines/<id>.wav` in place of the synthesized recording. `import_clips.py` installs finished clips.
 - **TTS thread**: all F5-TTS work runs on one dedicated thread; startup pre-records every fixed line one at a time, taking the TTS lock per line so live replies are not held up.
 
 ### Tools (`assistant_tools.py`)

@@ -98,6 +98,28 @@ function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number): 
 // How far ahead of the audio a lip-synced clip is started, in seconds.
 const SEEK_LEAD = 0.065;
 
+// Keep a playing line clip on the audio clock. The clip's soundtrack plays from a
+// separate audio element, which can start later than the clip (still loading) or drift.
+// Small drift is eased out with the playback rate; a large gap is closed with a seek.
+// Once the audio stops advancing (ended or paused), the clip is left to finish.
+type LineSync = { video: HTMLVideoElement; clock: () => number; last: number; stalls: number };
+
+function syncLine(s: LineSync): boolean {
+  const v = s.video, t = s.clock();
+  if (v.ended || v.paused) return false;
+  if (t === s.last) {
+    if (t === 0) { v.currentTime = 0; return true; }   // audio not started yet: hold the first frame
+    if (++s.stalls > 30) { v.playbackRate = 1; return false; }
+    return true;
+  }
+  s.last = t; s.stalls = 0;
+  const drift = v.currentTime - t;
+  if (Math.abs(drift) > 0.25) { v.currentTime = t + SEEK_LEAD; v.playbackRate = 1; }
+  else if (Math.abs(drift) > 0.02) v.playbackRate = Math.min(1.15, Math.max(0.85, 1 - drift * 2));
+  else v.playbackRate = 1;
+  return true;
+}
+
 function makeOffscreenVideo(): HTMLVideoElement {
   const v = document.createElement('video');
   v.muted = true;
@@ -166,6 +188,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
 
   // ── pick next video ────────────────────────────────────────────────────────
   const lineAudioTime = useRef<(() => number) | null>(null); // set while the clip being loaded is a line clip
+  const lineSync = useRef<LineSync | null>(null);             // the line clip now playing, kept on the audio clock
 
   const getNext = useCallback((): string => {
     lineAudioTime.current = null;
@@ -203,6 +226,8 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     const incoming = activeSlot.current === 'a' ? videoB.current : videoA.current;
     if (!incoming) return;
 
+    lineSync.current = null;
+    incoming.playbackRate = 1;
     incoming.src = next;
     incoming.load();
 
@@ -217,6 +242,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
         if (offset < (incoming.duration || Infinity)) incoming.currentTime = offset;
       }
       incoming.play().catch(() => {});
+      if (audioTime) lineSync.current = { video: incoming, clock: audioTime, last: -1, stalls: 0 };
       const nextSlot = activeSlot.current === 'a' ? 'b' : 'a';
       activeSlot.current = nextSlot;
       setShowA(nextSlot === 'a');   // marks new stable-active (used after fade completes)
@@ -241,6 +267,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     const paint = () => {
       if (canvasA.current) drawCover(canvasA.current, videoA.current!);
       if (canvasB.current) drawCover(canvasB.current, videoB.current!);
+      if (lineSync.current && !syncLine(lineSync.current)) lineSync.current = null;
       frame = requestAnimationFrame(paint);
     };
     frame = requestAnimationFrame(paint);

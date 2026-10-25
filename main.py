@@ -123,20 +123,33 @@ app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 # Lip-synced face clips for the pre-recorded lines, saved as <clip id>.mp4
 # (for example 04_glen/greeting_01.mp4). A line without a clip uses the talking loops.
+# The clip's own soundtrack sits next to it as <clip id>.wav: the generator re-renders
+# the voice, and the lips follow that render, so it is what plays with the clip.
 LINES_DIR = os.environ.get("DELAMAIN_LINES_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "line_clips"))
 os.makedirs(LINES_DIR, exist_ok=True)
 app.mount("/lines", StaticFiles(directory=LINES_DIR), name="lines")
 _line_ids: dict[tuple[str, str], str] = {}
 
 
-def line_video(persona: str, text: str) -> str | None:
-    """URL of the lip-synced clip for a pre-recorded line, if one has been made."""
+def _line_clip(persona: str, text: str) -> str | None:
     if not _line_ids:
         _line_ids.update({(r["core_key"], r["line"]): r["id"] for r in _lines.registry()})
     clip = _line_ids.get((persona, text))
-    if clip and os.path.exists(os.path.join(LINES_DIR, clip + ".mp4")):
-        return f"/lines/{clip}.mp4"
+    if clip and all(os.path.exists(os.path.join(LINES_DIR, clip + ext)) for ext in (".mp4", ".wav")):
+        return clip
     return None
+
+
+def line_video(persona: str, text: str) -> str | None:
+    """URL of the lip-synced clip for a pre-recorded line, if one has been made."""
+    clip = _line_clip(persona, text)
+    return f"/lines/{clip}.mp4" if clip else None
+
+
+async def line_voice(text: str, persona: str = "delamain") -> str | None:
+    """The clip's soundtrack when the line has a clip, otherwise the synthesized voice."""
+    clip = _line_clip(persona, text)
+    return f"/lines/{clip}.wav" if clip else await synthesize_voice(text, persona)
 
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8080/v1/chat/completions")
 LLM_MODEL = os.environ.get("LLM_MODEL") or "gpt-4-vision-preview"
@@ -690,7 +703,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         # reconnecting on its own after the link dropped (resume=1).
         if not resume and (not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT):
             greeting = pick_greeting(_persona(client_id), user_name)
-            greeting_audio = await synthesize_voice(greeting, _persona(client_id))
+            greeting_audio = await line_voice(greeting, _persona(client_id))
             await websocket.send_json({
                 "type": "greeting",
                 "text": greeting,
@@ -726,7 +739,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 async def say_working(ws=websocket, persona_now=persona_now):
                     line = random.choice(_personas.get(persona_now).working)
                     await ws.send_json({"type": "response", "text": line,
-                                        "audio_url": await synthesize_voice(line, persona_now),
+                                        "audio_url": await line_voice(line, persona_now),
                                         "video_url": line_video(persona_now, line), "source": "working"})
 
                 # Everyday messages ("thanks", "how are you", "combat mode") get an
@@ -736,7 +749,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if kind:
                     text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
                     _last_canned[(client_id, kind)] = text
-                    audio_url = await synthesize_voice(text, persona_now)
+                    audio_url = await line_voice(text, persona_now)
                     history.append({"role": "assistant", "content": text})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
                     print(f"[WS] Pre-recorded reply ({kind}) to {client_id}")
@@ -761,7 +774,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     history.pop()
                     line = _lines.pick(persona_now, "error")
                     await websocket.send_json({"type": "response", "text": line,
-                                               "audio_url": await synthesize_voice(line, persona_now),
+                                               "audio_url": await line_voice(line, persona_now),
                                                "video_url": line_video(persona_now, line), "source": "error"})
 
             elif msg_type == "persona":
