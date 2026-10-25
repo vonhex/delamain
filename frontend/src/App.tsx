@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
+import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { DataDashboard } from './components/DataDashboard';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing } from './utils/sounds';
@@ -84,6 +85,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     return DEFAULT_SETTINGS;
   });
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
+  const integrationsRef = useRef<IntegrationsHandle>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
@@ -266,7 +268,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
     try {
       const response = await axios.post(`${settings.backendUrl}/api/chat`, {
         message: userMessage,
-        llm_url: settings.llmUrl,
         system_prompt: settings.systemPrompt || undefined,
         user_name: settings.userName,
         temperature: settings.temperature,
@@ -360,7 +361,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`, '_blank');
   };
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
+    if (!(await integrationsRef.current?.save() ?? true)) return;   // the panel shows what was refused
     setSettings(tempSettings);
     setIsSettingsOpen(false);
   };
@@ -447,16 +449,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">LLM Core URL (llama.cpp)</label>
-                <input 
-                  type="text" 
-                  value={tempSettings.llmUrl}
-                  onChange={e => setTempSettings({...tempSettings, llmUrl: e.target.value})}
-                  className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
-                />
-              </div>
-
-              <div className="space-y-2">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Directive Override (System Prompt)</label>
                 <textarea 
                   value={tempSettings.systemPrompt}
@@ -514,6 +506,11 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   {PERSONAS.find(p => p.key === tempSettings.persona)?.blurb}
                   {tempSettings.persona !== 'delamain' && tempSettings.persona !== 'merged' && ' Still drives you safely and tells you the truth.'}
                 </p>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Integrations (saved on the server)</label>
+                <IntegrationsPanel ref={integrationsRef} token={token} />
               </div>
             </div>
 

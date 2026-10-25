@@ -7,6 +7,10 @@ All notable changes to Delamain are documented here.
 ## [Unreleased]
 
 ### Added
+- **Runs from a fresh clone**: the F5-TTS weights download from Hugging Face on first start, the lip-synced clips download from the `line-clips` release (and refresh when it changes; clips imported by hand are never replaced), and the Docker image bundles the reference voice. The backend serves the built web UI itself, so one command starts everything.
+- **First-start password**: a new install asks for a password on the login page instead of needing `auth.py set-password`.
+- **Settings → Integrations**: the LLM endpoint, model and reasoning effort, tools, SearXNG, Obsidian vault, news, routing and units are set in the web UI and saved on the server (`settings.json`), ahead of `.env`, which is now optional. A vault must be an existing folder with a `.obsidian` folder in it. The panel also shows whether the voice model, reference voice and clips are installed. The client-side "LLM core URL" field, which the server ignored, is gone.
+- New README screenshots: desktop, phone, car display, the ten cores, settings and the first-start screen.
 - **More idles, picked up by name**: `import_clips.py` writes `frontend/public/animations.json`, and the face adds any installed clip to its pools without a code change:
   - `delamain_blink_<n>`, `delamain_turn_<n>`, `delamain_random_<n>` and `delamain_bored_<n>` join the original core's idles;
   - `delamain_rare_<name>` adds rare clips;

@@ -26,8 +26,20 @@ def _cache_key(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 
+def ensure_model() -> None:
+    """Download the F5-TTS base weights from Hugging Face on first start (about 1.3 GB)."""
+    if os.path.exists(CHECKPOINT) and os.path.exists(VOCAB_FILE):
+        return
+    from huggingface_hub import hf_hub_download
+    print("F5-TTS weights not found; downloading them from Hugging Face (SWivid/F5-TTS, about 1.3 GB)...")
+    for name in ("F5TTS_Base/model_1200000.pt", "F5TTS_Base/vocab.txt"):
+        hf_hub_download("SWivid/F5-TTS", name, local_dir=os.path.join(BASE_DIR, "checkpoints"))
+    print("F5-TTS weights downloaded.")
+
+
 class F5TTSEngine:
     def __init__(self):
+        ensure_model()
         print("Initializing F5-TTS...")
         self.tts = F5TTS(
             model="F5TTS_Base",

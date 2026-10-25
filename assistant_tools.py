@@ -19,9 +19,10 @@ from pathlib import Path
 
 import requests
 
-SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://localhost:8887/search")
-VAULT = Path(os.environ.get("OBSIDIAN_VAULT_PATH", "~/Documents/obsidian vault")).expanduser().resolve()
-MEMORY_DIR = Path(os.environ.get("DELAMAIN_MEMORY_DIR", str(VAULT / "Delamain" / "Memory"))).expanduser()
+import config
+
+# Search, news, routing, units and the vault come from config (Settings panel, .env or
+# defaults) on every call, so a change in Settings takes effect without a restart.
 MEMORY_FILES = {
     "you": "About You.md",
     "people": "People.md",
@@ -40,7 +41,7 @@ USER_AGENT = "DelamainAI/1.0"
 
 def web_search(query: str, max_results: int = 6) -> str:
     try:
-        resp = requests.get(SEARXNG_URL, params={"q": query, "format": "json", "language": "en"}, timeout=10)
+        resp = requests.get(config.get("searxng_url"), params={"q": query, "format": "json", "language": "en"}, timeout=10)
         resp.raise_for_status()
         results = resp.json().get("results", [])[:max_results]
     except Exception as e:
@@ -53,7 +54,6 @@ def web_search(query: str, max_results: int = 6) -> str:
     return "\n".join(lines) or "No results found."
 
 
-NEWS_RSS = os.environ.get("NEWS_RSS_URL", "https://news.google.com/rss")
 NEWS_LOCALE = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
 NEWS_SECTIONS = {"world", "nation", "business", "technology", "entertainment", "sports", "science", "health"}
 
@@ -61,14 +61,14 @@ NEWS_SECTIONS = {"world", "nation", "business", "technology", "entertainment", "
 def _news_feed(topic: str, area: str) -> str:
     topic = topic.strip().lower()
     if area.strip():
-        return f"{NEWS_RSS}/headlines/section/geo/{urllib.parse.quote(area.strip())}"
+        return f"{config.get('news_rss_url')}/headlines/section/geo/{urllib.parse.quote(area.strip())}"
     if topic in ("tech", "tech news"):
         topic = "technology"
     if topic in NEWS_SECTIONS:
-        return f"{NEWS_RSS}/headlines/section/topic/{topic.upper()}"
+        return f"{config.get('news_rss_url')}/headlines/section/topic/{topic.upper()}"
     if topic and topic not in ("news", "top stories", "headlines", "top"):
-        return f"{NEWS_RSS}/search?" + urllib.parse.urlencode({"q": f"{topic} when:1d"})
-    return NEWS_RSS
+        return f"{config.get('news_rss_url')}/search?" + urllib.parse.urlencode({"q": f"{topic} when:1d"})
+    return config.get("news_rss_url")
 
 
 def _ago(when: datetime) -> str:
@@ -115,9 +115,6 @@ def get_news(topic: str = "", area: str = "", max_results: int = 8) -> str:
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
-OSRM_URL = os.environ.get("OSRM_URL", "https://router.project-osrm.org")
-# imperial (°F, mph, miles) or metric (°C, km/h, km)
-UNITS = os.environ.get("DELAMAIN_UNITS", "imperial").lower()
 
 # WMO weather interpretation codes, as Open-Meteo reports them
 _WMO = {
@@ -167,7 +164,7 @@ def get_weather(place: str = "", location: dict | None = None) -> str:
         label = "the passenger's location"
     else:
         return "The passenger's location is unknown; ask which town they mean."
-    imperial = UNITS != "metric"
+    imperial = config.get("units") != "metric"
     params = {
         "latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 3,
         "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,precipitation",
@@ -216,7 +213,7 @@ def get_route(destination: str, origin: str = "", location: dict | None = None) 
         (o_lat, o_lon), o_label = here, "the passenger's location"
     else:
         return "The passenger's location is unknown; ask where they are starting from."
-    url = f"{OSRM_URL}/route/v1/driving/{o_lon},{o_lat};{dest[1]},{dest[0]}"
+    url = f"{config.get('osrm_url')}/route/v1/driving/{o_lon},{o_lat};{dest[1]},{dest[0]}"
     resp = requests.get(url, params={"overview": "false"}, headers={"User-Agent": USER_AGENT}, timeout=10)
     resp.raise_for_status()
     routes = resp.json().get("routes") or []
@@ -224,8 +221,8 @@ def get_route(destination: str, origin: str = "", location: dict | None = None) 
         return f"No driving route found to {dest[2]}."
     r = routes[0]
     minutes = round(r["duration"] / 60)
-    dist = r["distance"] / (1609.344 if UNITS != "metric" else 1000)
-    unit = "miles" if UNITS != "metric" else "km"
+    dist = r["distance"] / (1609.344 if config.get("units") != "metric" else 1000)
+    unit = "miles" if config.get("units") != "metric" else "km"
     eta = (datetime.now() + timedelta(seconds=r["duration"])).strftime("%-I:%M %p")
     span = f"{minutes // 60} h {minutes % 60} min" if minutes >= 60 else f"{minutes} min"
     return (f"From {o_label} to {dest[2]}: {dist:.1f} {unit}, about {span} by car "
@@ -358,28 +355,28 @@ def _resolve_note(path: str, *, for_write: bool = False) -> Path:
         raise ValueError("A note path is required.")
     if not rel.lower().endswith(".md"):
         rel += ".md"
-    target = (VAULT / rel).resolve()
-    if not target.is_relative_to(VAULT) or target == VAULT:
+    target = (config.vault() / rel).resolve()
+    if not target.is_relative_to(config.vault()) or target == config.vault():
         raise ValueError("That path is outside the vault.")
-    if any(part.startswith(".") for part in target.relative_to(VAULT).parts):
+    if any(part.startswith(".") for part in target.relative_to(config.vault()).parts):
         raise ValueError("Hidden folders are not accessible.")
-    if for_write and target.is_relative_to(MEMORY_DIR.resolve()):
+    if for_write and target.is_relative_to(config.memory_dir().resolve()):
         raise ValueError("The memory folder is managed by the remember tool.")
     return target
 
 
 def _notes(folder: Path):
     for p in sorted(folder.rglob("*.md")):
-        if not any(part.startswith(".") for part in p.relative_to(VAULT).parts):
+        if not any(part.startswith(".") for part in p.relative_to(config.vault()).parts):
             yield p
 
 
 def list_notes(folder: str = "", limit: int = 50) -> str:
-    base = (VAULT / folder.strip().lstrip("/")).resolve() if folder.strip() else VAULT
-    if not base.is_relative_to(VAULT) or not base.is_dir():
+    base = (config.vault() / folder.strip().lstrip("/")).resolve() if folder.strip() else config.vault()
+    if not base.is_relative_to(config.vault()) or not base.is_dir():
         return "No such folder in the vault."
     notes = sorted(_notes(base), key=lambda p: p.stat().st_mtime, reverse=True)[: max(1, min(int(limit), 200))]
-    return "\n".join(f"{p.relative_to(VAULT)} ({datetime.fromtimestamp(p.stat().st_mtime):%Y-%m-%d})"
+    return "\n".join(f"{p.relative_to(config.vault())} ({datetime.fromtimestamp(p.stat().st_mtime):%Y-%m-%d})"
                      for p in notes) or "No notes found."
 
 
@@ -394,7 +391,7 @@ def read_note(path: str) -> str:
 def search_notes(query: str, limit: int = 10) -> str:
     pattern = re.compile(re.escape(query.strip()), re.IGNORECASE)
     hits = []
-    for p in _notes(VAULT):
+    for p in _notes(config.vault()):
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -403,7 +400,7 @@ def search_notes(query: str, limit: int = 10) -> str:
         if m or pattern.search(p.stem):
             start = max(0, (m.start() if m else 0) - 80)
             snippet = text[start:start + 240].replace("\n", " ").strip()
-            hits.append(f"{p.relative_to(VAULT)}: {snippet}")
+            hits.append(f"{p.relative_to(config.vault())}: {snippet}")
             if len(hits) >= max(1, min(int(limit), 30)):
                 break
     return "\n".join(hits) or f"No notes mention '{query}'."
@@ -414,10 +411,10 @@ def write_note(path: str, content: str, overwrite: bool = False) -> str:
         return "Content too large."
     target = _resolve_note(path, for_write=True)
     if target.exists() and not overwrite:
-        return f"{target.relative_to(VAULT)} already exists; use append_to_note or overwrite."
+        return f"{target.relative_to(config.vault())} already exists; use append_to_note or overwrite."
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
-    return f"Saved {target.relative_to(VAULT)}."
+    return f"Saved {target.relative_to(config.vault())}."
 
 
 def append_to_note(path: str, text: str) -> str:
@@ -428,7 +425,7 @@ def append_to_note(path: str, text: str) -> str:
     existing = target.read_text(encoding="utf-8", errors="replace") if target.exists() else ""
     sep = "" if not existing or existing.endswith("\n") else "\n"
     target.write_text(existing + sep + text.rstrip("\n") + "\n", encoding="utf-8")
-    return f"Appended to {target.relative_to(VAULT)}."
+    return f"Appended to {target.relative_to(config.vault())}."
 
 
 # ── Delamain's long-term memory: <vault>/Delamain/Memory/<Topic>.md ──────────
@@ -449,8 +446,8 @@ def _bullet_text(line: str) -> str | None:
 
 def _memory_lock():
     """Exclusive lock for read-modify-write of the memory notes (hidden file, ignored by Obsidian)."""
-    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-    fd = os.open(MEMORY_DIR / ".lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    config.memory_dir().mkdir(parents=True, exist_ok=True)
+    fd = os.open(config.memory_dir() / ".lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     fcntl.flock(fd, fcntl.LOCK_EX)
     return fd
 
@@ -484,7 +481,7 @@ def remember(fact: str, category: str = "you") -> str:
     fact = " ".join(fact.split()).rstrip(".") + "."
     if len(fact) < 3:
         return "Nothing to remember."
-    path = MEMORY_DIR / MEMORY_FILES[category]
+    path = config.memory_dir() / MEMORY_FILES[category]
     fd = _memory_lock()
     try:
         if any(fact.lower().rstrip(".") == f.lower().rstrip(".") for f in _facts(path)):
@@ -506,7 +503,7 @@ def forget(text: str) -> str:
     removed = []
     try:
         for name in MEMORY_FILES.values():
-            path = MEMORY_DIR / name
+            path = config.memory_dir() / name
             if not path.exists():
                 continue
             lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -528,7 +525,7 @@ def memory_context() -> str:
     """Remembered facts for the system prompt, grouped by topic, newest kept if over budget."""
     sections = []
     for category, name in MEMORY_FILES.items():
-        facts = _facts(MEMORY_DIR / name)
+        facts = _facts(config.memory_dir() / name)
         if facts:
             sections.append((Path(name).stem, facts))
     text = "\n\n".join(f"{title}:\n" + "\n".join(f"• {f}" for f in facts) for title, facts in sections)

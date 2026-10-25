@@ -7,9 +7,9 @@ services:
     ports:
       - "8888:8888"   # web UI, API and WebSocket
     volumes:
-      # F5-TTS model weights — download separately, see README
+      # F5-TTS model weights, downloaded on first start (about 1.3 GB)
       - ./checkpoints:/app/checkpoints
-      # Database, voice clips, and your reference audio (delamain_ref_10s.wav)
+      # Database, settings, recorded audio and the lip-synced clips (downloaded on first start)
       - ./data:/app/data
       # Optional: Obsidian vault for notes and long-term memory
       - ${OBSIDIAN_VAULT_PATH:-./vault}:/vault
