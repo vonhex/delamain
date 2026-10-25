@@ -14,6 +14,9 @@ All notable changes to Delamain are documented here.
   - `delamain_listen_<n>` plays while the mic is open, `delamain_think_<n>` while a reply is on its way, and `delamain_angry_<n>` replaces the glitch flip when he is insulted;
   - `<core>_idle_<n>` (for example `glen_idle_3`) gives a rogue core its own idles, played about 70% of the time in that core.
 
+### Fixed
+- **Talking glow came on before his mouth moved**: replies open with about half a second of silence (three quarters on clip soundtracks), and the glow and talking loops started with playback. Each message now carries `speech_at`, where the voice starts in its audio, and the page waits for it.
+
 ---
 
 ## [2.0.0] — 2026-10-25 — Delamain V2

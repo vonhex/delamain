@@ -109,6 +109,8 @@ No auth required.
 
 `video_url` is set on greetings, "one moment" lines, pre-recorded replies and error lines when a lip-synced clip exists for that exact line (`/lines/<clip id>.mp4`), and is `null` otherwise. With a clip, `audio_url` is the clip's soundtrack (`/lines/<clip id>.wav`).
 
+Every message with `audio_url` also carries `speech_at`: the seconds of silence before the voice starts in that file. The page holds the talking glow and talking loops until the audio reaches it.
+
 **Pong:**
 ```json
 { "type": "pong" }
