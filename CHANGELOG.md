@@ -4,6 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **112 new idle animations** (152 in all): six idles for each rogue core, plus listening, thinking, angry and late-night loops, more blinks, turns, random and bored loops for the original core, and six new rare clips (map, mirror, rain, scan, static, wireframe).
+
+---
+
 ## [2.0.0] — 2026-10-25 — Delamain V2
 
 A lip-synced face, a one-step installer, and setup from the browser: a fresh clone needs nothing but an LLM.
