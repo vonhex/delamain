@@ -5,18 +5,15 @@
 ```bash
 git clone https://github.com/vonhex/delamain.git
 cd delamain
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-(cd frontend && npm ci && npm run build)
+./install.sh          # Windows: double-click install.bat
 ```
 
-You also need ffmpeg on the PATH.
+The installer brings its own Python (uv), installs PyTorch for your GPU (NVIDIA, AMD or CPU; override with `TORCH_INDEX=<url>`), Delamain's packages and, if needed, a private Node.js, builds the web UI and starts Delamain. Everything stays in this folder; run it again after `git pull` to update. Options: `--no-start`, and `--service` (Linux) to run Delamain as a systemd user service that starts at login.
 
 ## 2. Start it
 
 ```bash
-./start.sh        # or: uvicorn main:app --host 0.0.0.0 --port 8888 --ws-ping-interval 0
+./start.sh        # Windows: start.bat. PORT=9000 ./start.sh for another port
 ```
 
 The backend serves the web UI on port 8888. On the first start it also:
