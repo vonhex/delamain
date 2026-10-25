@@ -4,12 +4,20 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased] — Delamain V2
+## [2.0.0] — 2026-10-25 — Delamain V2
+
+### Added
+- **Lip-synced lines**: 507 of the 607 fixed lines (greetings, "one moment", the pre-recorded replies, across all ten cores) now play a lip-synced face clip made with MiniMax H3. The rest use the talking loops until their clips are remade.
+- **`import_clips.py`**: installs a folder of finished clips. Each clip is copied without its audio, and its soundtrack is saved beside it as `<clip id>.wav`, levelled to the original recording. Clips in `idle/` replace the idle loops.
+
+### Changed
+- **A clip plays its own soundtrack**: the generator re-renders the voice, and the lips follow that render, which can start up to a second later than the original recording. Lines with a clip now play the clip's soundtrack instead of the cached recording.
+- **New idle loops**: all 33 blink, glance, fidget, bored and rare loops were remade at 800×544.
 
 ### Fixed
 - **Greeting repeated every few minutes**: the WebSocket sat idle and Cloudflare closed it, the page reconnected, and each reconnect was greeted as a new trip. The page now sends a heartbeat every 20 seconds, and an automatic reconnect resumes the conversation without a greeting.
 - **Navigation inside Fermata**: an app's embedded browser cannot open the Maps app, so instead of failing silently Delamain now names the destination and says to open him in the phone's browser to navigate.
-- **Lip-synced clips stay on the words**: a clip starts at the audio's current position, read from the audio itself, plus a 65 ms lead for the seek, and is fetched as soon as the reply arrives. Measured within 100 ms of the audio throughout, including with clips loading 700 ms late.
+- **Lip-synced clips stay on the words**: a clip starts at the audio's current position, is fetched as soon as the reply arrives, waits on its first frame if the audio has not started, and is kept on the audio clock while it plays (playback rate eased for small drift, a seek for large gaps). Measured with the real clips: median 19 ms, 96–98% of samples within 100 ms, including with clips loading 700 ms late.
 
 ---
 
