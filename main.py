@@ -491,7 +491,7 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         memory = _tools.memory_context()
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
-    system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more.]"
+    system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more; a news bulletin reads the headlines.]"
 
     if search_context:
         system += f"\n\nCurrent web search results for context:\n{search_context}"
@@ -598,6 +598,24 @@ def _persona(client_id: str) -> str:
     return _client_persona.get(client_id, "delamain")
 
 
+# A reply that promises to look something up ("Allow me to fetch the headlines") without
+# calling any tool: the model then never comes back with the answer.
+_FETCH_CLAIM = re.compile(
+    r"\b(?:allow me to|let me|i shall|i will|i'll)\s+(?:\w+\s+){0,2}?"
+    r"(?:fetch|check|look|gather|retrieve|find|get|pull|search|consult|assemble|compile)"
+    r"|\b(?:allow me|give me|just) a moment\b|\bone moment\b|\bstand by\b|\bfetching\b",
+    re.IGNORECASE,
+)
+
+# A plain request for the news goes straight to the news tool: left to choose, the model
+# sometimes answers "Allow me to fetch the headlines" and never fetches them.
+_NEWS_REQUEST = re.compile(
+    r"^\W*(?:\w+\s+){0,2}(?:news|headlines)\W*$"
+    r"|\b(?:read|tell|give|play|catch|update|brief|what'?s|what is|what are|any|latest|today'?s|this morning'?s|tonight'?s)\b"
+    r".{0,40}\b(?:news|headlines|bulletin)\b",
+    re.IGNORECASE,
+)
+
 _SAVE_CLAIM = re.compile(
     r"\b(i (have|shall|will)\s+(now\s+)?(remember|committed|commit|noted|note|saved|save|stored|store|recorded|record|written|write|filed|file)"
     r"|committed .{0,40}to memory|(noted|saved|stored|recorded) (it|that|this)|in(to)? (my )?memory|i shall remember|i will remember)\b",
@@ -616,11 +634,15 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     announced = False
     called: set[str] = set()
     nudged = False
+    latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    wants_news = isinstance(latest, str) and len(latest) < 120 and bool(_NEWS_REQUEST.search(latest))
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         last_round = round_no == MAX_TOOL_ROUNDS
         body = dict(payload, messages=messages)
         if not last_round:
-            body.update(tools=_tools.TOOL_SCHEMAS, tool_choice="auto")
+            choice = ({"type": "function", "function": {"name": "get_news"}}
+                      if wants_news and round_no == 0 else "auto")
+            body.update(tools=_tools.TOOL_SCHEMAS, tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
         response = await loop.run_in_executor(None, _post_llm, body)
         response.raise_for_status()
@@ -639,6 +661,25 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                     {"role": "user", "content": "[SYSTEM: You said you remembered or saved something, but no remember, "
                      "write_note or append_to_note tool was called, so nothing was stored. Call the right tool now, "
                      "then give your spoken reply again. If nothing needed saving, restate your reply without claiming to save.]"},
+                ]
+                continue
+            # A bulletin that stops at its opening line ("The evening bulletin, as requested.").
+            if not nudged and not last_round and "get_news" in called and len(content) < 100:
+                nudged = True
+                print(f"[Tools] News reply without the headlines — nudging: {content[:120]}")
+                messages = messages + [
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": "[SYSTEM: That was only the opening. Read the headlines from the news "
+                     "result now as a short spoken bulletin, then stop.]"},
+                ]
+                continue
+            if not nudged and not last_round and not called and _FETCH_CLAIM.search(content):
+                nudged = True
+                print(f"[Tools] Reply promises a lookup without a tool call — nudging: {content[:120]}")
+                messages = messages + [
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": "[SYSTEM: You said you would look something up, but no tool was called, "
+                     "so nothing was fetched. Call the right tool now, then give your spoken reply with the result.]"},
                 ]
                 continue
             return content
@@ -816,9 +857,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 {"role": r["role"], "content": r["content"]} for r in recent]})
         # The model only picks up lines spoken in the current core: another core's
         # replies would pull it back into that voice.
-        conversation_history[client_id] = [
-            {"role": r["role"], "content": r["content"]} for r in recent
-            if (r["persona"] or "delamain") == _persona(client_id)]
+        resumed = [{"role": r["role"], "content": r["content"]} for r in recent
+                   if (r["persona"] or "delamain") == _persona(client_id)]
+        # Drop questions that never got an answer, as above.
+        conversation_history[client_id] = [m for i, m in enumerate(resumed)
+                                           if not (m["role"] == "user" and i + 1 < len(resumed)
+                                                   and resumed[i + 1]["role"] == "user")]
 
         # A quick reconnect is not a new journey: no fresh greeting. Nor is the page
         # reconnecting on its own after the link dropped (resume=1).
@@ -852,6 +896,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 loop = asyncio.get_event_loop()
                 loop.run_in_executor(None, _db.log_conversation, "user", user_text, None, persona_now)
                 history = conversation_history.setdefault(client_id, [])
+                # A message that never got an answer (a crash or a dropped link) is replaced,
+                # not stacked: two questions in a row make the model answer the repeat itself.
+                if history and history[-1]["role"] == "user":
+                    history.pop()
                 history.append({"role": "user", "content": user_text})
                 # Trim to keep last MAX_HISTORY messages
                 if len(history) > MAX_HISTORY:
