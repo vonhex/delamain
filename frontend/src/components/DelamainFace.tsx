@@ -142,21 +142,21 @@ const SEEK_LEAD = 0.065;
 
 // Keep a playing line clip on the audio clock. The clip's soundtrack plays from a
 // separate audio element, which can start later than the clip (still loading) or drift.
-// Small drift is eased out with the playback rate; a large gap is closed with a seek.
-// Once the audio stops advancing (ended or paused), the clip is left to finish.
-type LineSync = { video: HTMLVideoElement; clock: () => number; last: number; stalls: number };
+// Some phone browsers update the audio's currentTime only a few times a second, so the
+// position is carried forward from its last change. Small drift is eased out with the
+// playback rate; a large gap is closed with a seek. Once the audio stops advancing
+// (ended or paused), the clip is left to finish.
+type LineSync = { video: HTMLVideoElement; clock: () => number; last: number; lastAt: number };
 
 function syncLine(s: LineSync): boolean {
-  const v = s.video, t = s.clock();
+  const v = s.video, t = s.clock(), now = performance.now();
   if (v.ended || v.paused) return false;
-  if (t === s.last) {
-    if (t === 0) { v.currentTime = 0; return true; }   // audio not started yet: hold the first frame
-    if (++s.stalls > 30) { v.playbackRate = 1; return false; }
-    return true;
-  }
-  s.last = t; s.stalls = 0;
-  const drift = v.currentTime - t;
-  if (Math.abs(drift) > 0.25) { v.currentTime = t + SEEK_LEAD; v.playbackRate = 1; }
+  if (t !== s.last) { s.last = t; s.lastAt = now; }
+  if (t === 0) { v.currentTime = 0; return true; }       // audio not started yet: hold the first frame
+  const since = (now - s.lastAt) / 1000;
+  if (since > 0.6) { v.playbackRate = 1; return false; } // audio ended or paused
+  const drift = v.currentTime - (t + since);
+  if (Math.abs(drift) > 0.12) { v.currentTime = t + since + SEEK_LEAD; v.playbackRate = 1; }
   else if (Math.abs(drift) > 0.02) v.playbackRate = Math.min(1.15, Math.max(0.85, 1 - drift * 2));
   else v.playbackRate = 1;
   return true;
@@ -311,7 +311,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
         if (offset < (incoming.duration || Infinity)) incoming.currentTime = offset;
       }
       incoming.play().catch(() => {});
-      if (audioTime) lineSync.current = { video: incoming, clock: audioTime, last: -1, stalls: 0 };
+      if (audioTime) lineSync.current = { video: incoming, clock: audioTime, last: -1, lastAt: performance.now() };
       const nextSlot = activeSlot.current === 'a' ? 'b' : 'a';
       activeSlot.current = nextSlot;
       setShowA(nextSlot === 'a');   // marks new stable-active (used after fade completes)

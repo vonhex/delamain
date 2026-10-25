@@ -15,6 +15,7 @@ All notable changes to Delamain are documented here.
   - `<core>_idle_<n>` (for example `glen_idle_3`) gives a rogue core its own idles, played about 70% of the time in that core.
 
 ### Fixed
+- **Lip-synced clips slipping on phones**: some phone browsers update the audio position only a few times a second, which let a clip run up to a quarter second behind its voice. The face now carries the position forward between updates and seeks once the gap passes 120 ms; with position updates every 250 ms the clip stays within 80 ms of the audio.
 - **Talking glow came on before his mouth moved**: replies open with about half a second of silence (three quarters on clip soundtracks), and the glow and talking loops started with playback. Each message now carries `speech_at`, where the voice starts in its audio, and the page waits for it.
 
 ---
