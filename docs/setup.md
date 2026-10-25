@@ -38,7 +38,7 @@ Open Settings (the gear) → Integrations:
 
 | Setting | Needed | What it is |
 |---|---|---|
-| LLM endpoint | Yes | OpenAI-compatible chat completions URL with tool calling (llama.cpp, vLLM, Halogen, …) |
+| LLM endpoint | Yes | OpenAI-compatible chat completions URL with tool calling (Ollama, LM Studio, llama.cpp, vLLM, …) |
 | Model id | Usually | The model the endpoint serves (see its `/v1/models`); llama.cpp ignores it |
 | Reasoning effort | No | `none` turns thinking off on reasoning models |
 | Tools | No | Web search, news, weather, routes, notes and memory |
@@ -50,7 +50,7 @@ These are saved in `settings.json` next to the database and take effect at once.
 
 ## 5. Use it in the car
 
-Open the address in the browser on your phone or on the Android Auto display, log in, and press the mic. Over the internet, put it behind HTTPS (for example a Cloudflare Tunnel) and add that origin to `ALLOWED_ORIGINS`. Browsers only allow the microphone and location on secure pages.
+Open the address in the browser on your phone or on the Android Auto display, log in, and press the mic. The microphone and location only work on a secure (`https://`) page, so use Tailscale (`tailscale serve 8888`) or a Cloudflare Tunnel; see the README. Opening Delamain through either needs no `ALLOWED_ORIGINS` change.
 
 ## Your own voice
 

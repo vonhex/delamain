@@ -5,25 +5,65 @@
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
 
-A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It runs in any browser, including the one on your car's Android Auto display, so there's nothing to install. Talk to it and it answers in Delamain's cloned voice. It can search the web, read you the news and the weather, tell you how long a drive will take, speak reminders when they're due, keep notes and long-term memory in your Obsidian vault, and hand navigation off to your phone's map app.
+A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. You run it on a computer at home, then open it in a web browser on your phone, or on your car's Android Auto screen. Talk to it and it answers in Delamain's voice, with his face moving as he speaks. It can search the web, read you the news and the weather, tell you how long a drive will take, remind you of things, keep notes, and send directions to your phone's map app.
 
 ---
 
-## Quick install
+## What you need
 
-One step, nothing else to download or configure by hand:
+- **A computer to run it on**, left on while you use it: Windows, macOS or Linux. A graphics card (NVIDIA, or AMD on Linux) makes the voice fast. Without one it still works, but answers that are not pre-recorded take a while to be spoken.
+- **About 5 GB of free disk space** for the voice model, the face videos and the software.
+- **An AI model (LLM) for the conversation.** Delamain is the voice, face and personality; the thinking is done by a language model you run yourself. The easiest free option is [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), both of which run on the same computer (see [Step 3](#3-connect-an-ai-model)). Any OpenAI-compatible server that supports tool calling works, such as llama.cpp or vLLM.
+- **A phone** (or your car's Android Auto screen) to talk to it.
+
+Web search ([SearXNG](https://github.com/searxng/searxng)) and an [Obsidian](https://obsidian.md) vault for notes are optional extras.
+
+---
+
+## Getting started
+
+### 1. Install
 
 | System | Do this |
 |---|---|
-| **Linux / macOS** | `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` |
-| **Windows** | Download or clone the repository, then double-click **`install.bat`** |
-| **Docker** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d` |
+| **Windows** | [Download the latest release](https://github.com/vonhex/delamain/releases/latest) (the **delamain-v…zip** file under *Assets*), unzip it, and double-click **`install.bat`** |
+| **macOS / Linux** | Open a terminal and run `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` |
+| **Docker / Unraid** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d`, or install **Delamain** from Community Apps on Unraid |
 
-Then open **http://localhost:8888**, choose a password, and point **Settings → Integrations** at your LLM. That's it.
+The installer gets everything it needs by itself (Python, PyTorch for your graphics card, Node.js) and keeps it all inside the `delamain` folder, so it does not change the rest of your system. When it finishes, Delamain starts.
 
-The installer brings its own Python (via [uv](https://github.com/astral-sh/uv)), picks the right PyTorch for your GPU (NVIDIA, AMD or none), installs a private Node.js if yours is missing or old, builds the web UI and starts Delamain. Everything stays inside the `delamain` folder. On the first start Delamain downloads its voice model (about 1.3 GB) and lip-synced clips (about 240 MB) by itself. Run the installer again any time to update after a `git pull`; `./install.sh --service` (Linux) also starts Delamain at login. Afterwards, start it with `./start.sh` or `start.bat`.
+The first start takes a few minutes longer: Delamain downloads its voice model (about 1.3 GB) and his lip-synced face clips (about 240 MB), then records his fixed lines in the background. He answers in the meantime.
 
-You bring the LLM: any OpenAI-compatible server with tool calling, such as llama.cpp, vLLM or Halogen. Web search (SearXNG) and an Obsidian vault are optional.
+To start Delamain again later, run `start.bat` (Windows) or `./start.sh` (macOS / Linux). To update, download the new release (or `git pull`) and run the installer again. On Linux, `./install.sh --service` makes Delamain start by itself when you log in.
+
+### 2. Choose a password
+
+Open **http://localhost:8888** in a browser on the same computer. The first time, it asks you to choose a password. That password protects Delamain if you open it to the internet later.
+
+### 3. Connect an AI model
+
+Open **Settings** (the gear) → **Integrations** and fill in **LLM endpoint** and **Model id**. For example:
+
+| If you use | LLM endpoint | Model id |
+|---|---|---|
+| [Ollama](https://ollama.com) | `http://localhost:11434/v1/chat/completions` | the model you pulled, e.g. `qwen3:8b` (run `ollama pull qwen3:8b` first) |
+| [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1/chat/completions` (start the server on the Developer tab) | the model's name as LM Studio shows it |
+| llama.cpp server | `http://localhost:8080/v1/chat/completions` | anything; it is ignored |
+
+Pick a model that supports **tool calling** (Ollama marks these with a *tools* tag), or he cannot search, read the news or take notes. If replies are slow because the model "thinks" first (Qwen 3, DeepSeek R1 and similar), set **Reasoning effort** to `none`. If the AI runs on another computer, or Delamain runs in Docker, use the AI computer's network address (such as `http://192.168.1.20:11434/…`) instead of `localhost`; inside a container, `localhost` is the container itself.
+
+Press save, go back, press the mic and say hello.
+
+### 4. Use it on your phone and in the car
+
+On a phone on the same Wi-Fi, open `http://<the computer's IP address>:8888` to see the page. **The microphone, however, only works over a secure (`https://`) address.** Browsers block it on plain `http://` everywhere except `localhost`. Two free ways to get a secure address:
+
+- **[Tailscale](https://tailscale.com)**: install it on the computer and the phone, then run `tailscale serve 8888` on the computer. Delamain is then at `https://<computer-name>.<your-tailnet>.ts.net` on your phone, wherever you are, and stays private to your devices.
+- **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)**: gives Delamain a public `https://` address on a domain you own. Anyone can reach the login page, so use a strong password.
+
+In the car, Android Auto does not have a web browser of its own; an app such as [Fermata Auto](https://github.com/AndreyPavlenko/Fermata) can show a web page on the car screen. Open your Delamain address in it. Delamain fits the page to any screen, from a phone to a wide car display.
+
+---
 
 ---
 
@@ -101,6 +141,17 @@ You bring the LLM: any OpenAI-compatible server with tool calling, such as llama
 
 ---
 
+## Troubleshooting
+
+- **He doesn't answer anything except the pre-recorded lines.** Delamain cannot reach the AI model. Check the LLM endpoint and model id in Settings → Integrations, and that Ollama or LM Studio is running. In Docker, use the computer's network address, not `localhost`.
+- **The mic button does nothing on the phone.** The page has to be opened over `https://` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)), and the browser must be allowed to use the microphone.
+- **Replies take a long time to be spoken.** Speech that is not pre-recorded is made on the spot. With a graphics card that takes a second or two; on a CPU it can take much longer. Pre-recorded lines are always instant.
+- **He can't search the web or read the news.** Use a model with tool calling, and keep **Tools** on in Settings. Web search needs a [SearXNG](https://github.com/searxng/searxng) address in Settings; news works without it.
+- **No lip-synced face, only the talking loop.** The clips download on the first start. Give it a few minutes, and check that the computer can reach github.com.
+- **Something else.** Open an [issue](https://github.com/vonhex/delamain/issues) with what you did and what you saw; the window or terminal running Delamain shows its log.
+
+---
+
 ## Architecture
 
 ```
@@ -113,17 +164,17 @@ You bring the LLM: any OpenAI-compatible server with tool calling, such as llama
                                      LLM (tool calling) news RSS    vault
 ```
 
-- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. It works with any OpenAI-compatible chat endpoint (llama.cpp, vLLM, Halogen, …), and the LLM uses the tools in `assistant_tools.py`.
+- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. It works with any OpenAI-compatible chat endpoint (Ollama, LM Studio, llama.cpp, vLLM, …), and the LLM uses the tools in `assistant_tools.py`.
 - **Frontend**: React + Vite with Tailwind CSS v4 (cyber theme).
 - More detail: [docs/architecture.md](docs/architecture.md).
 
 ---
 
-## Requirements
+## Requirements in detail
 
 - Linux, macOS or Windows. The installer provides Python, PyTorch and Node.js.
 - A GPU is recommended for F5-TTS (NVIDIA CUDA, or AMD ROCm on Linux). CPU works, but replies that are not pre-recorded take noticeably longer to speak.
-- An OpenAI-compatible LLM endpoint with tool calling (llama.cpp server, vLLM, Halogen, …)
+- An OpenAI-compatible LLM endpoint with tool calling (Ollama, LM Studio, llama.cpp server, vLLM, …)
 - SearXNG (optional; used for web search and as the news fallback)
 - An Obsidian vault (optional; used for notes and memory)
 
@@ -133,7 +184,7 @@ Everything else comes with the repository or downloads itself on first start: th
 
 ## Installation
 
-The [Quick install](#quick-install) above is all most people need. To do the same steps by hand:
+The [Getting started](#getting-started) steps above are all most people need. To do the same steps by hand:
 
 ```bash
 git clone https://github.com/vonhex/delamain.git
@@ -155,11 +206,7 @@ Open `http://localhost:8888`, choose a password, and point Settings → Integrat
 
 The full guide is in [docs/setup.md](docs/setup.md).
 
-### Making more lip-synced clips
-
-Every fixed line has a stable id such as `04_glen/greeting_01`. Run `python import_clips.py <folder>` on a folder of finished videos (`<id>.mp4`, laid out as in the audio export) to install them. The import keeps each video's soundtrack as `line_clips/<id>.wav` and plays that instead of the original recording, because the lips follow the generator's re-rendered voice. Idle loops in the folder's `idle/` go into `frontend/public/` and are picked up by name (`delamain_blink_<n>`, `delamain_listen_<n>`, `delamain_think_<n>`, `delamain_angry_<n>`, `delamain_night_<n>`, `<core>_idle_<n>` and so on; see the changelog); rebuild the web app afterwards. Clips play muted in off-page videos painted onto the face canvas, so Android Auto WebViews cannot pull them fullscreen.
-
-To publish them for everyone, zip `line_clips/` and replace the release asset: `cd line_clips && zip -r ../delamain-line-clips.zip . -i '*.mp4' '*.wav' && gh release upload line-clips ../delamain-line-clips.zip --clobber`. Installs that downloaded the clips pick up the new archive on their next start; clips imported by hand are never replaced.
+To make and add more lip-synced clips of your own, see [docs/clips.md](docs/clips.md).
 
 ---
 
@@ -200,7 +247,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `OSRM_URL` ⚙ | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
 | `DELAMAIN_CLIPS_URL` | the `line-clips` release | Where a new install downloads the lip-synced clips from; empty to skip |
 | `DELAMAIN_REF_AUDIO` | `delamain_ref_10s.wav` | Reference clip the voice is cloned from |
-| `ALLOWED_ORIGINS` | `https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173` | CORS allowed origins (comma-separated) |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Only needed when a page on another site calls the API (CORS). Opening Delamain directly, or through a tunnel or reverse proxy, works without it |
 
 ---
 

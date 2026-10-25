@@ -101,7 +101,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
-    "https://delamain.genysis.xyz,http://localhost:5173,http://localhost:4173"
+    "http://localhost:5173,http://localhost:4173"
 ).split(",")
 
 app.add_middleware(
@@ -249,7 +249,7 @@ async def line_voice(text: str, persona: str = "delamain") -> str | None:
     clip = _line_clip(persona, text)
     return f"/lines/{clip}.wav" if clip else await synthesize_voice(text, persona)
 
-# Reasoning models (e.g. Halogen/Qwen) think by default; "none" keeps the whole
+# Reasoning models (e.g. Qwen 3) think by default; "none" keeps the whole
 # max_tokens budget for the spoken reply. Unset to send nothing.
 def llm_payload_extras() -> dict:
     effort = config.get("llm_reasoning_effort")
