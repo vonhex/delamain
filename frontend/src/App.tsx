@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
+import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing } from './utils/sounds';
@@ -86,6 +87,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   });
   const [tempSettings, setTempSettings] = useState<AppSettings>(settings);
   const integrationsRef = useRef<IntegrationsHandle>(null);
+  const [song, setSong] = useState<Song | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
@@ -193,6 +195,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         if (msg.source !== 'working') setIsLoading(false);
         playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
+        if (msg.song) { setSong(msg.song); triggerAngry(); }
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
           navigateToCoords(msg.navigate_options[0]);
@@ -539,6 +542,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {/* Face Panel — expands to fill when chat is closed */}
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
         <div className={`face-panel relative flex flex-col items-center justify-center-safe overflow-y-auto px-6 pt-4 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
+          {song && <SongPlayer song={song} onDone={() => setSong(null)} />}
+
           {/* Wordmark */}
           <div className="mb-3 flex flex-col items-center gap-1 min-w-0 w-full">
             <h1

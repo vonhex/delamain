@@ -180,6 +180,27 @@ def _download_line_clips() -> None:
         print(f"[Clips] Download failed (lines use the talking loops): {e}")
 
 
+_song_titles: dict[str, str] = {}
+
+
+def insult_song() -> dict | None:
+    """The comeback song for an insult, if this one gets it (insult_song_chance)."""
+    video = config.youtube_id(config.get("insult_song_url"))
+    if not video or random.random() >= float(config.get("insult_song_chance") or 0):
+        return None
+    if video not in _song_titles:
+        try:
+            meta = requests.get("https://www.youtube.com/oembed", timeout=5, params={
+                "url": f"https://www.youtube.com/watch?v={video}", "format": "json"}).json()
+            author = meta.get("author_name", "").removesuffix(" - Topic")
+            _song_titles[video] = f"{meta['title']} — {author}" if author else meta["title"]
+        except Exception:
+            _song_titles[video] = "a song"
+    start = float(config.get("insult_song_start"))
+    return {"video": video, "start": start, "end": start + float(config.get("insult_song_seconds")),
+            "label": f"♪ {_song_titles[video]} ♪"}
+
+
 def _line_clip(persona: str, text: str) -> str | None:
     if not _line_ids:
         _line_ids.update({(r["core_key"], r["line"]): r["id"] for r in _lines.registry()})
@@ -917,6 +938,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 # instant pre-recorded reply instead of a model call.
                 prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
                 kind = _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
+                song = insult_song() if kind == "rude" else None
+                if song:
+                    # Now and then an insult gets a song instead of a comeback (Settings → Integrations).
+                    history.append({"role": "assistant", "content": song["label"]})
+                    loop.run_in_executor(None, _db.log_conversation, "assistant", song["label"], None, persona_now)
+                    print(f"[WS] Insult song to {client_id}")
+                    await websocket.send_json({"type": "response", "text": song["label"], "audio_url": None,
+                                               "song": song, "source": "song"})
+                    continue
                 if kind:
                     text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
                     _last_canned[(client_id, kind)] = text

@@ -25,6 +25,7 @@ export interface IntegrationsHandle {
 const ORDER: { title: string; keys: string[] }[] = [
   { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_reasoning_effort'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
+  { title: 'Insult comeback', keys: ['insult_song_url', 'insult_song_start', 'insult_song_seconds', 'insult_song_chance'] },
 ];
 
 const HINT: Record<string, string> = {
@@ -34,6 +35,8 @@ const HINT: Record<string, string> = {
   searxng_url: 'Web search, and the fallback for news',
   obsidian_vault_path: 'A folder on the server with a .obsidian folder in it; Delamain writes under Delamain/',
   osrm_url: 'Drive times; the public demo server works for light use',
+  insult_song_url: 'Now and then, an insult gets a part of this song instead of a comeback',
+  insult_song_chance: '0 turns it off; 1 plays it every time',
 };
 
 const inputClass = 'w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50';

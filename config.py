@@ -6,6 +6,7 @@ fresh install works without a .env and an existing .env keeps working.
 """
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
@@ -26,13 +27,19 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "news_rss_url": ("NEWS_RSS_URL", "https://news.google.com/rss", "News RSS base URL"),
     "osrm_url": ("OSRM_URL", "https://router.project-osrm.org", "OSRM routing server"),
     "units": ("DELAMAIN_UNITS", "imperial", "Units"),
+    "insult_song_url": ("DELAMAIN_INSULT_SONG", "https://www.youtube.com/watch?v=BsGD5TprqNA", "Insult comeback song (YouTube link)"),
+    "insult_song_start": ("DELAMAIN_INSULT_SONG_START", "77", "Song: start at (seconds)"),
+    "insult_song_seconds": ("DELAMAIN_INSULT_SONG_SECONDS", "15", "Song: play for (seconds)"),
+    "insult_song_chance": ("DELAMAIN_INSULT_SONG_CHANCE", "0.33", "Song: how often an insult gets it"),
 }
-URL_FIELDS = {"llm_url", "searxng_url", "news_rss_url", "osrm_url"}
+URL_FIELDS = {"llm_url", "searxng_url", "news_rss_url", "osrm_url", "insult_song_url"}
 CHOICES = {
     "llm_reasoning_effort": ("", "none", "low", "medium", "high"),
     "tools_enabled": ("true", "false"),
     "units": ("imperial", "metric"),
+    "insult_song_chance": ("0", "0.25", "0.33", "0.5", "1"),
 }
+NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (1, 120)}
 
 _lock = threading.Lock()
 _saved: dict[str, str] | None = None
@@ -62,6 +69,13 @@ def flag(key: str) -> bool:
     return get(key).strip().lower() not in ("0", "false", "no", "off")
 
 
+def youtube_id(url: str) -> str | None:
+    """The video id of a youtube.com/watch?v=, youtu.be/ or /shorts/ link."""
+    m = re.match(r"^https?://(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/)|youtu\.be/)"
+                 r"([A-Za-z0-9_-]{11})", url.strip())
+    return m.group(1) if m else None
+
+
 def vault() -> Path:
     return Path(get("obsidian_vault_path")).expanduser().resolve()
 
@@ -88,6 +102,8 @@ def _check(key: str, value: str) -> str:
         u = urlparse(value)
         if u.scheme not in ("http", "https") or not u.netloc:
             raise ValueError(f"{FIELDS[key][2]}: enter a full http:// or https:// URL")
+        if key == "insult_song_url" and not youtube_id(value):
+            raise ValueError(f"{FIELDS[key][2]}: enter a YouTube video link")
     elif key in CHOICES:
         value = value.lower()
         if value not in CHOICES[key]:
@@ -100,6 +116,15 @@ def _check(key: str, value: str) -> str:
             raise ValueError(f"Obsidian vault: {value} is not a folder on the server")
         if not (p / ".obsidian").is_dir():
             raise ValueError(f"Obsidian vault: {value} has no .obsidian folder; open it in Obsidian once first")
+    elif key in NUMBER_FIELDS:
+        lo, hi = NUMBER_FIELDS[key]
+        try:
+            n = float(value)
+        except ValueError:
+            raise ValueError(f"{FIELDS[key][2]}: enter a number of seconds")
+        if not lo <= n <= hi:
+            raise ValueError(f"{FIELDS[key][2]}: between {lo} and {hi}")
+        value = f"{n:g}"
     elif key == "llm_model" and not value:
         raise ValueError("Model id: enter a model id")
     return value
