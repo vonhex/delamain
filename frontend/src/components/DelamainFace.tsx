@@ -438,7 +438,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   const ac = accentColor;
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-4 landscape:p-1">
+    <div className="relative flex flex-col items-center justify-center p-3">
       <div className={`relative transition-all duration-500 ${isTalking ? 'scale-105' : 'scale-100'}`}>
 
         <div
@@ -451,7 +451,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
         />
 
         <div
-          className={`relative rounded-full border-4 overflow-hidden transition-all duration-700 ${size === 'large' ? 'w-80 h-80 md:w-96 md:h-96 landscape:w-56 landscape:h-56' : 'w-72 h-72 md:w-80 md:h-80 landscape:w-44 landscape:h-44'}`}
+          className={`relative rounded-full border-4 overflow-hidden transition-all duration-700 ${size === 'large' ? 'face-large' : 'face-normal'}`}
           style={{
             borderColor: ac,
             boxShadow: isTalking ? `0 0 40px ${hexAlpha(ac, 0.7)}` : 'none',
@@ -492,7 +492,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
         />
       </div>
 
-      <div className="mt-10 landscape:mt-2 flex gap-1.5 landscape:gap-1 h-12 landscape:h-6 items-end">
+      <div className="mt-3 flex gap-1.5 h-8 items-end">
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
