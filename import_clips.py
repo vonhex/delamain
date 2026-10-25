@@ -6,9 +6,11 @@ Each <clip id>.mp4 is copied into line_clips/ without its audio, and its soundtr
 saved next to it as <clip id>.wav. The generator re-renders the voice and the lips follow
 that render, so the soundtrack (not the original recording) is what plays with the clip.
 It is levelled to the original recording so clips and live replies sound the same.
-Clips in idle/ replace the idle loops in frontend/public/. Existing files are overwritten.
+Clips in idle/ are added to frontend/public/ (replacing any of the same name), and
+frontend/public/animations.json is rewritten so the face picks up new idles by name.
+Existing files are overwritten.
 """
-import os, shutil, subprocess, sys
+import json, os, subprocess, sys
 
 import numpy as np
 
@@ -80,6 +82,15 @@ def main(folder: str) -> None:
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", os.path.join(idle, f), "-an", "-c:v", "copy",
                             "-movflags", "+faststart", os.path.join(PUBLIC, f)], check=True)
         print(f"{len(loops)} idle loops installed in {PUBLIC}")
+    write_animation_list()
+
+
+def write_animation_list() -> None:
+    """List every clip in frontend/public, so the face can use new idles by name."""
+    clips = sorted(f for f in os.listdir(PUBLIC) if f.endswith(".mp4"))
+    with open(os.path.join(PUBLIC, "animations.json"), "w") as f:
+        json.dump(clips, f, indent=0)
+    print(f"animations.json lists {len(clips)} clips; rebuild the web app (npm run build) to serve them")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,9 @@ interface DelamainFaceProps {
   // off-page video; the sound is the line's audio, and audioTime() reports how far
   // into it playback is, so the clip starts at the same point.
   lineClip?: { url: string; audioTime: () => number } | null;
+  persona?: string;      // a rogue core's own idles play when it has some
+  listening?: boolean;   // the mic is open
+  thinking?: boolean;    // waiting for a reply
 }
 
 const COLOR = {
@@ -53,6 +56,31 @@ const ANIMATIONS = {
   },
 };
 
+// Extra clips are found by name in /animations.json (written by import_clips.py), so a
+// new idle shows up as soon as it is installed: delamain_<kind>_<n>.mp4 for the original
+// core's kinds and the listening/thinking/angry/late-night states, <core>_idle_<n>.mp4
+// for a rogue core, and delamain_rare_<name>.mp4 for further rare clips.
+let INSTALLED: string[] = [];
+const SPECIAL_RARE = new Set(Object.values(ANIMATIONS.rare));
+
+function installed(prefix: string): string[] {
+  const re = new RegExp(`^${prefix}_\\d+\\.mp4$`);
+  return INSTALLED.filter(f => re.test(f)).map(f => '/' + f);
+}
+
+function poolOf(kind: 'blinking' | 'turning' | 'random' | 'bored', prefix: string): string[] {
+  return [...new Set([...ANIMATIONS[kind], ...installed(prefix)])];
+}
+
+function extraRares(): string[] {
+  return INSTALLED.filter(f => /^delamain_rare_[a-z]+\.mp4$/.test(f)).map(f => '/' + f).filter(f => !SPECIAL_RARE.has(f));
+}
+
+function isLateNight(): boolean {
+  const h = new Date().getHours();
+  return h >= 22 || h < 5;
+}
+
 function pickFrom(pool: string[], last: string | null): string {
   if (pool.length === 1) return pool[0];
   let next = pool[Math.floor(Math.random() * pool.length)];
@@ -62,8 +90,22 @@ function pickFrom(pool: string[], last: string | null): string {
 
 // idleMs = time since last user interaction (resets on each message)
 // sessionMs = total session time (never resets, for secret rare only)
-function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number): string {
+function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number, persona: string): string {
+  const core = persona === 'delamain' ? [] : installed(`${persona}_idle`);
+  if (core.length && Math.random() < 0.7) return pickFrom(core, last);
+  const night = installed('delamain_night');
+  if (night.length && isLateNight() && Math.random() < 0.3) return pickFrom(night, last);
+  const rares = extraRares();
+  if (rares.length && Math.random() < 0.03) return pickFrom(rares, last);
+  return pickOriginalIdle(last, idleMs, sessionMs);
+}
+
+function pickOriginalIdle(last: string | null, idleMs: number, sessionMs: number): string {
   const r = Math.random();
+  const blinking = poolOf('blinking', 'delamain_blink');
+  const turning = poolOf('turning', 'delamain_turn');
+  const random = poolOf('random', 'delamain_random');
+  const bored = poolOf('bored', 'delamain_bored');
 
   // Secret rare — only after 45 min session regardless of interaction
   if (sessionMs > 45 * 60_000 && r < 0.008) return ANIMATIONS.rare.secret;
@@ -73,22 +115,22 @@ function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number): 
 
   if (isDeepBored) {
     if (r < 0.05) return ANIMATIONS.rare.reading;
-    if (r < 0.55) return pickFrom(ANIMATIONS.bored, last);
-    if (r < 0.90) return pickFrom(ANIMATIONS.blinking, last);
-    if (r < 0.95) return pickFrom(ANIMATIONS.turning, last);
-    return pickFrom(ANIMATIONS.random, last);
+    if (r < 0.55) return pickFrom(bored, last);
+    if (r < 0.90) return pickFrom(blinking, last);
+    if (r < 0.95) return pickFrom(turning, last);
+    return pickFrom(random, last);
   }
 
   if (isBored) {
-    if (r < 0.40) return pickFrom(ANIMATIONS.bored, last);
-    if (r < 0.80) return pickFrom(ANIMATIONS.blinking, last);
-    if (r < 0.90) return pickFrom(ANIMATIONS.turning, last);
-    return pickFrom(ANIMATIONS.random, last);
+    if (r < 0.40) return pickFrom(bored, last);
+    if (r < 0.80) return pickFrom(blinking, last);
+    if (r < 0.90) return pickFrom(turning, last);
+    return pickFrom(random, last);
   }
 
-  if (r < 0.70) return pickFrom(ANIMATIONS.blinking, last);
-  if (r < 0.85) return pickFrom(ANIMATIONS.turning, last);
-  return pickFrom(ANIMATIONS.random, last);
+  if (r < 0.70) return pickFrom(blinking, last);
+  if (r < 0.85) return pickFrom(turning, last);
+  return pickFrom(random, last);
 }
 
 // The clips play in <video> elements that are never added to the page, and are
@@ -152,7 +194,9 @@ function computeColor(idleMs: number): string {
   return COLOR.cyan;
 }
 
-const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', size = 'normal', lineClip = null }) => {
+const DelamainFace: React.FC<DelamainFaceProps> = ({
+  isTalking, mood = 'idle', size = 'normal', lineClip = null, persona = 'delamain', listening = false, thinking = false,
+}) => {
   const [offscreen] = useState(() => [makeOffscreenVideo(), makeOffscreenVideo()] as const);
   const videoA = useRef<HTMLVideoElement | null>(offscreen[0]);
   const videoB = useRef<HTMLVideoElement | null>(offscreen[1]);
@@ -161,6 +205,10 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   const activeSlot = useRef<'a' | 'b'>('a');
   const lastVideo = useRef<string | null>(null);
   const isTalkingRef = useRef(isTalking);
+  const personaRef = useRef(persona);
+  const listeningRef = useRef(listening);
+  const thinkingRef = useRef(thinking);
+  const pendingAngry = useRef(false);
   const pendingFlip = useRef(false);
   const isFlipPlaying = useRef(false);  // true while flip anim is the active video
   const pendingLine = useRef<{ url: string; audioTime: () => number } | null>(null); // lip-synced clip waiting to play
@@ -178,6 +226,14 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
   const [accentColor, setAccentColor] = useState(COLOR.cyan);
 
   useEffect(() => { isTalkingRef.current = isTalking; }, [isTalking]);
+  useEffect(() => { personaRef.current = persona; }, [persona]);
+
+  // The list of installed clips; until it arrives (or without it) the built-in pools play.
+  useEffect(() => {
+    fetch('/animations.json').then(r => (r.ok ? r.json() : [])).then(list => {
+      if (Array.isArray(list)) INSTALLED = list.filter((f): f is string => typeof f === 'string');
+    }).catch(() => {});
+  }, []);
 
   // ── color helper ───────────────────────────────────────────────────────────
   const refreshColor = useCallback(() => {
@@ -201,6 +257,14 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     }
     lineActive.current = false;
 
+    // Angry: a cold stare when there are angry clips, otherwise the glitch flip.
+    if (pendingAngry.current) {
+      pendingAngry.current = false;
+      const angry = installed('delamain_angry');
+      if (angry.length) return pickFrom(angry, lastVideo.current);
+      pendingFlip.current = true;
+    }
+
     // Flip takes priority unless talking needs to resume after flip finishes
     if (pendingFlip.current) {
       pendingFlip.current = false;
@@ -212,9 +276,14 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     // While talking (and flip isn't pending), show talking animation
     if (isTalkingRef.current) return pickFrom(ANIMATIONS.talking, lastVideo.current);
 
+    const listen = installed('delamain_listen');
+    if (listeningRef.current && listen.length) return pickFrom(listen, lastVideo.current);
+    const think = installed('delamain_think');
+    if (thinkingRef.current && think.length) return pickFrom(think, lastVideo.current);
+
     const idleMs    = Date.now() - lastInteractionMs.current;
     const sessionMs = Date.now() - sessionStartMs.current;
-    return pickIdleVideo(lastVideo.current, idleMs, sessionMs);
+    return pickIdleVideo(lastVideo.current, idleMs, sessionMs, personaRef.current);
   }, []);
 
   // ── advance: load next video into the inactive slot ────────────────────────
@@ -314,13 +383,26 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({ isTalking, mood = 'idle', s
     }
   }, [isTalking, advance]);
 
+  // ── listening / thinking: cut to the state's clip when it begins ──────────
+  useEffect(() => {
+    const started = listening && !listeningRef.current;
+    listeningRef.current = listening;
+    if (started && installed('delamain_listen').length && !isTalkingRef.current && !lineActive.current) advance();
+  }, [listening, advance]);
+
+  useEffect(() => {
+    const started = thinking && !thinkingRef.current;
+    thinkingRef.current = thinking;
+    if (started && installed('delamain_think').length && !isTalkingRef.current && !lineActive.current) advance();
+  }, [thinking, advance]);
+
   // ── mood: advance only when becoming angry (not when resetting to idle) ────
   useEffect(() => {
     const justAngry = mood === 'angry' && prevMood.current !== 'angry';
     prevMood.current = mood;
     if (!justAngry) return;
 
-    pendingFlip.current = true;
+    pendingAngry.current = true;
     angryUntilMs.current = Date.now() + 45_000;
     setAccentColor(COLOR.red);
 
