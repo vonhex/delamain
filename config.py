@@ -28,8 +28,8 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "osrm_url": ("OSRM_URL", "https://router.project-osrm.org", "OSRM routing server"),
     "units": ("DELAMAIN_UNITS", "imperial", "Units"),
     "insult_song_url": ("DELAMAIN_INSULT_SONG", "https://www.youtube.com/watch?v=BsGD5TprqNA", "Insult comeback song (YouTube link)"),
-    "insult_song_start": ("DELAMAIN_INSULT_SONG_START", "77", "Song: start at (seconds)"),
-    "insult_song_seconds": ("DELAMAIN_INSULT_SONG_SECONDS", "15", "Song: play for (seconds)"),
+    "insult_song_start": ("DELAMAIN_INSULT_SONG_START", "0", "Song: start at (seconds)"),
+    "insult_song_seconds": ("DELAMAIN_INSULT_SONG_SECONDS", "0", "Song: play for (seconds, 0 = to the end)"),
     "insult_song_chance": ("DELAMAIN_INSULT_SONG_CHANCE", "0.33", "Song: how often an insult gets it"),
 }
 URL_FIELDS = {"llm_url", "searxng_url", "news_rss_url", "osrm_url", "insult_song_url"}
@@ -39,7 +39,7 @@ CHOICES = {
     "units": ("imperial", "metric"),
     "insult_song_chance": ("0", "0.25", "0.33", "0.5", "1"),
 }
-NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (1, 120)}
+NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (0, 36000)}
 
 _lock = threading.Lock()
 _saved: dict[str, str] | None = None

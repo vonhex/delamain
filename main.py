@@ -197,7 +197,8 @@ def insult_song() -> dict | None:
         except Exception:
             _song_titles[video] = "a song"
     start = float(config.get("insult_song_start"))
-    return {"video": video, "start": start, "end": start + float(config.get("insult_song_seconds")),
+    seconds = float(config.get("insult_song_seconds"))
+    return {"video": video, "start": start, "end": start + seconds if seconds else None,
             "label": f"♪ {_song_titles[video]} ♪"}
 
 
