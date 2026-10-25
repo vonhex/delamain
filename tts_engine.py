@@ -2,7 +2,35 @@ import hashlib
 import os
 import uuid
 
+from concurrent.futures import Future
+
+import f5_tts.infer.utils_infer as _f5_infer
 from f5_tts.api import F5TTS
+
+
+class _SameThreadExecutor:
+    """Runs each submitted job at once, in the calling thread.
+
+    F5-TTS splits long text into batches and runs them on a fresh ThreadPoolExecutor.
+    On ROCm, attention started on a new thread can segfault in aotriton's GPU check
+    (getGpuFromStream), so every batch stays on the one thread the engine runs on."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def submit(self, fn, *args, **kwargs) -> Future:
+        f: Future = Future()
+        try:
+            f.set_result(fn(*args, **kwargs))
+        except BaseException as e:
+            f.set_exception(e)
+        return f
+
+
+_f5_infer.ThreadPoolExecutor = _SameThreadExecutor
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHECKPOINT = os.path.join(BASE_DIR, "checkpoints/F5TTS_Base/model_1200000.pt")
