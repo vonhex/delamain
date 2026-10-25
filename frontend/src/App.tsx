@@ -94,7 +94,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const userNameRef = useRef(settings.userName);
 
   // Audio queue — keeps spoken replies from overlapping
-  const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string }>>([]);
+  const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string; speechAt?: number }>>([]);
   const [lineClip, setLineClip] = useState<{ url: string; audioTime: () => number } | null>(null);
   const audioPlayingRef = useRef(false);
 
@@ -141,28 +141,34 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const playNext = () => {
       const item = audioQueueRef.current.shift();
       if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
-      const { url: audioUrl, text, video } = item;
+      const { url: audioUrl, text, video, speechAt = 0 } = item;
       // A pre-recorded line with its own lip-synced clip: the face cuts to it as the audio starts.
       const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
-      audio.onplay  = () => { showClip(() => audio.currentTime); setIsTalking(true); };
+      // The file opens with silence; the glow and talking loops wait for the voice.
+      const talkWhenHeard = () => {
+        if (audio.currentTime >= speechAt || audio.ended) setIsTalking(true);
+        else if (!audio.paused) requestAnimationFrame(talkWhenHeard);
+      };
+      audio.onplay  = () => { showClip(() => audio.currentTime); talkWhenHeard(); };
+      audio.onplaying = talkWhenHeard;
       audio.onended = () => { playNext(); };
       audio.onerror = () => { playNext(); };
       audio.play().catch(() => {
         if (text) {
           const t0 = performance.now();
           showClip(() => (performance.now() - t0) / 1000);
-          setIsTalking(true);
+          setTimeout(() => setIsTalking(true), speechAt * 1000);
           setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
         } else { playNext(); }
       });
     };
 
-    const playAudio = (audioUrl: string, text?: string, video?: string) => {
+    const playAudio = (audioUrl: string, text?: string, video?: string, speechAt = 0) => {
       // Fetch the lip-synced clip now, so it is cached by the time its audio starts.
       if (video) fetch(video).catch(() => {});
-      audioQueueRef.current.push({ url: audioUrl, text, video });
+      audioQueueRef.current.push({ url: audioUrl, text, video, speechAt });
       if (!audioPlayingRef.current) {
         audioPlayingRef.current = true;
         playNext();
@@ -178,13 +184,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
         })));
       } else if (msg.type === 'greeting') {
         playConnectChime();
-        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
       } else if (msg.type === 'response') {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
         playResponsePing();
-        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
           navigateToCoords(msg.navigate_options[0]);
@@ -279,7 +285,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
       if (audioUrl) {
         const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
         const audio = new Audio(url);
-        audio.onplay = () => setIsTalking(true);
+        const speechAt: number = response.data.speech_at || 0;
+        const talkWhenHeard = () => {
+          if (audio.currentTime >= speechAt || audio.ended) setIsTalking(true);
+          else if (!audio.paused) requestAnimationFrame(talkWhenHeard);
+        };
+        audio.onplay = talkWhenHeard;
+        audio.onplaying = talkWhenHeard;
         audio.onended = () => setIsTalking(false);
         audio.onerror = () => setIsTalking(false);
         audio.play().catch(() => {

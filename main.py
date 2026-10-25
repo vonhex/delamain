@@ -16,6 +16,8 @@ import re
 import time
 import traceback
 import urllib.parse
+import numpy as np
+import soundfile as _sf
 from concurrent.futures import ThreadPoolExecutor
 from tts_engine import OUTPUT_DIR, get_tts_engine, reset_engine
 from voice_glitch import corrupt_file
@@ -144,6 +146,33 @@ def line_video(persona: str, text: str) -> str | None:
     """URL of the lip-synced clip for a pre-recorded line, if one has been made."""
     clip = _line_clip(persona, text)
     return f"/lines/{clip}.mp4" if clip else None
+
+
+_onsets: dict[str, float] = {}
+
+
+def speech_onset(url: str | None) -> float:
+    """Seconds of silence before the speech starts in an /audio/ or /lines/ file.
+
+    Synthesized replies open with about half a second of silence and clip
+    soundtracks with about three quarters; the page holds the talking glow
+    and the talking loops until the voice is actually heard."""
+    if not url:
+        return 0.0
+    if url not in _onsets:
+        base, rest = (LINES_DIR, url[len("/lines/"):]) if url.startswith("/lines/") else (AUDIO_DIR, url[len("/audio/"):])
+        try:
+            x, sr = _sf.read(os.path.join(base, urllib.parse.unquote(rest)), dtype="float32")
+            x = x if x.ndim == 1 else x.mean(axis=1)
+            hop = sr // 100
+            n = len(x) // hop
+            env = np.sqrt((x[: n * hop].reshape(n, hop) ** 2).mean(axis=1))
+            first = int(np.argmax(env > env.max() * 0.05)) if n else 0
+            _onsets[url] = max(0.0, first / 100 - 0.03)
+        except Exception as e:
+            print(f"Speech onset error for {url}: {e}")
+            _onsets[url] = 0.0
+    return _onsets[url]
 
 
 async def line_voice(text: str, persona: str = "delamain") -> str | None:
@@ -662,7 +691,8 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
         delamain_response, navigate_to = extract_navigate(raw)
         navigate_options = geocode_places(navigate_to) if navigate_to else []
         audio_url = await synthesize_voice(delamain_response)
-        return {"response": delamain_response, "audio_url": audio_url, "navigate_options": navigate_options}
+        return {"response": delamain_response, "audio_url": audio_url, "speech_at": speech_onset(audio_url),
+                "navigate_options": navigate_options}
 
     except requests.exceptions.RequestException as e:
         print(f"LLM error: {e}")
@@ -708,6 +738,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 "type": "greeting",
                 "text": greeting,
                 "audio_url": greeting_audio,
+                "speech_at": speech_onset(greeting_audio),
                 "video_url": line_video(_persona(client_id), greeting),
             })
         _ready_clients.add(client_id)
@@ -738,8 +769,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
 
                 async def say_working(ws=websocket, persona_now=persona_now):
                     line = random.choice(_personas.get(persona_now).working)
+                    audio = await line_voice(line, persona_now)
                     await ws.send_json({"type": "response", "text": line,
-                                        "audio_url": await line_voice(line, persona_now),
+                                        "audio_url": audio, "speech_at": speech_onset(audio),
                                         "video_url": line_video(persona_now, line), "source": "working"})
 
                 # Everyday messages ("thanks", "how are you", "combat mode") get an
@@ -754,6 +786,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
                     print(f"[WS] Pre-recorded reply ({kind}) to {client_id}")
                     await websocket.send_json({"type": "response", "text": text, "audio_url": audio_url,
+                                               "speech_at": speech_onset(audio_url),
                                                "video_url": line_video(persona_now, text), "source": "canned"})
                     continue
 
@@ -767,14 +800,16 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                         "type": "response",
                         "text": text,
                         "audio_url": audio_url,
+                        "speech_at": speech_onset(audio_url),
                         "navigate_options": navigate_options,
                     })
                 except Exception as e:
                     print(f"[WS] Response error: {e}")
                     history.pop()
                     line = _lines.pick(persona_now, "error")
+                    audio = await line_voice(line, persona_now)
                     await websocket.send_json({"type": "response", "text": line,
-                                               "audio_url": await line_voice(line, persona_now),
+                                               "audio_url": audio, "speech_at": speech_onset(audio),
                                                "video_url": line_video(persona_now, line), "source": "error"})
 
             elif msg_type == "persona":
@@ -818,7 +853,8 @@ async def _announce_reminder(reminder: dict) -> bool:
             spoken[persona] = (line, await synthesize_voice(line, persona))
         line, audio_url = spoken[persona]
         try:
-            await ws.send_json({"type": "response", "text": line, "audio_url": audio_url, "source": "reminder"})
+            await ws.send_json({"type": "response", "text": line, "audio_url": audio_url,
+                                "speech_at": speech_onset(audio_url), "source": "reminder"})
             conversation_history.setdefault(cid, []).append({"role": "assistant", "content": line})
             delivered = True
         except Exception as e:
