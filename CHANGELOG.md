@@ -15,6 +15,8 @@ All notable changes to Delamain are documented here.
   - `<core>_idle_<n>` (for example `glen_idle_3`) gives a rogue core its own idles, played about 70% of the time in that core.
 
 ### Fixed
+- **Wordmark cut off on car displays**: the face had fixed sizes, so on short screens the panel overflowed and the top was cut off. The face is now sized from the space its panel actually has, and the panel centers safely and scrolls rather than clipping. Checked at phone, car (800×480, 1280×480, 1024×600, 1920×720), tablet, laptop and desktop sizes, with the chat open and closed.
+- **Face clipped under the sidebar on phones**, and the closed chat panel taking up half the screen height on narrow screens.
 - **Lip-synced clips slipping on phones**: some phone browsers update the audio position only a few times a second, which let a clip run up to a quarter second behind its voice. The face now carries the position forward between updates and seeks once the gap passes 120 ms; with position updates every 250 ms the clip stays within 80 ms of the audio.
 - **Talking glow came on before his mouth moved**: replies open with about half a second of silence (three quarters on clip soundtracks), and the glow and talking loops started with playback. Each message now carries `speech_at`, where the voice starts in its audio, and the page waits for it.
 

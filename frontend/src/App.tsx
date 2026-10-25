@@ -541,7 +541,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
         {/* Face Panel — expands to fill when chat is closed */}
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
-        <div className={`relative flex flex-col items-center justify-center px-6 pt-4 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 pr-16'}`}>
+        <div className={`face-panel relative flex flex-col items-center justify-center-safe overflow-y-auto px-6 pt-4 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
           {/* Wordmark */}
           <div className="mb-3 flex flex-col items-center gap-1 min-w-0 w-full">
             <h1
@@ -595,7 +595,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         )}
 
         {/* Right Panel: Chat Interface — hidden by default */}
-        <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 md:w-0'}`}>
+        <div className={`flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 ${isChatOpen ? 'w-full md:w-[450px]' : 'w-0 h-0 md:h-auto md:w-0'}`}>
           {/* Header */}
           <div className="p-4 border-b border-cyber-gray flex justify-between items-center bg-cyber-dark/50 min-w-[450px]">
             <span className="text-xs font-bold text-cyber-blue flex items-center gap-2">

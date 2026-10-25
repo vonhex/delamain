@@ -167,3 +167,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   [class^="core-"] { animation: none; }
 }
+
+/* The face is sized from the panel it sits in, so the wordmark, face, level bars and
+   talk bar all fit on any screen: phone, car display or desktop. 11rem is everything
+   in the panel except the circle (padding, wordmark, bars, talk bar). */
+.face-panel { container-type: size; }
+.face-large { --face: clamp(4rem, min(24rem, 100cqw - 2rem, 100cqh - 11rem), 24rem); width: var(--face); height: var(--face); }
+.face-normal { --face: clamp(4rem, min(20rem, 100cqw - 2rem, 100cqh - 11rem), 20rem); width: var(--face); height: var(--face); }
