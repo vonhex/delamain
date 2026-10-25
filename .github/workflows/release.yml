@@ -42,7 +42,9 @@ jobs:
           VERSION=${{ steps.version.outputs.VERSION }}
           DIR="delamain-${VERSION}"
 
+          # The reference voice is the one .wav that ships (the voice is cloned from it).
           rsync -a . "$DIR/" \
+            --include='/delamain_ref_10s.wav' \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='frontend/node_modules' \

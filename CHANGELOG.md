@@ -4,9 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.0.0] — 2026-10-25 — Delamain V2
+
+A lip-synced face, a one-step installer, and setup from the browser: a fresh clone needs nothing but an LLM.
 
 ### Added
+- **Lip-synced lines**: 507 of the 607 fixed lines (greetings, "one moment", the pre-recorded replies, across all ten cores) now play a lip-synced face clip made with MiniMax H3. The rest use the talking loops until their clips are remade.
+- **`import_clips.py`**: installs a folder of finished clips. Each clip is copied without its audio, and its soundtrack is saved beside it as `<clip id>.wav`, levelled to the original recording. Clips in `idle/` replace the idle loops.
 - **Insult comeback song**: now and then (one insult in three by default) Delamain skips the comeback and plays Harley Poe's "Whiny Bitch" from YouTube, from the beginning, in a small inline card, while the face turns red. It plays until the song ends or the X is pressed. The song, start, an optional length and how often are in Settings → Integrations (0 turns it off). Insults now also cover "bitch", "loser" and the like.
 - **One-step installer**: `./install.sh` (Linux, macOS) or `install.bat` (Windows) installs uv and its own Python, PyTorch for the machine's GPU (NVIDIA cu126, AMD ROCm 7.2, Apple, or CPU), the Python packages and a private Node.js if needed, builds the web UI and starts Delamain; `--service` installs a systemd user service. Tested from a clean Ubuntu 24.04 with nothing but wget: installed in 18 seconds, then started, downloaded the voice model and clips and recorded lines on CPU.
 - **Runs without FFmpeg**: the reference voice is loaded with soundfile instead of torchaudio, whose torchcodec backend needs FFmpeg's libraries.
@@ -22,6 +26,10 @@ All notable changes to Delamain are documented here.
   - `delamain_listen_<n>` plays while the mic is open, `delamain_think_<n>` while a reply is on its way, and `delamain_angry_<n>` replaces the glitch flip when he is insulted;
   - `<core>_idle_<n>` (for example `glen_idle_3`) gives a rogue core its own idles, played about 70% of the time in that core.
 
+### Changed
+- **A clip plays its own soundtrack**: the generator re-renders the voice, and the lips follow that render, which can start up to a second later than the original recording. Lines with a clip now play the clip's soundtrack instead of the cached recording.
+- **New idle loops**: all 33 blink, glance, fidget, bored and rare loops were remade at 800×544.
+
 ### Fixed
 - **Backend crash reading the news (or any long reply)**: F5-TTS voices long text in batches on its own thread pool, and on ROCm attention started on a new thread can segfault in aotriton's GPU check. The batches now run one after another on the dedicated voice thread. Checked with a 40-second bulletin, three times in a row.
 - **"Read me the news" answered without the news**: a clear news request now goes straight to the news tool; a reply that promises to look something up without calling a tool is sent back once to do it; a news reply that stops at its opening line is sent back for the headlines; and a question that never got an answer (after a crash or a dropped link) no longer stays in the conversation, where the model took the repeat as a cue to stall.
@@ -29,20 +37,6 @@ All notable changes to Delamain are documented here.
 - **Face clipped under the sidebar on phones**, and the closed chat panel taking up half the screen height on narrow screens.
 - **Lip-synced clips slipping on phones**: some phone browsers update the audio position only a few times a second, which let a clip run up to a quarter second behind its voice. The face now carries the position forward between updates and seeks once the gap passes 120 ms; with position updates every 250 ms the clip stays within 80 ms of the audio.
 - **Talking glow came on before his mouth moved**: replies open with about half a second of silence (three quarters on clip soundtracks), and the glow and talking loops started with playback. Each message now carries `speech_at`, where the voice starts in its audio, and the page waits for it.
-
----
-
-## [2.0.0] — 2026-10-25 — Delamain V2
-
-### Added
-- **Lip-synced lines**: 507 of the 607 fixed lines (greetings, "one moment", the pre-recorded replies, across all ten cores) now play a lip-synced face clip made with MiniMax H3. The rest use the talking loops until their clips are remade.
-- **`import_clips.py`**: installs a folder of finished clips. Each clip is copied without its audio, and its soundtrack is saved beside it as `<clip id>.wav`, levelled to the original recording. Clips in `idle/` replace the idle loops.
-
-### Changed
-- **A clip plays its own soundtrack**: the generator re-renders the voice, and the lips follow that render, which can start up to a second later than the original recording. Lines with a clip now play the clip's soundtrack instead of the cached recording.
-- **New idle loops**: all 33 blink, glance, fidget, bored and rare loops were remade at 800×544.
-
-### Fixed
 - **Greeting repeated every few minutes**: the WebSocket sat idle and Cloudflare closed it, the page reconnected, and each reconnect was greeted as a new trip. The page now sends a heartbeat every 20 seconds, and an automatic reconnect resumes the conversation without a greeting.
 - **Navigation inside Fermata**: an app's embedded browser cannot open the Maps app, so instead of failing silently Delamain now names the destination and says to open him in the phone's browser to navigate.
 - **Lip-synced clips stay on the words**: a clip starts at the audio's current position, is fetched as soon as the reply arrives, waits on its first frame if the audio has not started, and is kept on the audio clock while it plays (playback rate eased for small drift, a seek for large gaps). Measured with the real clips: median 19 ms, 96–98% of samples within 100 ms, including with clips loading 700 ms late.
