@@ -4,10 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.1.0] — 2026-10-25 — More idles
 
 ### Added
 - **112 new idle animations** (152 in all): six idles for each rogue core, plus listening, thinking, angry and late-night loops, more blinks, turns, random and bored loops for the original core, and six new rare clips (map, mirror, rain, scan, static, wireframe).
+
+### Changed
+- **README for newcomers**: what you need, four getting-started steps (install, password, connecting Ollama, LM Studio or llama.cpp, and using it on a phone or in the car over Tailscale or a Cloudflare Tunnel), and troubleshooting. Making lip-synced clips moved to `docs/clips.md`.
+- `ALLOWED_ORIGINS` no longer defaults to the author's domain; the Settings hints and `.env.example` name Ollama and LM Studio.
 
 ---
 
