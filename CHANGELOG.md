@@ -4,6 +4,18 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **More idles, picked up by name**: `import_clips.py` writes `frontend/public/animations.json`, and the face adds any installed clip to its pools without a code change:
+  - `delamain_blink_<n>`, `delamain_turn_<n>`, `delamain_random_<n>` and `delamain_bored_<n>` join the original core's idles;
+  - `delamain_rare_<name>` adds rare clips;
+  - `delamain_night_<n>` plays some of the time between 22:00 and 05:00;
+  - `delamain_listen_<n>` plays while the mic is open, `delamain_think_<n>` while a reply is on its way, and `delamain_angry_<n>` replaces the glitch flip when he is insulted;
+  - `<core>_idle_<n>` (for example `glen_idle_3`) gives a rogue core its own idles, played about 70% of the time in that core.
+
+---
+
 ## [2.0.0] — 2026-10-25 — Delamain V2
 
 ### Added

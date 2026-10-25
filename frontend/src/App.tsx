@@ -546,7 +546,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
           </div>
 
           <div className={settings.persona === 'delamain' ? undefined : `core-${settings.persona}`}>
-            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip} />
+            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
+              persona={settings.persona} listening={isListening} thinking={isLoading} />
           </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}
