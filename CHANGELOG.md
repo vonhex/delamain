@@ -7,6 +7,9 @@ All notable changes to Delamain are documented here.
 ## [Unreleased]
 
 ### Added
+- **One-step installer**: `./install.sh` (Linux, macOS) or `install.bat` (Windows) installs uv and its own Python, PyTorch for the machine's GPU (NVIDIA cu126, AMD ROCm 7.2, Apple, or CPU), the Python packages and a private Node.js if needed, builds the web UI and starts Delamain; `--service` installs a systemd user service. Tested from a clean Ubuntu 24.04 with nothing but wget: installed in 18 seconds, then started, downloaded the voice model and clips and recorded lines on CPU.
+- **Runs without FFmpeg**: the reference voice is loaded with soundfile instead of torchaudio, whose torchcodec backend needs FFmpeg's libraries.
+- `start.sh` reads `.env` as plain `KEY=value` (paths with spaces work) and takes `PORT`; `start.bat` for Windows.
 - **Runs from a fresh clone**: the F5-TTS weights download from Hugging Face on first start, the lip-synced clips download from the `line-clips` release (and refresh when it changes; clips imported by hand are never replaced), and the Docker image bundles the reference voice. The backend serves the built web UI itself, so one command starts everything.
 - **First-start password**: a new install asks for a password on the login page instead of needing `auth.py set-password`.
 - **Settings → Integrations**: the LLM endpoint, model and reasoning effort, tools, SearXNG, Obsidian vault, news, routing and units are set in the web UI and saved on the server (`settings.json`), ahead of `.env`, which is now optional. A vault must be an existing folder with a `.obsidian` folder in it. The panel also shows whether the voice model, reference voice and clips are installed. The client-side "LLM core URL" field, which the server ignored, is gone.

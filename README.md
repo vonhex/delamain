@@ -9,6 +9,24 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 
 ---
 
+## Quick install
+
+One step, nothing else to download or configure by hand:
+
+| System | Do this |
+|---|---|
+| **Linux / macOS** | `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` |
+| **Windows** | Download or clone the repository, then double-click **`install.bat`** |
+| **Docker** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d` |
+
+Then open **http://localhost:8888**, choose a password, and point **Settings → Integrations** at your LLM. That's it.
+
+The installer brings its own Python (via [uv](https://github.com/astral-sh/uv)), picks the right PyTorch for your GPU (NVIDIA, AMD or none), installs a private Node.js if yours is missing or old, builds the web UI and starts Delamain. Everything stays inside the `delamain` folder. On the first start Delamain downloads its voice model (about 1.3 GB) and lip-synced clips (about 240 MB) by itself. Run the installer again any time to update after a `git pull`; `./install.sh --service` (Linux) also starts Delamain at login. Afterwards, start it with `./start.sh` or `start.bat`.
+
+You bring the LLM: any OpenAI-compatible server with tool calling, such as llama.cpp, vLLM or Halogen. Web search (SearXNG) and an Obsidian vault are optional.
+
+---
+
 ## Demo
 
 [![Watch the demo](demo-thumb.jpg)](https://github.com/vonhex/delamain/releases/download/v1.1.0/delamain-demo.mp4)
@@ -102,10 +120,8 @@ A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. It run
 
 ## Requirements
 
-- Python 3.11+
-- A GPU is recommended for F5-TTS (NVIDIA CUDA or AMD ROCm). CPU works, but uncached phrases take noticeably longer to speak.
-- Node.js 20+ to build the frontend
-- ffmpeg
+- Linux, macOS or Windows. The installer provides Python, PyTorch and Node.js.
+- A GPU is recommended for F5-TTS (NVIDIA CUDA, or AMD ROCm on Linux). CPU works, but replies that are not pre-recorded take noticeably longer to speak.
 - An OpenAI-compatible LLM endpoint with tool calling (llama.cpp server, vLLM, Halogen, …)
 - SearXNG (optional; used for web search and as the news fallback)
 - An Obsidian vault (optional; used for notes and memory)
@@ -116,20 +132,23 @@ Everything else comes with the repository or downloads itself on first start: th
 
 ## Installation
 
+The [Quick install](#quick-install) above is all most people need. To do the same steps by hand:
+
 ```bash
 git clone https://github.com/vonhex/delamain.git
 cd delamain
 python -m venv venv
 source venv/bin/activate
+pip install torch torchaudio      # pick the build for your GPU at https://pytorch.org
 pip install -r requirements.txt
 (cd frontend && npm ci && npm run build)
 ./start.sh
 ```
 
-Open `http://localhost:8888`, choose a password, and point Settings → Integrations at your LLM (and SearXNG and Obsidian vault, if you use them). That's all; the backend serves the web UI, and the voice model and lip-synced clips download on the first start.
+Open `http://localhost:8888`, choose a password, and point Settings → Integrations at your LLM (and SearXNG and Obsidian vault, if you use them). The backend serves the web UI, and the voice model and lip-synced clips download on the first start.
 
 - **Change the password** later with `python auth.py set-password <new-password>`.
-- **Environment variables** still work and are used for anything not set in Settings: copy `.env.example` to `.env`.
+- **Environment variables** still work and are used for anything not set in Settings: copy `.env.example` to `.env`. `PORT` changes the port.
 - **Your own voice**: replace `delamain_ref_10s.wav` (or set `DELAMAIN_REF_AUDIO`) and edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken. See [docs/f5-tts.md](docs/f5-tts.md).
 - **Frontend development**: `cd frontend && npm run dev` serves the UI with hot reload on `http://localhost:5173`, proxying to the backend.
 

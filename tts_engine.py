@@ -4,6 +4,10 @@ import uuid
 
 from concurrent.futures import Future
 
+import numpy as np
+import soundfile as sf
+import torch
+
 import f5_tts.infer.utils_infer as _f5_infer
 from f5_tts.api import F5TTS
 
@@ -31,6 +35,18 @@ class _SameThreadExecutor:
 
 
 _f5_infer.ThreadPoolExecutor = _SameThreadExecutor
+
+
+def _load_audio(path, *args, **kwargs):
+    """torchaudio.load through soundfile: (channels × frames float tensor, sample rate).
+
+    Recent torchaudio loads audio through torchcodec, which needs FFmpeg's shared
+    libraries installed; soundfile brings its own, so the voice works without FFmpeg."""
+    data, sr = sf.read(path, dtype="float32", always_2d=True)
+    return torch.from_numpy(np.ascontiguousarray(data.T)), sr
+
+
+_f5_infer.torchaudio.load = _load_audio
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHECKPOINT = os.path.join(BASE_DIR, "checkpoints/F5TTS_Base/model_1200000.pt")
