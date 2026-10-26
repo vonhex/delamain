@@ -4,6 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **14 more lip-synced lines** (521 of 607), from the re-rendered clips that passed the checks. The clip download was updated, so existing installs fetch them on their next start.
+
+---
+
 ## [2.1.1] — 2026-10-26 — Lip-sync and car display fixes
 
 ### Fixed
