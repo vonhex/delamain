@@ -213,6 +213,8 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   const isFlipPlaying = useRef(false);  // true while flip anim is the active video
   const pendingLine = useRef<{ url: string; audioTime: () => number } | null>(null); // lip-synced clip waiting to play
   const lineActive = useRef(false);     // true from a line clip's request until it ends
+  const lineLoading = useRef(false);    // a line clip is loading into the incoming slot
+  const loadGen = useRef(0);            // bumped on every load; a stale load's canplay is ignored
   const angryUntilMs = useRef(0);       // wall-clock ms; hold red until this time
   const sessionStartMs = useRef(Date.now());
   const lastInteractionMs = useRef(Date.now()); // resets on each user message
@@ -295,20 +297,37 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
     const incoming = activeSlot.current === 'a' ? videoB.current : videoA.current;
     if (!incoming) return;
 
+    const gen = ++loadGen.current;
+    const audioTime = lineAudioTime.current;
+    lineLoading.current = !!audioTime;
     lineSync.current = null;
     incoming.playbackRate = 1;
     incoming.src = next;
     incoming.load();
 
-    const audioTime = lineAudioTime.current;
+    const giveUp = () => {
+      if (gen !== loadGen.current) return;
+      lineLoading.current = false;
+      advance();
+    };
+    // A clip that fails, or a line clip still not loaded after 8 s, is skipped.
+    const onError = () => { incoming.removeEventListener('error', onError); giveUp(); };
+    incoming.addEventListener('error', onError);
+    if (audioTime) setTimeout(() => { if (lineLoading.current) giveUp(); }, 8000);
+
     const onReady = () => {
       incoming.removeEventListener('canplay', onReady);
+      incoming.removeEventListener('error', onError);
+      // Another load took this slot since (the old src's events can still arrive).
+      if (gen !== loadGen.current) return;
+      lineLoading.current = false;
       // A line clip that took a moment to load joins the audio where it is now,
       // so the lips stay on the words instead of lagging behind them.
       // SEEK_LEAD covers the time the seek and start take, measured at about 65 ms.
       if (audioTime) {
         const offset = audioTime() + SEEK_LEAD;
-        if (offset < (incoming.duration || Infinity)) incoming.currentTime = offset;
+        if (offset >= (incoming.duration || Infinity) - 0.1) { advance(); return; } // the line is already over
+        incoming.currentTime = offset;
       }
       incoming.play().catch(() => {});
       if (audioTime) lineSync.current = { video: incoming, clock: audioTime, last: -1, lastAt: performance.now() };
@@ -323,8 +342,14 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   // ── off-page videos: advance when the active clip ends ─────────────────────
   useEffect(() => {
     const a = videoA.current!, b = videoB.current!;
-    const endA = () => { if (activeSlot.current === 'a') advance(); };
-    const endB = () => { if (activeSlot.current === 'b') advance(); };
+    // While a line clip is still loading, the clip on screen starts over instead of
+    // handing its slot to the next idle, which would replace the line clip.
+    const onEnd = (v: HTMLVideoElement) => {
+      if (lineLoading.current) { v.currentTime = 0; v.play().catch(() => {}); }
+      else advance();
+    };
+    const endA = () => { if (activeSlot.current === 'a') onEnd(a); };
+    const endB = () => { if (activeSlot.current === 'b') onEnd(b); };
     a.addEventListener('ended', endA);
     b.addEventListener('ended', endB);
     return () => { a.removeEventListener('ended', endA); b.removeEventListener('ended', endB); };
@@ -408,7 +433,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
 
     // Start the flip immediately if not talking; if talking, it will play when
     // the current talking animation ends and onEnded fires.
-    if (!isTalkingRef.current) advance();
+    if (!isTalkingRef.current && !lineActive.current) advance();
   }, [mood, advance]);
 
   // ── periodic color refresh for bored→orange and angry cooldown ────────────
@@ -438,7 +463,8 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   const ac = accentColor;
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-3">
+    <div className="relative flex flex-col items-center justify-center p-3 w-full h-full min-h-0">
+      <div className="face-fit flex-1 min-h-0 w-full flex items-center justify-center">
       <div className={`relative transition-all duration-500 ${isTalking ? 'scale-105' : 'scale-100'}`}>
 
         <div
@@ -491,8 +517,9 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
           }}
         />
       </div>
+      </div>
 
-      <div className="mt-3 flex gap-1.5 h-8 items-end">
+      <div className="face-bars mt-3 flex shrink-0 gap-1.5 h-8 items-end">
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
