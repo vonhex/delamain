@@ -39,6 +39,7 @@ Screenshot_*
 "AA test*"
 # but track the app logo and Screenshots/ folder
 !logo.png
+!icon.png
 !Screenshots/
 !Screenshots/*.png
 

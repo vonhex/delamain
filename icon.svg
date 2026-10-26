@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#10202a"/>
+      <stop offset="1" stop-color="#05080c"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="256" cy="256" r="242" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#00f3ff" stroke-width="14" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="208" fill="none" stroke="#00f3ff" stroke-opacity="0.25" stroke-width="3"/>
+  <g fill="none" stroke="#00f3ff" stroke-linejoin="miter" filter="url(#glow)" transform="translate(-6 -6)">
+    <!-- outer chamfered D -->
+    <path d="M174 164 H290 L352 226 V286 L290 348 H174 Z" stroke-width="32"/>
+    <!-- inner D -->
+    <path d="M224 214 H274 L302 242 V270 L274 298 H224 Z" stroke-width="20"/>
+    <!-- circuit trace to a node -->
+    <path d="M174 348 V364 L160 378" stroke-width="16"/>
+  </g>
+  <circle cx="144" cy="382" r="15" fill="#05080c" stroke="#00f3ff" stroke-width="12" filter="url(#glow)"/>
+</svg>
