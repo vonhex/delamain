@@ -558,13 +558,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
         {/* Face Panel — expands to fill when chat is closed */}
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
-        <div className={`face-panel relative flex flex-col items-center overflow-hidden px-6 pt-4 pb-20 [@media(max-height:560px)]:pt-2 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
+        <div className={`face-panel relative flex flex-col items-center overflow-hidden px-6 pt-4 pb-20 [@media(max-height:560px)]:pt-2 [@media(max-height:560px)]:pb-14 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
           {song && <SongPlayer song={song} onDone={() => setSong(null)} />}
 
           {/* Wordmark */}
           <div className="mb-1 flex shrink-0 flex-col items-center gap-1 min-w-0 w-full">
             <h1
-              className="font-rajdhani font-bold uppercase leading-none tracking-[0.25em] xl:tracking-[0.55em] text-cyber-blue text-4xl xl:text-5xl"
+              className="font-rajdhani font-bold uppercase leading-none tracking-[0.25em] xl:tracking-[0.55em] text-cyber-blue text-4xl xl:text-5xl [@media(max-height:560px)]:text-3xl"
               style={{ textShadow: '0 0 18px rgba(0,243,255,0.65), 0 0 50px rgba(0,243,255,0.2)' }}
             >
               DELAMAIN
@@ -582,11 +582,11 @@ function MainApp({ token, onLogout }: MainAppProps) {
           </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}
-          <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
+          <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 [@media(max-height:560px)]:pb-2">
             <button
               onClick={toggleListening}
               disabled={isLoading}
-              className={`relative w-full h-14 rounded-lg flex items-center justify-center gap-3 transition-all duration-300 disabled:opacity-40
+              className={`relative w-full h-14 [@media(max-height:560px)]:h-11 rounded-lg flex items-center justify-center gap-3 transition-all duration-300 disabled:opacity-40
                 ${isListening
                   ? 'bg-cyber-blue/20 border border-cyber-blue shadow-[0_0_24px_rgba(0,243,255,0.45)]'
                   : 'bg-cyber-gray/80 border border-cyber-blue/30 hover:border-cyber-blue/60 hover:bg-cyber-blue/10 active:bg-cyber-blue/20'

@@ -8,7 +8,7 @@ All notable changes to Delamain are documented here.
 
 ### Fixed
 - **Lip-sync clips on slow connections**: a clip that took longer to load than the idle on screen had left to play was replaced by the next idle, so in the car most lines played without their clip. The idle now starts over until the clip is ready, and the clip joins its audio where it is. Clips are also fetched into memory ahead of their audio.
-- **Bigger face on short screens**: the face now fills the room between the wordmark and the talk bar instead of keeping a fixed margin, and short landscape screens drop the subtitle and level bars. On an 800×480 car display the face went from 192 to 308 pixels.
+- **Bigger face on short screens**: the face now fills the room between the wordmark and the talk bar instead of keeping a fixed margin, and short landscape screens drop the subtitle and level bars. The title, talk bar and margins also shrink on them. On an 800×480 car display the face went from 192 to 352 pixels.
 
 ---
 
