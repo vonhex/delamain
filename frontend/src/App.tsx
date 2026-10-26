@@ -55,6 +55,22 @@ const DEFAULT_SETTINGS: AppSettings = {
   persona: 'delamain',
 };
 
+
+// Lip-synced clips fetched ahead of their audio, as in-memory object URLs (the newest 40).
+const clipCache = new Map<string, string>();
+
+function prefetchClip(url: string) {
+  if (clipCache.has(url)) return;
+  fetch(url).then(r => (r.ok ? r.blob() : Promise.reject())).then(blob => {
+    clipCache.set(url, URL.createObjectURL(blob));
+    while (clipCache.size > 40) {
+      const [oldest, objectUrl] = clipCache.entries().next().value!;
+      clipCache.delete(oldest);
+      URL.revokeObjectURL(objectUrl);
+    }
+  }).catch(() => {});
+}
+
 function App() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('delamain_token'));
 
@@ -147,7 +163,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
       if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
       const { url: audioUrl, text, video, speechAt = 0 } = item;
       // A pre-recorded line with its own lip-synced clip: the face cuts to it as the audio starts.
-      const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: video, audioTime }); };
+      const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: clipCache.get(video) ?? video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
       // The file opens with silence; the glow and talking loops wait for the voice.
@@ -170,8 +186,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
     };
 
     const playAudio = (audioUrl: string, text?: string, video?: string, speechAt = 0) => {
-      // Fetch the lip-synced clip now, so it is cached by the time its audio starts.
-      if (video) fetch(video).catch(() => {});
+      // Fetch the lip-synced clip now and keep it in memory, so it starts at once with its
+      // audio even over a slow connection (a car's), where a video element loads late.
+      if (video) prefetchClip(video);
       audioQueueRef.current.push({ url: audioUrl, text, video, speechAt });
       if (!audioPlayingRef.current) {
         audioPlayingRef.current = true;
@@ -541,25 +558,25 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
         {/* Face Panel — expands to fill when chat is closed */}
         {/* pr-16 balances the 64px sidebar so the face centres on the full screen */}
-        <div className={`face-panel relative flex flex-col items-center justify-center-safe overflow-y-auto px-6 pt-4 pb-24 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
+        <div className={`face-panel relative flex flex-col items-center overflow-hidden px-6 pt-4 pb-20 [@media(max-height:560px)]:pt-2 transition-all duration-300 ${isChatOpen ? 'flex-1 md:border-r border-cyber-gray' : 'flex-1 md:pr-16'}`}>
           {song && <SongPlayer song={song} onDone={() => setSong(null)} />}
 
           {/* Wordmark */}
-          <div className="mb-3 flex flex-col items-center gap-1 min-w-0 w-full">
+          <div className="mb-1 flex shrink-0 flex-col items-center gap-1 min-w-0 w-full">
             <h1
               className="font-rajdhani font-bold uppercase leading-none tracking-[0.25em] xl:tracking-[0.55em] text-cyber-blue text-4xl xl:text-5xl"
               style={{ textShadow: '0 0 18px rgba(0,243,255,0.65), 0 0 50px rgba(0,243,255,0.2)' }}
             >
               DELAMAIN
             </h1>
-            <div className="flex items-center gap-2 xl:gap-3">
+            <div className="face-subtitle flex items-center gap-2 xl:gap-3">
               <div className="h-px w-10 xl:w-16 bg-linear-to-r from-transparent to-cyber-blue/35" />
               <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
               <div className="h-px w-10 xl:w-16 bg-linear-to-l from-transparent to-cyber-blue/35" />
             </div>
           </div>
 
-          <div className={settings.persona === 'delamain' ? undefined : `core-${settings.persona}`}>
+          <div className={`flex-1 min-h-0 w-full ${settings.persona === 'delamain' ? '' : `core-${settings.persona}`}`}>
             <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
               persona={settings.persona} listening={isListening} thinking={isLoading} />
           </div>
