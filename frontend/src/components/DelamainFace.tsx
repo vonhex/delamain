@@ -463,7 +463,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   const ac = accentColor;
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-3 w-full h-full min-h-0">
+    <div className="relative flex flex-col items-center justify-center p-3 [@media(max-height:560px)]:p-1 w-full h-full min-h-0">
       <div className="face-fit flex-1 min-h-0 w-full flex items-center justify-center">
       <div className={`relative transition-all duration-500 ${isTalking ? 'scale-105' : 'scale-100'}`}>
 
