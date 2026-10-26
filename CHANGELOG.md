@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.1.1] — 2026-10-26 — Lip-sync and car display fixes
 
 ### Fixed
 - **Lip-sync clips on slow connections**: a clip that took longer to load than the idle on screen had left to play was replaced by the next idle, so in the car most lines played without their clip. The idle now starts over until the clip is ready, and the clip joins its audio where it is. Clips are also fetched into memory ahead of their audio.
