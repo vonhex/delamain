@@ -6,7 +6,15 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **He does what he says he'll do**: replies such as "I shall verify the figures at once" ended the turn without any tool call, so nothing was ever checked. Any promise to check, verify, confirm, recalculate, correct, update, mark or report back is now sent back to the model, up to twice, to do it with its tools, including after it has already used a tool. The prompt also tells him there is no "later", to act at once when the passenger accepts an offer, and to check with a tool when told he got something wrong.
+- He no longer adds a navigation tag while still asking whether to go there.
+
 ### Added
+- **Listening tone**: a short rising tone when the mic opens, and a softer falling one when it closes without hearing anything.
+- **Answer without the button**: when Delamain's reply ends with a question, the mic opens by itself for seven seconds after he finishes speaking.
+- **Wake word** (off by default): say "Delamain" to open the mic, or "Delamain, <request>" to ask in one go. It runs on the browser's speech recognition, pauses while he speaks and while he is thinking, and restarts itself when the browser ends it.
+- These three are switches under Settings → Listening, saved per device.
 - **14 more lip-synced lines** (521 of 607), from the re-rendered clips that passed the checks. The clip download was updated, so existing installs fetch them on their next start.
 
 ---

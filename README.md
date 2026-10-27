@@ -136,7 +136,8 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 - **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route.
 
   > **Navigation needs Delamain open in your phone's browser.** Inside an app's embedded browser, such as Fermata on Android Auto, a web page cannot open the Maps app. There Delamain still finds the place and tells you the destination, but you have to start the route yourself, or open Delamain in Chrome on the phone instead.
-- **Voice input**: a push-to-talk microphone button using the browser's speech recognition, plus a text chat panel.
+- **Voice input**: press the mic button (a short tone tells you he's listening), or turn on the **wake word** in Settings and just say "Delamain", or "Delamain, what's the weather?". When he asks you a question, the mic opens for a few seconds by itself so you can simply answer. All three are switches in Settings. It uses the browser's speech recognition, and there's a text chat panel too.
+- **Follows through**: when he says he'll check, verify or correct something, he does it in the same reply with his tools. A reply that only promises is sent back to him to actually do it.
 - **Conversation log**: a history panel of everything you and Delamain have said.
 - **JWT authentication**: a single shared password, chosen on first start, rate-limited login and 30-day tokens.
 

@@ -6,7 +6,7 @@ import { IntegrationsPanel, type IntegrationsHandle } from './components/Integra
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { LoginPage } from './components/LoginPage';
-import { playConnectChime, playResponsePing } from './utils/sounds';
+import { playConnectChime, playResponsePing, playListenTone, playListenEndTone } from './utils/sounds';
 import { PERSONAS, isPersona, type PersonaKey } from './personas';
 
 interface NavOption {
@@ -43,6 +43,9 @@ interface AppSettings {
   temperature: number;
   maxTokens: number;
   persona: PersonaKey;
+  listenTone: boolean;           // a tone when the mic opens
+  listenAfterQuestion: boolean;  // open the mic for a moment after he asks a question
+  wakeWord: boolean;             // listen for "Delamain" in the background
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -53,7 +56,17 @@ const DEFAULT_SETTINGS: AppSettings = {
   temperature: 0.7,
   maxTokens: 150,
   persona: 'delamain',
+  listenTone: true,
+  listenAfterQuestion: true,
+  wakeWord: false,
 };
+
+const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+// "Delamain", "hey Delamain", and the ways speech recognition tends to spell it.
+const WAKE_WORD = /\b(?:(?:hey|hi|ok|okay)\s+)?(?:delamain|dela\s?main|della\s?main|delamaine|delamane|dela\s?mane|delaman|the\s?la\s?main)\b[\s,.!?]*/i;
+// How long the mic stays open for an answer after he asks a question.
+const FOLLOW_UP_MS = 7000;
+const endsWithQuestion = (text: string) => /\?["'\u201d\u2019)\]]*\s*$/.test(text);
 
 
 // Lip-synced clips fetched ahead of their audio, as in-memory object URLs (the newest 40).
@@ -109,12 +122,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
   const [isListening, setIsListening] = useState(false);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recognitionRef = useRef<any>(null);
   const personaRef = useRef(settings.persona);
   const userNameRef = useRef(settings.userName);
 
   // Audio queue — keeps spoken replies from overlapping
-  const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string; speechAt?: number }>>([]);
+  const audioQueueRef = useRef<Array<{ url: string; text?: string; video?: string; speechAt?: number; question?: boolean }>>([]);
+  const askedRef = useRef(false);   // the last thing he said was a question
   const [lineClip, setLineClip] = useState<{ url: string; audioTime: () => number } | null>(null);
   const audioPlayingRef = useRef(false);
 
@@ -160,8 +173,17 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
     const playNext = () => {
       const item = audioQueueRef.current.shift();
-      if (!item) { audioPlayingRef.current = false; setIsTalking(false); return; }
-      const { url: audioUrl, text, video, speechAt = 0 } = item;
+      if (!item) {
+        audioPlayingRef.current = false;
+        setIsTalking(false);
+        // He asked something: open the mic briefly so the answer needs no button.
+        if (askedRef.current && settingsRef.current.listenAfterQuestion) startCommandRef.current(FOLLOW_UP_MS);
+        else resumeWakeRef.current();
+        askedRef.current = false;
+        return;
+      }
+      const { url: audioUrl, text, video, speechAt = 0, question = false } = item;
+      askedRef.current = question;
       // A pre-recorded line with its own lip-synced clip: the face cuts to it as the audio starts.
       const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: clipCache.get(video) ?? video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
@@ -185,11 +207,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
       });
     };
 
-    const playAudio = (audioUrl: string, text?: string, video?: string, speechAt = 0) => {
+    const playAudio = (audioUrl: string, text?: string, video?: string, speechAt = 0, question = false) => {
       // Fetch the lip-synced clip now and keep it in memory, so it starts at once with its
       // audio even over a slow connection (a car's), where a video element loads late.
       if (video) prefetchClip(video);
-      audioQueueRef.current.push({ url: audioUrl, text, video, speechAt });
+      // His own voice must not wake him ("Delamain online"), so the wake word pauses.
+      pauseWakeRef.current();
+      audioQueueRef.current.push({ url: audioUrl, text, video, speechAt, question });
       if (!audioPlayingRef.current) {
         audioPlayingRef.current = true;
         playNext();
@@ -211,7 +235,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
         playResponsePing();
-        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
+        if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0,
+          msg.source !== 'working' && !msg.song && endsWithQuestion(msg.text || ''));
         if (msg.song) { setSong(msg.song); triggerAngry(); }
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
@@ -335,31 +360,148 @@ function MainApp({ token, onLogout }: MainAppProps) {
     }
   };
 
+  // ── Speech recognition ────────────────────────────────────────────────────
+  // One recognizer runs at a time: a command (after the button, the wake word or a
+  // question) or the background wake-word listener. Switching waits for the old one to end.
+  const recRef = useRef<{ rec: any; mode: 'command' | 'wake' } | null>(null);
+  const afterStopRef = useRef<(() => void) | null>(null);
+  const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const wakeBlockedRef = useRef(false);   // the browser refused the mic for background listening
+  const loadingRef = useRef(isLoading);
+  const settingsRef = useRef(settings);
+  const handleSendRef = useRef(handleSend);
+  useEffect(() => { loadingRef.current = isLoading; }, [isLoading]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { handleSendRef.current = handleSend; });
+
+  const stopRecognizer = (then?: () => void) => {
+    clearTimeout(wakeTimerRef.current);
+    const cur = recRef.current;
+    if (!cur) { then?.(); return; }
+    afterStopRef.current = then ?? null;
+    cur.rec.onresult = null;
+    try { cur.rec.abort(); } catch { /* already ended */ }
+  };
+
+  const ended = (rec: any, retryMs = 300) => {
+    if (recRef.current?.rec !== rec) return;
+    recRef.current = null;
+    const next = afterStopRef.current;
+    afterStopRef.current = null;
+    if (next) next();
+    else scheduleWake(retryMs);
+  };
+
+  const startCommand = (timeoutMs?: number) => {
+    if (!SpeechRec) return;
+    stopRecognizer(() => {
+      const rec = new SpeechRec();
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      let heard = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      rec.onstart = () => {
+        if (settingsRef.current.listenTone) playListenTone();
+        setIsListening(true);
+        // A follow-up closes on its own when no answer comes.
+        if (timeoutMs) timer = setTimeout(() => { if (!heard) rec.stop(); }, timeoutMs);
+      };
+      rec.onspeechstart = () => { heard = true; };
+      rec.onresult = (e: any) => {
+        heard = true;
+        const text = e.results[0][0].transcript;
+        setIsListening(false);
+        handleSendRef.current(text);
+      };
+      rec.onend = () => {
+        clearTimeout(timer);
+        setIsListening(false);
+        if (!heard && settingsRef.current.listenTone) playListenEndTone();
+        ended(rec);
+      };
+      recRef.current = { rec, mode: 'command' };
+      try { rec.start(); } catch { recRef.current = null; setIsListening(false); }
+    });
+  };
+
+  const wakeAllowed = () => settingsRef.current.wakeWord && !wakeBlockedRef.current && !!SpeechRec
+    && !audioPlayingRef.current && !loadingRef.current && document.visibilityState === 'visible';
+
+  // Listen in the background for "Delamain". Speech recognition ends now and then by
+  // itself (silence, a time limit), so it is started again whenever it is still wanted.
+  const startWake = () => {
+    if (recRef.current || !wakeAllowed()) return;
+    const rec = new SpeechRec();
+    rec.lang = 'en-US';
+    rec.continuous = true;
+    rec.interimResults = false;
+    let retryMs = 300;
+    rec.onresult = (e: any) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (!e.results[i].isFinal) continue;
+        const said: string = e.results[i][0].transcript;
+        const m = WAKE_WORD.exec(said);
+        if (!m) continue;
+        const rest = said.slice(m.index + m[0].length).trim();
+        // "Delamain, what's the weather?" carries its own request; "Delamain" alone opens the mic.
+        if (rest.split(/\s+/).length >= 2) {
+          stopRecognizer(() => {
+            if (settingsRef.current.listenTone) playListenTone();
+            handleSendRef.current(rest);
+          });
+        } else {
+          stopRecognizer(() => startCommand(8000));
+        }
+        return;
+      }
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') wakeBlockedRef.current = true;
+      else if (e.error === 'network' || e.error === 'audio-capture') retryMs = 5000;
+    };
+    rec.onend = () => ended(rec, retryMs);
+    recRef.current = { rec, mode: 'wake' };
+    try { rec.start(); } catch { recRef.current = null; }
+  };
+
+  const scheduleWake = (ms = 300) => {
+    clearTimeout(wakeTimerRef.current);
+    wakeTimerRef.current = setTimeout(startWake, ms);
+  };
+
+  const pauseWake = () => { if (recRef.current?.mode === 'wake') stopRecognizer(); };
+
+  // The WebSocket handlers are set up once, so they reach these through refs.
+  const startCommandRef = useRef(startCommand);
+  const resumeWakeRef = useRef(() => scheduleWake());
+  const pauseWakeRef = useRef(pauseWake);
+  useEffect(() => {
+    startCommandRef.current = startCommand;
+    resumeWakeRef.current = () => scheduleWake();
+    pauseWakeRef.current = pauseWake;
+  });
+
+  // Start or stop the wake word with the setting, the thinking state and page visibility.
+  useEffect(() => {
+    if (!settings.wakeWord) { wakeBlockedRef.current = false; pauseWake(); return; }
+    if (isLoading) pauseWake(); else scheduleWake();
+    const onVisible = () => (document.visibilityState === 'visible' ? scheduleWake() : pauseWake());
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.wakeWord, isLoading]);
+
+  // Stop listening when the page goes away.
+  useEffect(() => () => { clearTimeout(wakeTimerRef.current); afterStopRef.current = null; try { recRef.current?.rec.abort(); } catch { /* ended */ } }, []);
+
   const toggleListening = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      stopRecognizer();
       setIsListening(false);
       return;
     }
-
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) {
-      const recognition = new SR();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (e: any) => {
-        const text = e.results[0][0].transcript;
-        setIsListening(false);
-        handleSend(text);
-      };
-      recognition.onend  = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
-      recognitionRef.current = recognition;
-      recognition.start();
-      setIsListening(true);
-      return;
-    }
+    if (SpeechRec) { startCommand(); return; }
 
     // Fallback — open chat and focus the text input
     setIsChatOpen(true);
@@ -456,6 +598,29 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
                   placeholder="e.g. V, Guest, Major"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Listening</label>
+                {([
+                  ['listenTone', 'Tone when listening', 'A short tone when the mic opens, and a softer one if it closes without hearing you.'],
+                  ['listenAfterQuestion', 'Listen after a question', 'When Delamain asks you something, the mic opens for a few seconds so you can just answer.'],
+                  ['wakeWord', 'Wake word: "Delamain"', 'Listens in the background, so you can say "Delamain" (or "Delamain, what\'s the weather?") instead of pressing the button. Pauses while he speaks. Uses the browser\'s speech recognition the whole time the page is open; on some phones it chimes each time it restarts.'],
+                ] as const).map(([key, label, hint]) => (
+                  <label key={key} className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={tempSettings[key]}
+                      onChange={e => setTempSettings({ ...tempSettings, [key]: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400"
+                    />
+                    <span>
+                      <span className="block text-sm text-gray-200">{label}</span>
+                      <span className="block text-[11px] text-gray-500">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+                {!SpeechRec && <p className="text-[11px] text-amber-400/80">This browser has no speech recognition, so these have no effect here.</p>}
               </div>
 
               <div className="space-y-2">
@@ -594,7 +759,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             >
               <Mic size={20} className={`shrink-0 transition-colors ${isListening ? 'text-cyber-blue animate-pulse' : 'text-cyber-blue/50'}`} />
               <span className={`text-xs font-bold tracking-[0.35em] uppercase transition-colors ${isListening ? 'text-cyber-blue' : 'text-cyber-blue/40'}`}>
-                {isListening ? 'Listening...' : 'Speak to Delamain'}
+                {isListening ? 'Listening...' : settings.wakeWord && SpeechRec ? 'Say "Delamain" or tap' : 'Speak to Delamain'}
               </span>
               {!isListening && !(window as any).SpeechRecognition && !(window as any).webkitSpeechRecognition && (
                 <span className="text-[9px] text-cyber-blue/25 font-mono ml-1">[type]</span>
