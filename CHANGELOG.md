@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.2.0] — 2026-10-27 — Listening and follow-through
 
 ### Fixed
 - **He does what he says he'll do**: replies such as "I shall verify the figures at once" ended the turn without any tool call, so nothing was ever checked. Any promise to check, verify, confirm, recalculate, correct, update, mark or report back is now sent back to the model, up to twice, to do it with its tools, including after it has already used a tool. The prompt also tells him there is no "later", to act at once when the passenger accepts an offer, and to check with a tool when told he got something wrong.
