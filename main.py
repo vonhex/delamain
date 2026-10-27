@@ -512,6 +512,10 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     where = describe_location(location)
     if where:
         system += f"\n[PASSENGER LOCATION: {where}]"
+    home = config.get("home_address").strip()
+    if home:
+        system += (f"\n[PASSENGER HOME: {home}. 'Home' means this address: use it for 'take me home' "
+                   "([NAVIGATE:" + home + "]), the drive time home and the weather at home.]")
     if _real_name(user_name):
         system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
                    "driver who knows a regular passenger would; not in every reply.]")
@@ -566,6 +570,7 @@ def geocode_places(query: str, limit: int = 3, location: dict | None = None) -> 
     the place itself (it handles business names far better than Nominatim).
     """
     options = []
+    query = config.place(query)
     try:
         params = {"q": query, "format": "json", "limit": limit, "addressdetails": 1}
         if location and location.get("lat") is not None:

@@ -24,6 +24,7 @@ export interface IntegrationsHandle {
 
 const ORDER: { title: string; keys: string[] }[] = [
   { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_reasoning_effort'] },
+  { title: 'You', keys: ['home_address'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Insult comeback', keys: ['insult_song_url', 'insult_song_start', 'insult_song_seconds', 'insult_song_chance'] },
 ];
@@ -32,6 +33,7 @@ const HINT: Record<string, string> = {
   llm_url: 'Ollama, LM Studio, llama.cpp, vLLM or any OpenAI-compatible server with tool calling',
   llm_model: 'As the server lists it at /v1/models; llama.cpp ignores it',
   llm_reasoning_effort: '"none" turns thinking off so the whole reply budget goes to speech',
+  home_address: '"Take me home", the drive time home and the weather there. Shared with your AI model, and with OpenStreetMap when he looks it up',
   searxng_url: 'Web search, and the fallback for news',
   obsidian_vault_path: 'A folder on the server with a .obsidian folder in it; Delamain writes under Delamain/',
   osrm_url: 'Drive times; the public demo server works for light use',
@@ -99,7 +101,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
                     {f.choices.map(c => <option key={c} value={c}>{c || '(not sent)'}</option>)}
                   </select>
                 ) : (
-                  <input type="text" value={values[key]} placeholder={f.default}
+                  <input type="text" value={values[key]} placeholder={f.default || (key === 'home_address' ? 'e.g. 1600 Pennsylvania Ave NW, Washington, DC' : '')}
                     onChange={e => setValues({ ...values, [key]: e.target.value })} className={inputClass} />
                 )}
                 {HINT[key] && <p className="text-[9px] text-gray-500 leading-relaxed">{HINT[key]}</p>}

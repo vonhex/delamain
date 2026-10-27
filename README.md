@@ -124,7 +124,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 - **Combat mode**: ask him to initiate it and he answers as he did Jackie: "My apologies, but you do not appear to be in any sort of imminent danger." If you say you are being followed or threatened, he drops the joke and helps.
 - **Lip-synced face**: over 500 of the pre-recorded lines (521 so far) play a lip-synced clip of Delamain saying them, made with MiniMax H3; the rest use the talking loops. The clips are published as a release download, and a new install fetches them by itself on first start. It fits any screen, from a phone to a wide car display.
 - **A face that's never still**: over 150 idle animations. Delamain blinks, glances away, fidgets and gets bored when left alone, leans in while you talk, thinks while he looks something up, and glares when insulted. Late at night the screen dims and streetlights slide across his face, and once in a while a rare clip plays: a holographic city map, glowing holographic rain, a wireframe glitch and others. Each rogue core has its own idles too, from the Badlands cab gazing at a desert sunset to Rancho Coronado's manic grin and the Coastview trickster flickering out of view.
-- **Set up from the browser**: on first start the page asks you to choose a password, and Settings → Integrations sets the LLM endpoint and model, SearXNG, the Obsidian vault, news, routing and units. They are saved on the server, so `.env` is optional.
+- **Set up from the browser**: on first start the page asks you to choose a password, and Settings → Integrations sets the LLM endpoint and model, your home address, SearXNG, the Obsidian vault, news, routing and units. They are saved on the server, so `.env` is optional.
 - **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
 - **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
 - **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.
@@ -133,7 +133,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 - **Knows the hour and your name**: greetings fit the time of day, and he uses the name from Settings now and then.
 - **Web search**: traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
 - **Notes and memory**: lists, reminders and notes go into your Obsidian vault under `Delamain/`. Lasting facts about you and the people and places in your life are kept in `Delamain/Memory/`, one Markdown note per topic, and you can read and edit them in Obsidian.
-- **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route.
+- **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route. Save your **home address** under Settings → Integrations and "take me home", "how long until I'm home?" and the weather at home just work.
 
   > **Navigation needs Delamain open in your phone's browser.** Inside an app's embedded browser, such as Fermata on Android Auto, a web page cannot open the Maps app. There Delamain still finds the place and tells you the destination, but you have to start the route yourself, or open Delamain in Chrome on the phone instead.
 - **Voice input**: press the mic button (a short tone tells you he's listening), or turn on the **wake word** in Settings and just say "Delamain", or "Delamain, what's the weather?". When he asks you a question, the mic opens for a few seconds by itself so you can simply answer. All three are switches in Settings. It uses the browser's speech recognition, and there's a text chat panel too.
@@ -245,6 +245,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `NEWS_RSS_URL` ⚙ | `https://news.google.com/rss` | Google News RSS base used by the news tool |
 | `OBSIDIAN_VAULT_PATH` ⚙ | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
 | `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
+| `DELAMAIN_HOME_ADDRESS` ⚙ | *(unset)* | Your home address, so "take me home", the drive time home and the weather at home work |
 | `DELAMAIN_UNITS` ⚙ | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
 | `DELAMAIN_LINES_DIR` | `<repo>/line_clips` | Lip-synced face clips for pre-recorded lines, as `<clip id>.mp4` with their soundtrack as `<clip id>.wav` |
 | `OSRM_URL` ⚙ | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
