@@ -147,6 +147,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 
 - **He doesn't answer anything except the pre-recorded lines.** Delamain cannot reach the AI model. Check the LLM endpoint and model id in Settings → Integrations, and that Ollama or LM Studio is running. In Docker, use the computer's network address, not `localhost`.
 - **The mic button does nothing on the phone.** The page has to be opened over `https://` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)), and the browser must be allowed to use the microphone.
+- **The wake word doesn't respond, or the phone chimes over and over.** The wake word keeps the browser's speech recognition running, and not every browser allows that: some Android phones play their listening chime each time it restarts, and some in-app browsers don't support it at all. Turn it off under Settings → Listening and use the mic button; the tone and listening after a question still work.
 - **Replies take a long time to be spoken.** Speech that is not pre-recorded is made on the spot. With a graphics card that takes a second or two; on a CPU it can take much longer. Pre-recorded lines are always instant.
 - **He can't search the web or read the news.** Use a model with tool calling, and keep **Tools** on in Settings. Web search needs a [SearXNG](https://github.com/searxng/searxng) address in Settings; news works without it.
 - **No lip-synced face, only the talking loop.** The clips download on the first start. Give it a few minutes, and check that the computer can reach github.com.
@@ -220,7 +221,7 @@ The image bundles the web UI, so one container serves everything on port 8888.
 docker compose up -d
 ```
 
-Then open `http://<server>:8888`, choose a password and fill in Settings → Integrations. A `.env` next to `docker-compose.yml` is optional and sets the same values. In the container, the Obsidian vault is mounted at `/vault` (set `OBSIDIAN_VAULT_PATH` before `docker compose up` to choose the folder on the host). Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:1.4`.
+Then open `http://<server>:8888`, choose a password and fill in Settings → Integrations. A `.env` next to `docker-compose.yml` is optional and sets the same values. In the container, the Obsidian vault is mounted at `/vault` (set `OBSIDIAN_VAULT_PATH` before `docker compose up` to choose the folder on the host). Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:2.2`.
 
 | Volume | Holds |
 |---|---|
