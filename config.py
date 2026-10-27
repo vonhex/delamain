@@ -27,6 +27,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "news_rss_url": ("NEWS_RSS_URL", "https://news.google.com/rss", "News RSS base URL"),
     "osrm_url": ("OSRM_URL", "https://router.project-osrm.org", "OSRM routing server"),
     "units": ("DELAMAIN_UNITS", "imperial", "Units"),
+    "home_address": ("DELAMAIN_HOME_ADDRESS", "", "Home address"),
     "insult_song_url": ("DELAMAIN_INSULT_SONG", "https://www.youtube.com/watch?v=BsGD5TprqNA", "Insult comeback song (YouTube link)"),
     "insult_song_start": ("DELAMAIN_INSULT_SONG_START", "0", "Song: start at (seconds)"),
     "insult_song_seconds": ("DELAMAIN_INSULT_SONG_SECONDS", "0", "Song: play for (seconds, 0 = to the end)"),
@@ -74,6 +75,15 @@ def youtube_id(url: str) -> str | None:
     m = re.match(r"^https?://(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?(?:.*&)?v=|shorts/|embed/)|youtu\.be/)"
                  r"([A-Za-z0-9_-]{11})", url.strip())
     return m.group(1) if m else None
+
+
+_HOME = re.compile(r"^\s*(?:my\s+|the\s+passenger'?s\s+)?(?:home|house|place|home address)\s*$", re.IGNORECASE)
+
+
+def place(text: str) -> str:
+    """'Home' (or 'my house') as the saved home address; any other place unchanged."""
+    home = get("home_address").strip()
+    return home if home and _HOME.match(text or "") else text
 
 
 def vault() -> Path:
@@ -125,6 +135,8 @@ def _check(key: str, value: str) -> str:
         if not lo <= n <= hi:
             raise ValueError(f"{FIELDS[key][2]}: between {lo} and {hi}")
         value = f"{n:g}"
+    elif key == "home_address" and len(value) > 200:
+        raise ValueError("Home address: keep it under 200 characters")
     elif key == "llm_model" and not value:
         raise ValueError("Model id: enter a model id")
     return value

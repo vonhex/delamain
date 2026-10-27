@@ -4,6 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Home address** under Settings → Integrations (or `DELAMAIN_HOME_ADDRESS`): Delamain knows it, so "take me home" navigates there, and "home" or "my house" given to the route, weather or navigation lookup means that address.
+
+---
+
 ## [2.2.0] — 2026-10-27 — Listening and follow-through
 
 ### Fixed

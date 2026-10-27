@@ -129,6 +129,7 @@ _WMO = {
 
 def _geocode(place: str, near: dict | None = None) -> tuple[float, float, str] | None:
     """(lat, lon, short name) for a place, preferring results near the passenger."""
+    place = config.place(place)
     params = {"q": place, "format": "json", "limit": 1, "addressdetails": 1}
     if near and near.get("lat") is not None:
         lat, lon = float(near["lat"]), float(near["lon"])
