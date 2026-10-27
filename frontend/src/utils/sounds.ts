@@ -34,3 +34,15 @@ export function playConnectChime(): void {
 export function playResponsePing(): void {
   tone(659.25, 0.0, 0.08, 0.10); // E5, barely there
 }
+
+// Two quick rising notes: the mic is open and Delamain is listening
+export function playListenTone(): void {
+  tone(659.25, 0.00, 0.07, 0.14); // E5
+  tone(880.00, 0.07, 0.10, 0.14); // A5
+}
+
+// A soft falling note: the mic closed without hearing anything
+export function playListenEndTone(): void {
+  tone(587.33, 0.00, 0.07, 0.08); // D5
+  tone(440.00, 0.07, 0.10, 0.08); // A4
+}

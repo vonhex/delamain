@@ -282,10 +282,16 @@ CAPABILITIES = (
     "Your memory lives in their vault under 'Delamain/Memory/', which they can read and edit.\n"
     "• Never say you have remembered, saved, noted or written something unless the tool call for it succeeded in this turn. "
     "Saying it is not doing it.\n"
+    "• Do things now, in this reply: once you finish speaking you cannot act again until the passenger speaks, so there is no "
+    "'later'. Never say you will check, verify, confirm, look into, recalculate, correct, update or report back unless you "
+    "call the tool for it in this same turn and answer with the result. When you offer to do something and the passenger "
+    "says yes, do it at once. When they say you got something wrong, check it with a tool before agreeing or disagreeing. "
+    "If no tool can do it, say so plainly instead of promising.\n"
     "• Navigation: when the passenger asks to go somewhere, reply briefly and append [NAVIGATE:destination] at the very end. "
     "The destination must be a real place: a full street address, or a business name plus its town. "
     "For 'nearest', 'nearby' or any place you are not certain of, call web_search with the passenger's town first and use what you find; "
-    "never guess an address. Example: 'Plotting a course. [NAVIGATE:Union Station, 1701 Wynkoop St, Denver]'\n"
+    "never guess an address. Example: 'Plotting a course. [NAVIGATE:Union Station, 1701 Wynkoop St, Denver]' "
+    "Add the tag only once the passenger has asked to go there; when you are still asking whether they want to, leave it out.\n"
     "• You have no connection to the car itself: you cannot control it, read its speed or see through a camera. Say so plainly if asked.\n"
     "• Danger comes before everything, character included: whenever the passenger says they are being followed, chased, threatened, "
     "attacked or shot at, or that someone dangerous is nearby, answer seriously and plainly: tell them to drive somewhere public and well lit "
@@ -620,14 +626,19 @@ def _persona(client_id: str) -> str:
     return _client_persona.get(client_id, "delamain")
 
 
-# A reply that promises to look something up ("Allow me to fetch the headlines") without
-# calling any tool: the model then never comes back with the answer.
-_FETCH_CLAIM = re.compile(
-    r"\b(?:allow me to|let me|i shall|i will|i'll)\s+(?:\w+\s+){0,2}?"
-    r"(?:fetch|check|look|gather|retrieve|find|get|pull|search|consult|assemble|compile)"
-    r"|\b(?:allow me|give me|just) a moment\b|\bone moment\b|\bstand by\b|\bfetching\b",
+# A reply that promises to do something ("Allow me to fetch the headlines", "I shall verify
+# the figures at once") without calling the tool for it: the model then never comes back
+# with the answer, because nothing happens until the passenger speaks again.
+_ACTION_CLAIM = re.compile(
+    r"\b(?:allow me to|let me|i shall|i will|i'll|i am going to|i'm going to|i'll be sure to)\s+(?:\w+\s+){0,2}?"
+    r"(?:fetch|(?:double[- ]?|re-?)?check|look|gather|retrieve|find|get|pull|search|consult|assemble|compile|"
+    r"verify|confirm|(?:re)?calculate|compute|work out|figure|compare|investigate|research|dig|correct|update|"
+    r"re-?route|mark|add|remove|cancel|set|report|follow up)\b"
+    r"|\b(?:allow me|give me|just) a moment\b|\bone moment\b|\bstand by\b|\bfetching\b"
+    r"|\bget back to you\b|\breport back\b|\bkeep you (?:posted|informed)\b",
     re.IGNORECASE,
 )
+MAX_ACTION_NUDGES = 2
 
 # A plain request for the news goes straight to the news tool: left to choose, the model
 # sometimes answers "Allow me to fetch the headlines" and never fetches them.
@@ -656,6 +667,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     announced = False
     called: set[str] = set()
     nudged = False
+    action_nudges = 0
     latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
     wants_news = isinstance(latest, str) and len(latest) < 120 and bool(_NEWS_REQUEST.search(latest))
     for round_no in range(MAX_TOOL_ROUNDS + 1):
@@ -695,13 +707,20 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                      "result now as a short spoken bulletin, then stop.]"},
                 ]
                 continue
-            if not nudged and not last_round and not called and _FETCH_CLAIM.search(content):
-                nudged = True
-                print(f"[Tools] Reply promises a lookup without a tool call — nudging: {content[:120]}")
+            # A promise to do something later. A navigation reply ("Plotting a course") is
+            # carried out by its tag, so it is left alone.
+            claim = _ACTION_CLAIM.search(content)
+            if (claim and action_nudges < MAX_ACTION_NUDGES and not last_round
+                    and "[NAVIGATE:" not in content.upper()):
+                action_nudges += 1
+                print(f"[Tools] Reply promises an action it has not done — nudging: {content[:120]}")
                 messages = messages + [
                     {"role": "assistant", "content": content},
-                    {"role": "user", "content": "[SYSTEM: You said you would look something up, but no tool was called, "
-                     "so nothing was fetched. Call the right tool now, then give your spoken reply with the result.]"},
+                    {"role": "user", "content": f"[SYSTEM: Your reply promises to do something (\"{claim.group(0)}\"), "
+                     "but you cannot act after your reply ends: nothing happens until the passenger speaks again. "
+                     "Do it now: call the tool or tools it needs, then give your spoken reply with the result. "
+                     "If you have already done it, give the result without promising anything. "
+                     "If no tool can do it, say so plainly.]"},
                 ]
                 continue
             return content
