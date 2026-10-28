@@ -86,6 +86,31 @@ def place(text: str) -> str:
     return home if home and _HOME.match(text or "") else text
 
 
+def vault_roots() -> list[str]:
+    """Folders a vault set from the web UI must be inside: notes are read and written there,
+    so a signed-in browser must not be able to point it anywhere on the server.
+    DELAMAIN_VAULT_ROOTS (separated by os.pathsep) replaces the default: the home folder,
+    /vault (the container's mount) and the folder holding OBSIDIAN_VAULT_PATH from .env."""
+    listed = os.environ.get("DELAMAIN_VAULT_ROOTS")
+    if listed:
+        roots = listed.split(os.pathsep)
+    else:
+        roots = [str(Path.home()), "/vault"]
+        env_vault = os.environ.get("OBSIDIAN_VAULT_PATH")
+        if env_vault:
+            roots.append(os.path.dirname(os.path.realpath(os.path.expanduser(env_vault))))
+    return [os.path.realpath(os.path.expanduser(r)) for r in roots if r.strip()]
+
+
+def _inside_roots(path: str) -> str | None:
+    """The real path of `path` when it lies inside one of the vault roots, else None."""
+    real = os.path.realpath(os.path.expanduser(path))
+    for root in vault_roots():
+        if real == root or real.startswith(root.rstrip(os.sep) + os.sep):
+            return real
+    return None
+
+
 def vault() -> Path:
     return Path(get("obsidian_vault_path")).expanduser().resolve()
 
@@ -121,7 +146,11 @@ def _check(key: str, value: str) -> str:
     elif key == "obsidian_vault_path":
         # Notes and memory are written inside this folder, so it must be a real vault:
         # an existing folder with Obsidian's .obsidian settings folder in it.
-        p = Path(value).expanduser().resolve()
+        real = _inside_roots(value)
+        if real is None:
+            raise ValueError(f"Obsidian vault: choose a folder inside {', '.join(vault_roots())} "
+                             "(DELAMAIN_VAULT_ROOTS on the server sets these)")
+        p = Path(real)
         if not p.is_dir():
             raise ValueError(f"Obsidian vault: {value} is not a folder on the server")
         if not (p / ".obsidian").is_dir():

@@ -248,6 +248,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `SEARXNG_URL` ⚙ | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |
 | `NEWS_RSS_URL` ⚙ | `https://news.google.com/rss` | Google News RSS base used by the news tool |
 | `OBSIDIAN_VAULT_PATH` ⚙ | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
+| `DELAMAIN_VAULT_ROOTS` | your home folder, `/vault`, and the folder holding `OBSIDIAN_VAULT_PATH` | Folders a vault chosen in Settings must be inside (separated by `:` on Linux and macOS, `;` on Windows). A vault set in `.env` is always allowed |
 | `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
 | `DELAMAIN_HOME_ADDRESS` ⚙ | *(unset)* | Your home address, so "take me home", the drive time home and the weather at home work |
 | `DELAMAIN_UNITS` ⚙ | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
