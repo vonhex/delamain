@@ -166,6 +166,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
     let stopped = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let reconnecting = false;
+    // One id for the life of the page: after a dropped link the backend sends a reply it
+    // was still working on to the new socket, which it finds by this id.
+    const clientId = `web-${Date.now()}`;
     // Proxies and Cloudflare close a WebSocket that sits idle, so send a ping now and then.
     const heartbeat = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: 'ping' }));
@@ -188,6 +191,23 @@ function MainApp({ token, onLogout }: MainAppProps) {
       const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: clipCache.get(video) ?? video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
+      // A clip that stalls on a weak connection fires neither ended nor error, which
+      // would leave him lit up with every later reply queued behind it. Give up on it
+      // a few seconds past its length (or after 20 s if its length never arrives).
+      let done = false;
+      let watchdog = setTimeout(() => finish(), 20_000);
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(watchdog);
+        audio.pause();
+        playNext();
+      };
+      audio.onloadedmetadata = () => {
+        if (!Number.isFinite(audio.duration)) return;
+        clearTimeout(watchdog);
+        watchdog = setTimeout(finish, (audio.duration + 5) * 1000);
+      };
       // The file opens with silence; the glow and talking loops wait for the voice.
       const talkWhenHeard = () => {
         if (audio.currentTime >= speechAt || audio.ended) setIsTalking(true);
@@ -195,9 +215,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
       };
       audio.onplay  = () => { showClip(() => audio.currentTime); talkWhenHeard(); };
       audio.onplaying = talkWhenHeard;
-      audio.onended = () => { playNext(); };
-      audio.onerror = () => { playNext(); };
+      audio.onended = finish;
+      audio.onerror = finish;
       audio.play().catch(() => {
+        if (done) return;
+        done = true;
+        clearTimeout(watchdog);
         if (text) {
           const t0 = performance.now();
           showClip(() => (performance.now() - t0) / 1000);
@@ -253,7 +276,6 @@ function MainApp({ token, onLogout }: MainAppProps) {
     // Reconnect whenever the link drops (backend restart, network change); a quick
     // reconnect resumes the conversation without a fresh greeting.
     const connect = () => {
-      const clientId = `web-${Date.now()}`;
       // The core travels in the URL so the greeting is already spoken in the right voice.
       // resume=1 on an automatic reconnect: the conversation carries on, with no fresh greeting.
       const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}&resume=${reconnecting ? 1 : 0}`);
@@ -380,6 +402,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     if (!cur) { then?.(); return; }
     afterStopRef.current = then ?? null;
     cur.rec.onresult = null;
+    cur.rec.cancelled = true;   // whatever it heard is not sent
     try { cur.rec.abort(); } catch { /* already ended */ }
   };
 
@@ -408,15 +431,19 @@ function MainApp({ token, onLogout }: MainAppProps) {
         if (timeoutMs) timer = setTimeout(() => { if (!heard) rec.stop(); }, timeoutMs);
       };
       rec.onspeechstart = () => { heard = true; };
+      // Chrome on Android fires a result for every word as the sentence grows ("What",
+      // "What do", "What do you…"), even with interim results off, so the request is
+      // sent once, when the recognizer ends, with the last transcript it gave.
+      let said = '';
       rec.onresult = (e: any) => {
         heard = true;
-        const text = e.results[0][0].transcript;
+        said = e.results[e.results.length - 1][0].transcript;
         setIsListening(false);
-        handleSendRef.current(text);
       };
       rec.onend = () => {
         clearTimeout(timer);
         setIsListening(false);
+        if (said.trim() && !rec.cancelled) handleSendRef.current(said);
         if (!heard && settingsRef.current.listenTone) playListenEndTone();
         ended(rec);
       };
@@ -437,22 +464,30 @@ function MainApp({ token, onLogout }: MainAppProps) {
     rec.continuous = true;
     rec.interimResults = false;
     let retryMs = 300;
+    // Android sends the sentence a word at a time, so act once the words stop coming.
+    let rest: string | null = null;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const act = () => {
+      // "Delamain, what's the weather?" carries its own request; "Delamain" alone opens the mic.
+      const request = rest ?? '';
+      if (request.split(/\s+/).length >= 2) {
+        stopRecognizer(() => {
+          if (settingsRef.current.listenTone) playListenTone();
+          handleSendRef.current(request);
+        });
+      } else {
+        stopRecognizer(() => startCommand(8000));
+      }
+    };
     rec.onresult = (e: any) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (!e.results[i].isFinal) continue;
         const said: string = e.results[i][0].transcript;
         const m = WAKE_WORD.exec(said);
         if (!m) continue;
-        const rest = said.slice(m.index + m[0].length).trim();
-        // "Delamain, what's the weather?" carries its own request; "Delamain" alone opens the mic.
-        if (rest.split(/\s+/).length >= 2) {
-          stopRecognizer(() => {
-            if (settingsRef.current.listenTone) playListenTone();
-            handleSendRef.current(rest);
-          });
-        } else {
-          stopRecognizer(() => startCommand(8000));
-        }
+        rest = said.slice(m.index + m[0].length).trim();
+        clearTimeout(settle);
+        settle = setTimeout(act, 1200);
         return;
       }
     };
@@ -460,7 +495,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') wakeBlockedRef.current = true;
       else if (e.error === 'network' || e.error === 'audio-capture') retryMs = 5000;
     };
-    rec.onend = () => ended(rec, retryMs);
+    rec.onend = () => {
+      // Ended by itself just after the wake word: still answer it.
+      if (rest !== null && !rec.cancelled) { clearTimeout(settle); recRef.current = null; act(); return; }
+      clearTimeout(settle);
+      ended(rec, retryMs);
+    };
     recRef.current = { rec, mode: 'wake' };
     try { rec.start(); } catch { recRef.current = null; }
   };
