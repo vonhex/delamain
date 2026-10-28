@@ -16,6 +16,10 @@ All notable changes to Delamain are documented here.
 ### Changed
 - The frontend's Vite dev and preview servers no longer have the author's tunnel domain built in. Behind your own tunnel, set `DELAMAIN_ALLOWED_HOSTS` to its domain; a normal install serves the page on `:8888` and needs nothing. The README and the Unraid template now explain how to reach Delamain from the phone on your own `https://` domain.
 
+### Security
+- The Obsidian vault folder chosen in Settings must now be inside your home folder, `/vault` or the folder of the vault set in `.env` (`DELAMAIN_VAULT_ROOTS` changes these). Before, a signed-in browser could point Delamain's note tools at any folder on the server.
+- The page only prefetches Delamain's own lip-synced clips (`/lines/<name>.mp4`), not any URL it is handed.
+
 ### Removed
 - Unused files: the Vite template's README and images, an unused icon sheet and logo copy, and `frontend/public/hevc_backup/` (20 MB of old clip encodes that no page used but every build and Docker image shipped).
 

@@ -72,9 +72,12 @@ const endsWithQuestion = (text: string) => /\?["'\u201d\u2019)\]]*\s*$/.test(tex
 // Lip-synced clips fetched ahead of their audio, as in-memory object URLs (the newest 40).
 const clipCache = new Map<string, string>();
 
+// Only Delamain's own clips are fetched: a same-origin /lines/<name>.mp4 path.
+const CLIP_PATH = /^\/lines\/[A-Za-z0-9_.-]+\.mp4$/;
+
 function prefetchClip(url: string) {
-  if (clipCache.has(url)) return;
-  fetch(url).then(r => (r.ok ? r.blob() : Promise.reject())).then(blob => {
+  if (clipCache.has(url) || !CLIP_PATH.test(url) || url.includes('..')) return;
+  fetch(new URL(url, location.origin).href).then(r => (r.ok ? r.blob() : Promise.reject())).then(blob => {
     clipCache.set(url, URL.createObjectURL(blob));
     while (clipCache.size > 40) {
       const [oldest, objectUrl] = clipCache.entries().next().value!;
