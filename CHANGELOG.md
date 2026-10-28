@@ -6,6 +6,10 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+---
+
+## [2.3.0] — 2026-10-28 — Road fixes
+
 ### Fixed
 - **He repeated himself, answering every word**: Chrome on Android reports a spoken sentence a word at a time ("What", "What do", "What do you…"), and each one was sent as its own question, so he answered all of them in turn until the page was reloaded. The request is now sent once, when the mic closes, with the whole sentence; "Delamain, <request>" waits until the words stop coming.
 - **He lit up and then never answered after a tool call**: a web search or weather lookup takes long enough for a phone's connection to drop and come back, and the answer was sent to the closed connection and lost. The page now keeps one id across reconnects, and a finished answer waits up to 30 seconds for it to come back.
