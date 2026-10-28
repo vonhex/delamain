@@ -12,6 +12,9 @@ All notable changes to Delamain are documented here.
 - **Stuck glow**: a reply whose audio stalled on a weak connection never finished, which left the face lit and every later reply queued behind it. A clip is now given up a few seconds past its length.
 - **Face and voice stutter with the chat open**: the face redrew both video layers on every screen refresh and measured the page each time. It now draws only when a clip has a new frame and reads its size only when it changes.
 
+### Changed
+- The frontend's Vite dev and preview servers no longer have the author's tunnel domain built in. Behind your own tunnel, set `DELAMAIN_ALLOWED_HOSTS` to its domain; a normal install serves the page on `:8888` and needs nothing. The README and the Unraid template now explain how to reach Delamain from the phone on your own `https://` domain.
+
 ### Removed
 - Unused files: the Vite template's README and images, an unused icon sheet and logo copy, and `frontend/public/hevc_backup/` (20 MB of old clip encodes that no page used but every build and Docker image shipped).
 

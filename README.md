@@ -61,6 +61,8 @@ On a phone on the same Wi-Fi, open `http://<the computer's IP address>:8888` to 
 - **[Tailscale](https://tailscale.com)**: install it on the computer and the phone, then run `tailscale serve 8888` on the computer. Delamain is then at `https://<computer-name>.<your-tailnet>.ts.net` on your phone, wherever you are, and stays private to your devices.
 - **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)**: gives Delamain a public `https://` address on a domain you own. Anyone can reach the login page, so use a strong password.
 
+Either way, the address is your own: Delamain does not come with one, and nobody else's install is reachable through yours. Point the tunnel (or a reverse proxy such as Caddy or Nginx Proxy Manager) at `http://<the computer's IP address>:8888`, the same port the page opens on at home. For a Cloudflare Tunnel, add a public hostname such as `delamain.example.com` on your domain, with the service `http://localhost:8888` (or the computer's LAN IP when `cloudflared` runs on another machine, or `http://[IP]:8888` for the Unraid container). Nothing in Delamain needs to know the domain; WebSockets go through the tunnel on their own.
+
 In the car, Android Auto does not have a web browser of its own; an app such as [Fermata Auto](https://github.com/AndreyPavlenko/Fermata) can show a web page on the car screen. Open your Delamain address in it. Delamain fits the page to any screen, from a phone to a wide car display.
 
 ---
@@ -229,6 +231,8 @@ Then open `http://<server>:8888`, choose a password and fill in Settings → Int
 | `/app/data` | Database, settings, recorded audio and the lip-synced clips (downloaded on first start) |
 | `/vault` | Optional Obsidian vault for notes and memory |
 
+For the phone and the car, give the container an `https://` address on your own domain with a tunnel or reverse proxy pointed at `http://<server>:8888` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)). The microphone does not work on a plain `http://` address. On Unraid, the same applies: run Cloudflare Tunnel (the `cloudflared` app), Tailscale or your reverse proxy alongside the container and point it at `http://<Unraid IP>:8888`.
+
 ---
 
 ## Environment Variables
@@ -252,6 +256,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_CLIPS_URL` | the `line-clips` release | Where a new install downloads the lip-synced clips from; empty to skip |
 | `DELAMAIN_REF_AUDIO` | `delamain_ref_10s.wav` | Reference clip the voice is cloned from |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Only needed when a page on another site calls the API (CORS). Opening Delamain directly, or through a tunnel or reverse proxy, works without it |
+| `DELAMAIN_ALLOWED_HOSTS` | *(unset)* | Only for the frontend's Vite dev or preview server (`npm run dev`, `npm run preview`) behind your own tunnel: its domain, e.g. `delamain.example.com` (comma-separated). Vite refuses other hostnames. A normal install serves the page on `:8888` and does not need it |
 
 ---
 
