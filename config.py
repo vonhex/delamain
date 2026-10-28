@@ -102,15 +102,6 @@ def vault_roots() -> list[str]:
     return [os.path.realpath(os.path.expanduser(r)) for r in roots if r.strip()]
 
 
-def _inside_roots(path: str) -> str | None:
-    """The real path of `path` when it lies inside one of the vault roots, else None."""
-    real = os.path.realpath(os.path.expanduser(path))
-    for root in vault_roots():
-        if real == root or real.startswith(root.rstrip(os.sep) + os.sep):
-            return real
-    return None
-
-
 def vault() -> Path:
     return Path(get("obsidian_vault_path")).expanduser().resolve()
 
@@ -146,9 +137,11 @@ def _check(key: str, value: str) -> str:
     elif key == "obsidian_vault_path":
         # Notes and memory are written inside this folder, so it must be a real vault:
         # an existing folder with Obsidian's .obsidian settings folder in it.
-        real = _inside_roots(value)
-        if real is None:
-            raise ValueError(f"Obsidian vault: choose a folder inside {', '.join(vault_roots())} "
+        real = os.path.realpath(os.path.expanduser(value))
+        roots = vault_roots()
+        root = next((r for r in roots if real == r or real.startswith(r.rstrip(os.sep) + os.sep)), None)
+        if root is None or not real.startswith(root):
+            raise ValueError(f"Obsidian vault: choose a folder inside {', '.join(roots)} "
                              "(DELAMAIN_VAULT_ROOTS on the server sets these)")
         p = Path(real)
         if not p.is_dir():
