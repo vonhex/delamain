@@ -6,6 +6,15 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **He repeated himself, answering every word**: Chrome on Android reports a spoken sentence a word at a time ("What", "What do", "What do you…"), and each one was sent as its own question, so he answered all of them in turn until the page was reloaded. The request is now sent once, when the mic closes, with the whole sentence; "Delamain, <request>" waits until the words stop coming.
+- **He lit up and then never answered after a tool call**: a web search or weather lookup takes long enough for a phone's connection to drop and come back, and the answer was sent to the closed connection and lost. The page now keeps one id across reconnects, and a finished answer waits up to 30 seconds for it to come back.
+- **Stuck glow**: a reply whose audio stalled on a weak connection never finished, which left the face lit and every later reply queued behind it. A clip is now given up a few seconds past its length.
+- **Face and voice stutter with the chat open**: the face redrew both video layers on every screen refresh and measured the page each time. It now draws only when a clip has a new frame and reads its size only when it changes.
+
+### Removed
+- Unused files: the Vite template's README and images, an unused icon sheet and logo copy, and `frontend/public/hevc_backup/` (20 MB of old clip encodes that no page used but every build and Docker image shipped).
+
 ### Added
 - **Home address** under Settings → Integrations (or `DELAMAIN_HOME_ADDRESS`): Delamain knows it, so "take me home" navigates there, and "home" or "my house" given to the route, weather or navigation lookup means that address.
 

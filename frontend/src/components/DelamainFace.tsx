@@ -173,13 +173,36 @@ function makeOffscreenVideo(): HTMLVideoElement {
   return v;
 }
 
+// Canvas sizes in device pixels, kept by a ResizeObserver: reading the size every frame
+// forces a layout of the whole page each time, which with the chat open costs a phone
+// enough to make the face and the voice stutter.
+const canvasSize = new WeakMap<HTMLCanvasElement, { w: number; h: number }>();
+const sizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
+  const dpr = window.devicePixelRatio || 1;
+  for (const e of entries) {
+    const box = e.contentRect;
+    canvasSize.set(e.target as HTMLCanvasElement,
+      { w: Math.max(1, Math.round(box.width * dpr)), h: Math.max(1, Math.round(box.height * dpr)) });
+  }
+});
+
+// What each canvas last showed, so a frame is drawn only when the video has a new one.
+const painted = new WeakMap<HTMLCanvasElement, { src: string; t: number; w: number; h: number }>();
+
 // Draw the current video frame to fill the canvas, cropping like object-fit: cover.
 function drawCover(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
   if (video.readyState < 2 || !video.videoWidth) return;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  const w = Math.max(1, Math.round(rect.width * dpr));
-  const h = Math.max(1, Math.round(rect.height * dpr));
+  let size = canvasSize.get(canvas);
+  if (!size) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    size = { w: Math.max(1, Math.round(rect.width * dpr)), h: Math.max(1, Math.round(rect.height * dpr)) };
+    if (sizeObserver) { canvasSize.set(canvas, size); sizeObserver.observe(canvas); }
+  }
+  const { w, h } = size;
+  const last = painted.get(canvas);
+  if (last && last.src === video.currentSrc && last.t === video.currentTime && last.w === w && last.h === h) return;
+  painted.set(canvas, { src: video.currentSrc, t: video.currentTime, w, h });
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   const ctx = canvas.getContext('2d');
   if (!ctx) return;

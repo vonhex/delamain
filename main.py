@@ -453,6 +453,9 @@ _last_canned: dict[tuple[str, str], str] = {}
 # Clients that have been greeted and can take unprompted speech (reminders)
 _ready_clients: set[str] = set()
 
+# A page that loses its link reconnects under the same client id; a reply finished in
+# the meantime waits this long for it instead of going to the closed socket.
+RECONNECT_GRACE = 30
 MAX_HISTORY = 40  # messages (20 exchanges) kept per client — trimmed oldest first
 
 
@@ -880,6 +883,24 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
         raise HTTPException(status_code=500, detail="An internal error occurred in Delamain's subroutines.")
 
 
+async def _send_to(client_id: str, payload: dict) -> bool:
+    """Send to the client's current socket, waiting out a reconnect; False if it never returns."""
+    deadline = time.monotonic() + RECONNECT_GRACE
+    failed = None
+    while True:
+        ws = connected_clients.get(client_id)
+        if ws is not None and ws is not failed:
+            try:
+                await ws.send_json(payload)
+                return True
+            except Exception:
+                failed = ws
+        if time.monotonic() > deadline:
+            print(f"[WS] Reply to {client_id} dropped: the page did not reconnect")
+            return False
+        await asyncio.sleep(0.5)
+
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain",
                              user_name: str = "", resume: int = 0):
@@ -898,6 +919,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         loop = asyncio.get_event_loop()
         recent = await loop.run_in_executor(None, _db.query_conversations, time.time() - RESUME_WINDOW, MAX_HISTORY)
         recent = [r for r in recent if r["role"] in ("user", "assistant")]
+        # The same page coming back (its link dropped) keeps the conversation it had,
+        # including a reply still being worked on for it.
+        same_page = client_id in conversation_history
         if recent:
             await websocket.send_json({"type": "history", "messages": [
                 {"role": r["role"], "content": r["content"]} for r in recent]})
@@ -906,9 +930,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         resumed = [{"role": r["role"], "content": r["content"]} for r in recent
                    if (r["persona"] or "delamain") == _persona(client_id)]
         # Drop questions that never got an answer, as above.
-        conversation_history[client_id] = [m for i, m in enumerate(resumed)
-                                           if not (m["role"] == "user" and i + 1 < len(resumed)
-                                                   and resumed[i + 1]["role"] == "user")]
+        if not same_page:
+            conversation_history[client_id] = [m for i, m in enumerate(resumed)
+                                               if not (m["role"] == "user" and i + 1 < len(resumed)
+                                                       and resumed[i + 1]["role"] == "user")]
 
         # A quick reconnect is not a new journey: no fresh greeting. Nor is the page
         # reconnecting on its own after the link dropped (resume=1).
@@ -952,10 +977,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
 
-                async def say_working(ws=websocket, persona_now=persona_now):
+                async def say_working(persona_now=persona_now):
                     line = random.choice(_personas.get(persona_now).working)
                     audio = await line_voice(line, persona_now)
-                    await ws.send_json({"type": "response", "text": line,
+                    await _send_to(client_id, {"type": "response", "text": line,
                                         "audio_url": audio, "speech_at": speech_onset(audio),
                                         "video_url": line_video(persona_now, line), "source": "working"})
 
@@ -969,7 +994,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     history.append({"role": "assistant", "content": song["label"]})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", song["label"], None, persona_now)
                     print(f"[WS] Insult song to {client_id}")
-                    await websocket.send_json({"type": "response", "text": song["label"], "audio_url": None,
+                    await _send_to(client_id, {"type": "response", "text": song["label"], "audio_url": None,
                                                "song": song, "source": "song"})
                     continue
                 if kind:
@@ -979,7 +1004,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     history.append({"role": "assistant", "content": text})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
                     print(f"[WS] Pre-recorded reply ({kind}) to {client_id}")
-                    await websocket.send_json({"type": "response", "text": text, "audio_url": audio_url,
+                    await _send_to(client_id, {"type": "response", "text": text, "audio_url": audio_url,
                                                "speech_at": speech_onset(audio_url),
                                                "video_url": line_video(persona_now, text), "source": "canned"})
                     continue
@@ -988,23 +1013,24 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     text, audio_url, navigate_options = await generate_response(
                         history, user_text, location=msg.get("location"), on_working=say_working,
                         persona=persona_now, user_name=msg.get("user_name", user_name))
-                    history.append({"role": "assistant", "content": text})
-                    loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
-                    await websocket.send_json({
-                        "type": "response",
-                        "text": text,
-                        "audio_url": audio_url,
-                        "speech_at": speech_onset(audio_url),
-                        "navigate_options": navigate_options,
-                    })
                 except Exception as e:
-                    print(f"[WS] Response error: {e}")
+                    print(f"[WS] Response error: {e!r}")
                     history.pop()
                     line = _lines.pick(persona_now, "error")
                     audio = await line_voice(line, persona_now)
-                    await websocket.send_json({"type": "response", "text": line,
+                    await _send_to(client_id, {"type": "response", "text": line,
                                                "audio_url": audio, "speech_at": speech_onset(audio),
                                                "video_url": line_video(persona_now, line), "source": "error"})
+                    continue
+                history.append({"role": "assistant", "content": text})
+                loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
+                await _send_to(client_id, {
+                    "type": "response",
+                    "text": text,
+                    "audio_url": audio_url,
+                    "speech_at": speech_onset(audio_url),
+                    "navigate_options": navigate_options,
+                })
 
             elif msg_type == "persona":
                 choice = msg.get("persona", "delamain")
@@ -1020,13 +1046,17 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     except WebSocketDisconnect:
         pass
     finally:
-        connected_clients.pop(client_id, None)
-        _client_persona.pop(client_id, None)
-        _ready_clients.discard(client_id)
-        for key in [k for k in _last_canned if k[0] == client_id]:
-            _last_canned.pop(key, None)
-        conversation_history.pop(client_id, None)
-        print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
+        if connected_clients.get(client_id) is not websocket:
+            # The page already reconnected under this id: the new socket owns its state.
+            print(f"[WS] Old link closed: {client_id}")
+        else:
+            connected_clients.pop(client_id, None)
+            _client_persona.pop(client_id, None)
+            _ready_clients.discard(client_id)
+            for key in [k for k in _last_canned if k[0] == client_id]:
+                _last_canned.pop(key, None)
+            conversation_history.pop(client_id, None)
+            print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
 
 
 async def _announce_reminder(reminder: dict) -> bool:
