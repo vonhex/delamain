@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 // Server-side settings (saved in settings.json on the server, ahead of .env), so the
 // LLM, search, Obsidian, news, routing and units can be set up without editing files.
@@ -48,6 +48,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
   const [status, setStatus] = useState<Status | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/config', { headers: { Authorization: `Bearer ${token}` } })
@@ -63,7 +64,11 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
   useImperativeHandle(ref, () => ({
     save: async () => {
       if (!fields) return true;
-      const changed = Object.fromEntries(Object.entries(values).filter(([k, v]) => v !== fields[k]?.value));
+      // What the boxes show wins: see typedSettings in App.tsx.
+      const typed = Object.fromEntries(Array.from(boxRef.current?.querySelectorAll<HTMLInputElement>('input[name]') ?? [])
+        .map(el => [el.name, el.value]));
+      const current = { ...values, ...typed };
+      const changed = Object.fromEntries(Object.entries(current).filter(([k, v]) => v !== fields[k]?.value));
       if (!Object.keys(changed).length) return true;
       const r = await fetch('/api/config', {
         method: 'PUT',
@@ -85,7 +90,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={boxRef} className="space-y-4">
       {ORDER.map(group => (
         <div key={group.title} className="space-y-3">
           <div className="text-[10px] text-cyber-blue/60 font-bold uppercase tracking-[0.3em] border-b border-cyber-blue/10 pb-1">
@@ -101,7 +106,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
                     {f.choices.map(c => <option key={c} value={c}>{c || '(not sent)'}</option>)}
                   </select>
                 ) : (
-                  <input type="text" value={values[key]} placeholder={f.default || (key === 'home_address' ? 'e.g. 1600 Pennsylvania Ave NW, Washington, DC' : '')}
+                  <input type="text" name={key} value={values[key]} placeholder={f.default || (key === 'home_address' ? 'e.g. 1600 Pennsylvania Ave NW, Washington, DC' : '')}
                     onChange={e => setValues({ ...values, [key]: e.target.value })} className={inputClass} />
                 )}
                 {HINT[key] && <p className="text-[9px] text-gray-500 leading-relaxed">{HINT[key]}</p>}

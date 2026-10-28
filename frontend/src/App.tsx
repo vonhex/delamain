@@ -563,9 +563,30 @@ function MainApp({ token, onLogout }: MainAppProps) {
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`, '_blank');
   };
 
+  // Some embedded browsers (Fermata on Android Auto) type by writing a text box's value
+  // directly. React does not see that as a change, so its copy keeps the old text and
+  // Apply would save that. On Apply, what the boxes actually show is what gets saved.
+  const settingsBodyRef = useRef<HTMLDivElement>(null);
+  const typedSettings = (): AppSettings => {
+    const box = (name: string) => settingsBodyRef.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)?.value;
+    const num = (v: string | undefined, parse: (s: string) => number, fallback: number) => {
+      const n = v === undefined ? NaN : parse(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    return {
+      ...tempSettings,
+      userName: box('userName') ?? tempSettings.userName,
+      backendUrl: box('backendUrl') ?? tempSettings.backendUrl,
+      systemPrompt: box('systemPrompt') ?? tempSettings.systemPrompt,
+      temperature: num(box('temperature'), parseFloat, tempSettings.temperature),
+      maxTokens: num(box('maxTokens'), s => parseInt(s, 10), tempSettings.maxTokens),
+    };
+  };
+
   const saveSettings = async () => {
+    const typed = typedSettings();
     if (!(await integrationsRef.current?.save() ?? true)) return;   // the panel shows what was refused
-    setSettings(tempSettings);
+    setSettings(typed);
     setIsSettingsOpen(false);
   };
 
@@ -628,11 +649,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
               </button>
             </div>
             
-            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-cyber-blue/20">
+            <div ref={settingsBodyRef} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-cyber-blue/20">
               <div className="space-y-2">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">User Designation</label>
                 <input 
                   type="text" 
+                  name="userName"
                   value={tempSettings.userName}
                   onChange={e => setTempSettings({...tempSettings, userName: e.target.value})}
                   className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
@@ -667,6 +689,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Backend API Endpoint</label>
                 <input 
                   type="text" 
+                  name="backendUrl"
                   value={tempSettings.backendUrl}
                   onChange={e => setTempSettings({...tempSettings, backendUrl: e.target.value})}
                   className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
@@ -676,6 +699,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
               <div className="space-y-2">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Directive Override (System Prompt)</label>
                 <textarea 
+                  name="systemPrompt"
                   value={tempSettings.systemPrompt}
                   onChange={e => setTempSettings({...tempSettings, systemPrompt: e.target.value})}
                   className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50 h-24 resize-none"
@@ -691,6 +715,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                     step="0.1"
                     min="0"
                     max="2"
+                    name="temperature"
                     value={tempSettings.temperature}
                     onChange={e => setTempSettings({...tempSettings, temperature: parseFloat(e.target.value)})}
                     className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
@@ -700,6 +725,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">Max Tokens</label>
                   <input
                     type="number"
+                    name="maxTokens"
                     value={tempSettings.maxTokens}
                     onChange={e => setTempSettings({...tempSettings, maxTokens: parseInt(e.target.value)})}
                     className="w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50"
