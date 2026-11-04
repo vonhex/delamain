@@ -20,6 +20,7 @@ SETTINGS_PATH = Path(os.environ.get(
 FIELDS: dict[str, tuple[str, str, str]] = {
     "llm_url": ("LLM_URL", "http://localhost:8080/v1/chat/completions", "LLM endpoint (OpenAI-compatible chat completions)"),
     "llm_model": ("LLM_MODEL", "gpt-4-vision-preview", "Model id"),
+    "llm_api_key": ("LLM_API_KEY", "", "API key (sent as a Bearer token; leave empty for local servers)"),
     "llm_reasoning_effort": ("LLM_REASONING_EFFORT", "", "Reasoning effort (reasoning models only)"),
     "tools_enabled": ("TOOLS_ENABLED", "true", "Tools: web search, news, weather, routes, notes, memory"),
     "searxng_url": ("SEARXNG_URL", "http://localhost:8887/search", "SearXNG search URL"),
@@ -41,6 +42,8 @@ CHOICES = {
     "insult_song_chance": ("0", "0.25", "0.33", "0.5", "1"),
 }
 NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (0, 36000)}
+# Never sent back to the browser: the Settings panel only learns whether one is set.
+SECRET_FIELDS = {"llm_api_key"}
 
 _lock = threading.Lock()
 _saved: dict[str, str] | None = None
@@ -119,7 +122,15 @@ def public() -> dict:
         source = "settings" if key in saved else ("env" if os.environ.get(env) else "default")
         out[key] = {"value": get(key), "source": source, "label": label, "default": default,
                     "choices": list(CHOICES.get(key, ()))}
+        if key in SECRET_FIELDS:
+            out[key].update(value="", secret=True, is_set=bool(get(key)))
     return out
+
+
+def llm_headers() -> dict:
+    """Headers for every request to the LLM endpoint: the API key, when one is set."""
+    key = get("llm_api_key").strip()
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def _check(key: str, value: str) -> str:
@@ -161,6 +172,10 @@ def _check(key: str, value: str) -> str:
         raise ValueError("Home address: keep it under 200 characters")
     elif key == "llm_model" and not value:
         raise ValueError("Model id: enter a model id")
+    elif key == "llm_api_key":
+        # It goes into an HTTP header: no spaces or line breaks (which could add headers of their own).
+        if len(value) > 512 or not re.fullmatch(r"[\x21-\x7e]+", value):
+            raise ValueError("API key: paste the key alone, with no spaces or line breaks")
     return value
 
 

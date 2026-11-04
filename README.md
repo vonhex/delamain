@@ -50,6 +50,8 @@ Open **Settings** (the gear) → **Integrations** and fill in **LLM endpoint** a
 | [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1/chat/completions` (start the server on the Developer tab) | the model's name as LM Studio shows it |
 | llama.cpp server | `http://localhost:8080/v1/chat/completions` | anything; it is ignored |
 
+A hosted or key-protected server (OpenAI, OpenRouter, a llama.cpp server started with `--api-key`) also needs its key in **API key**; local servers like Ollama and LM Studio need none.
+
 Pick a model that supports **tool calling** (Ollama marks these with a *tools* tag), or he cannot search, read the news or take notes. If replies are slow because the model "thinks" first (Qwen 3, DeepSeek R1 and similar), set **Reasoning effort** to `none`. If the AI runs on another computer, or Delamain runs in Docker, use the AI computer's network address (such as `http://192.168.1.20:11434/…`) instead of `localhost`; inside a container, `localhost` is the container itself.
 
 Press save, go back, press the mic and say hello.
@@ -243,6 +245,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 |---|---|---|
 | `LLM_URL` ⚙ | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible chat completions endpoint |
 | `LLM_MODEL` ⚙ | `gpt-4-vision-preview` | Model id sent to the endpoint (check its `/v1/models`) |
+| `LLM_API_KEY` ⚙ | *(unset)* | API key for a hosted or key-protected endpoint, sent as `Authorization: Bearer <key>`. Settings never shows it again once saved |
 | `LLM_REASONING_EFFORT` ⚙ | *(unset)* | For reasoning models: `none` turns thinking off so the whole reply budget goes to speech |
 | `TOOLS_ENABLED` ⚙ | `true` | Let the LLM call web search, news, notes and memory |
 | `SEARXNG_URL` ⚙ | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |

@@ -9,6 +9,8 @@ interface Field {
   label: string;
   default: string;
   choices: string[];
+  secret?: boolean;   // the server never sends its value back, only whether one is set
+  is_set?: boolean;
 }
 
 interface Status {
@@ -23,7 +25,7 @@ export interface IntegrationsHandle {
 }
 
 const ORDER: { title: string; keys: string[] }[] = [
-  { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_reasoning_effort'] },
+  { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort'] },
   { title: 'You', keys: ['home_address'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Insult comeback', keys: ['insult_song_url', 'insult_song_start', 'insult_song_seconds', 'insult_song_chance'] },
@@ -32,6 +34,7 @@ const ORDER: { title: string; keys: string[] }[] = [
 const HINT: Record<string, string> = {
   llm_url: 'Ollama, LM Studio, llama.cpp, vLLM or any OpenAI-compatible server with tool calling',
   llm_model: 'As the server lists it at /v1/models; llama.cpp ignores it',
+  llm_api_key: 'For hosted or key-protected servers (OpenAI, OpenRouter, llama.cpp --api-key, LiteLLM). Kept on the server, never shown again',
   llm_reasoning_effort: '"none" turns thinking off so the whole reply budget goes to speech',
   home_address: '"Take me home", the drive time home and the weather there. Shared with your AI model, and with OpenStreetMap when he looks it up',
   searxng_url: 'Web search, and the fallback for news',
@@ -60,6 +63,19 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
       })
       .catch(() => setError('Could not load the server settings.'));
   }, [token]);
+
+  const removeSecret = async (key: string) => {
+    const r = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: '' }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { setError(data.detail || 'The server did not accept these settings.'); return; }
+    setFields(data.settings);
+    setValues(v => ({ ...v, [key]: '' }));
+    setError('');
+  };
 
   useImperativeHandle(ref, () => ({
     save: async () => {
@@ -101,7 +117,19 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
             return (
               <div key={key} className="space-y-1">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">{f.label}</label>
-                {f.choices.length ? (
+                {f.secret ? (
+                  <div className="flex gap-2">
+                    <input type="password" name={key} value={values[key]} autoComplete="off"
+                      placeholder={f.is_set ? (f.source === 'env' ? 'Set on the server (environment); type one to replace it' : 'Saved; type a new one to replace it') : 'None'}
+                      onChange={e => setValues({ ...values, [key]: e.target.value })} className={inputClass} />
+                    {f.is_set && f.source === 'settings' && (
+                      <button type="button" onClick={() => removeSecret(key)}
+                        className="text-[10px] uppercase tracking-wider px-2 border border-cyber-blue/20 rounded-sm text-gray-400 hover:text-red-400 hover:border-red-400/40">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ) : f.choices.length ? (
                   <select value={values[key]} onChange={e => setValues({ ...values, [key]: e.target.value })} className={inputClass}>
                     {f.choices.map(c => <option key={c} value={c}>{c || '(not sent)'}</option>)}
                   </select>

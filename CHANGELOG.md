@@ -6,6 +6,9 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+### Added
+- **API key for the LLM endpoint** ([#10](https://github.com/vonhex/delamain/issues/10)): hosted and key-protected servers (OpenAI, OpenRouter, llama.cpp `--api-key`, LiteLLM) can now be used. Set it under Settings → Integrations → API key, or with `LLM_API_KEY` in `.env`, Docker or the Unraid template. It is sent as `Authorization: Bearer <key>`, kept on the server, and never shown in the browser again once saved.
+
 ---
 
 ## [2.3.0] — 2026-10-28 — Road fixes
