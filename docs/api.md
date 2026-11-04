@@ -47,7 +47,9 @@ JWT required. The server settings shown under Settings → Integrations.
 
 `GET` returns `settings` (per key: `value`, `source` of `settings`, `env` or `default`, `label`, `default`, `choices`) and `status` (`voice_model`, `voice_reference`, `line_clips`, `lines`).
 
-`PUT` takes `{ "<key>": "<value>", ... }` for any of `llm_url`, `llm_model`, `llm_reasoning_effort`, `tools_enabled`, `searxng_url`, `obsidian_vault_path`, `news_rss_url`, `osrm_url`, `units`, saves them to `settings.json` and returns the same shape as `GET`. An empty URL or path resets it to the environment value or the default. Invalid values return 400 with the reason in `detail`.
+`PUT` takes `{ "<key>": "<value>", ... }` for any of `llm_url`, `llm_model`, `llm_api_key`, `llm_reasoning_effort`, `tools_enabled`, `searxng_url`, `obsidian_vault_path`, `news_rss_url`, `osrm_url`, `units`, saves them to `settings.json` and returns the same shape as `GET`. An empty URL or path resets it to the environment value or the default. Invalid values return 400 with the reason in `detail`.
+
+`llm_api_key` is write-only: `GET` and `PUT` always return its `value` as `""`, with `secret: true` and `is_set` saying whether one is in use. Sending `""` removes a key saved here (a key from `LLM_API_KEY` stays).
 
 ---
 

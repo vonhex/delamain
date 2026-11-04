@@ -16,6 +16,7 @@ services:
     environment:
       - LLM_URL=${LLM_URL:-http://host.docker.internal:8080/v1/chat/completions}
       - LLM_MODEL=${LLM_MODEL:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_REASONING_EFFORT=${LLM_REASONING_EFFORT:-}
       - TOOLS_ENABLED=${TOOLS_ENABLED:-true}
       - SEARXNG_URL=${SEARXNG_URL:-}

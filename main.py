@@ -665,7 +665,7 @@ _SAVE_CLAIM = re.compile(
 
 
 def _post_llm(payload: dict) -> requests.Response:
-    return requests.post(config.get("llm_url"), json=payload, timeout=90)
+    return requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=90)
 
 
 async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None) -> str:
@@ -866,7 +866,7 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
             "max_tokens": min(max(request.max_tokens, 1), 1024),
             **llm_payload_extras(),
         }
-        response = requests.post(llm_url, json=payload, timeout=30)
+        response = requests.post(llm_url, json=payload, headers=config.llm_headers(), timeout=30)
         response.raise_for_status()
         raw = response.json()["choices"][0]["message"]["content"]
         delamain_response, navigate_to = extract_navigate(raw)
