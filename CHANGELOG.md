@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.4.0] — 2026-11-06 — Dungeon Master
 
 ### Added
 - **Dungeon Master mode**: Delamain runs a tabletop role-playing one-shot by voice for everyone in the car ("let's play a role-playing game", "continue our adventure", "pause the game"). There are twelve ready-made adventures in `campaigns/`, or he writes a new one from your idea. The adventure and a chronicle of play are kept in the Obsidian vault under `Delamain/Dungeon/` and read before every reply, and a scribe call updates the chronicle every few exchanges, so facts from hours ago stay straight. Dice are rolled on the server. See [docs/dungeon-master.md](docs/dungeon-master.md).
