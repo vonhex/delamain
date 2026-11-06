@@ -403,6 +403,9 @@ TABLE_RULES = (
     "• To attempt something uncertain: roll a d20, add the ability, and meet the difficulty: 10 easy, 13 medium, "
     "16 hard, 19 very hard. A natural 20 succeeds with a bonus; a natural 1 fails with a twist.\n"
     "• Advantage (a clever plan, good help, the right tool): roll two d20 and keep the higher. Disadvantage: the lower.\n"
+    "• Initiative: a fight opens with \"Roll for initiative\" (a recording says it for you, so do not say it). Roll d20 "
+    "plus Agility for each hero and one d20 for the foes, from the dice tray; say the rolls and the order, then play the "
+    "first turn. A hero who struck first, by surprise, acts first. Go round in that order until the fight ends.\n"
     "• Fights: a hero's attack is d20 plus Might or Agility against the foe's defense (usually 12). Damage: d6 light "
     "weapon or spell, d8 heavy, d10 huge. Foes attack by rolling d20 plus their attack against 10 plus the hero's "
     "Agility. Heroes have 10 to 16 HP. At 0 HP a hero is down, not dead: an ally can bring them back to 1 HP, and only "
@@ -446,9 +449,8 @@ DM_RULES = (
     "• Track hit points exactly, from the chronicle and the rolls, and say them when they change.\n"
     "• CUES: a few moments have a short pre-recorded line. Put its tag at the very start of your reply and do not say "
     "the same thing in words: [CUE:nat20] when a roll you narrate is a natural twenty, [CUE:nat1] for a natural one, "
-    "[CUE:combat] when weapons are drawn and a real fight begins, [CUE:victory] when the last foe in a fight is defeated, "
-    "[CUE:down] when a hero drops to 0 HP. Talking, bargaining, sneaking, a scuffle without weapons or a friendly offer is "
-    "never a fight. At most one cue in a reply, and none when in doubt.\n\n"
+    "[CUE:combat] when a real fight begins (the table plays it by itself when a hero attacks), [CUE:victory] when the last foe in a fight is defeated, "
+    "[CUE:down] when a hero drops to 0 HP. At most one cue in a reply, and none when in doubt.\n\n"
     + TABLE_RULES + "\n"
     "SPEAKING AT THE TABLE\n"
     "• This is heard, not read: no lists, headings, asterisks, stage directions or bracketed notes. Vivid, concrete "
@@ -503,6 +505,59 @@ _CUE_CHECK = {
     "down": re.compile(r"\b(zero|0) (hit points|hp)\b|\b(unconscious|collapses?|falls? (down|still)|drops? to)\b", re.I),
 }
 _tray_d20: list[int] = []   # the d20s in the dice tray the model was last given
+
+
+# A hero attacking: the table opens a fight with "Roll for initiative" by itself, rather than
+# trusting the model to tag it.
+_ATTACK = re.compile(
+    r"\b(attack|attacks|attacking|swing|swings|swinging|stab|stabs|slash|slashes|shoot|shoots|shooting|fire at|fires at|"
+    r"punch|punches|kick|kicks|hit|hits|strike|strikes|smack|smacks|whack|whacks|charge at|charges at|tackle|tackles|"
+    r"lunge at|lunges at|throw\w* .{0,30}\bat|draws? (my|his|her|their|a|the) (sword|blade|knife|dagger|axe|bow|gun|pistol|weapon)|"
+    r"cast\w* .{0,30}\bat|fight|fights|ambush|ambushes)\b", re.IGNORECASE)
+FIGHT_QUIET_TURNS = 4   # turns without an attack before a fight is taken to be over
+
+
+INITIATIVE_NOTE = ("[DM: a fight begins, and \"Roll for initiative\" has just been said aloud. In your reply: roll "
+                   "initiative from the dice tray (d20 plus Agility for each hero, one d20 for the foes) and say each roll "
+                   "and the order. Then resolve this attack with an attack roll and damage, saying the numbers, describe "
+                   "what the foes do, and ask the next hero in the order what they do.]")
+INITIATIVE_SAID = re.compile(r"(?:^|(?<=[.!?]\s))[^.!?]*\broll (?:for )?initiative\b[^.!?]*[.!?]\s*", re.IGNORECASE)
+FIGHT_NOTE = ("[DM: the fight goes on. Resolve this hero's action with the dice tray, saying the rolls, the damage and "
+              "any hit points that change, let the foes act in their turn, and ask the next hero what they do.]")
+
+
+def table_note(camp: Campaign | None, player_text: str) -> str:
+    """A note on the player's message for this turn of a fight, where the model heeds it most."""
+    if not camp:
+        return ""
+    if fight_begins(camp, player_text):
+        return INITIATIVE_NOTE
+    return FIGHT_NOTE if camp.meta.get("fight") and _ATTACK.search(player_text) else ""
+
+
+def fight_begins(camp: Campaign, player_text: str) -> bool:
+    """Whether this message opens a fight: a hero attacks while none is on."""
+    return not camp.meta.get("fight", False) and bool(_ATTACK.search(player_text))
+
+
+def table_cue(camp: Campaign, player_text: str, cue: str | None) -> str | None:
+    """The cue to play this turn, keeping track of whether a fight is on: "Roll for
+    initiative" opens one (when a hero attacks, or the narration starts one), once."""
+    fight = camp.meta.get("fight", False)
+    attacked = bool(_ATTACK.search(player_text))
+    quiet = 0 if attacked or cue == "combat" else camp.meta.get("fight_quiet", 0) + 1
+    if cue == "victory" or (fight and quiet >= FIGHT_QUIET_TURNS):
+        fight = False
+    elif cue is None and attacked and not fight:
+        cue = "combat"
+    if cue == "combat":
+        if fight:
+            cue = None   # already fighting: the order was set when it began
+        fight = True
+    camp.save_meta(fight=fight, fight_quiet=quiet)
+    if cue:
+        print(f"[Dungeon] Cue {cue}{' (a hero attacked)' if cue == 'combat' and attacked else ''}")
+    return cue
 
 
 def confirm_cue(cue: str | None, text: str) -> str | None:
