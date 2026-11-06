@@ -818,6 +818,11 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
+    # In a fight (a hero attacking opens one, with "Roll for initiative"), the player's message
+    # carries a note on what the turn needs; the stored history keeps their words alone.
+    note = _dungeon.table_note(_dungeon.active() if config.flag("tools_enabled") else None, latest_message)
+    if note and history and history[-1]["role"] == "user":
+        history = history[:-1] + [{"role": "user", "content": history[-1]["content"] + "\n\n" + note}]
     payload = build_llm_payload(history, search_context, temperature=_personas.get(persona).temperature,
                                  location=location, persona=persona, user_name=user_name)
     called: set[str] = set()
@@ -838,6 +843,9 @@ async def generate_response(history: list[dict], latest_message: str, location: 
     persona = table()
     if config.flag("tools_enabled") and _dungeon.active():
         text, cue = _dungeon.extract_cue(text)
+        cue = _dungeon.table_cue(_dungeon.active(), latest_message, cue)
+        if cue == "combat":
+            text = _dungeon.INITIATIVE_SAID.sub("", text).strip()   # the recording has just said it
         persona = "delamain"
 
     navigate_options: list[dict] = []
