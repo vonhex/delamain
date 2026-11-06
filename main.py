@@ -509,6 +509,10 @@ _place_cache: dict[tuple, str] = {}
 
 
 def build_llm_payload(history: list[dict], search_context: str = "", temperature: float = 0.7, max_tokens: int = 150, location: dict | None = None, persona: str = "delamain", user_name: str = "") -> dict:
+    # Dungeon Master mode is the original core's alone, whichever core is chosen.
+    campaign = _dungeon.active() if config.flag("tools_enabled") else None
+    if campaign:
+        persona = "delamain"
     system = base_system_prompt(persona)
 
     now = time.strftime("%A, %B %-d %Y, %-I:%M %p %Z")
@@ -529,7 +533,6 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
     # Dungeon Master mode: the adventure, what has happened in it and the dice go in
     # with every reply, and narration gets room beyond the usual one or two sentences.
-    campaign = _dungeon.active() if config.flag("tools_enabled") else None
     if campaign:
         system += "\n\n" + _dungeon.context(campaign) + "\n\n" + _dungeon.REMINDER
         max_tokens = max(max_tokens, _dungeon.DM_MAX_TOKENS)
@@ -708,15 +711,18 @@ def _run_any_tool(name: str, arguments: str, location: dict | None) -> str:
     return _tools.run_tool(name, arguments, location)
 
 
-async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None, rebuild=None) -> str:
+async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None, rebuild=None,
+                         on_dm_lines=None, called: set | None = None) -> str:
     """Let the model call assistant_tools until it produces a spoken reply.
 
     rebuild() gives a fresh payload when a tool changes the instructions themselves
-    (Dungeon Master mode starting or stopping), so the rest of the reply follows them."""
+    (Dungeon Master mode starting or stopping), so the rest of the reply follows them.
+    on_dm_lines(tool, result) plays any pre-recorded narration the tool calls for (the
+    menu, an adventure's pitch) while the model writes the rest, and returns a note for it."""
     loop = asyncio.get_event_loop()
     messages = payload["messages"]
     announced = False
-    called: set[str] = set()
+    called = set() if called is None else called
     nudged = False
     action_nudges = 0
     latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
@@ -789,16 +795,22 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             print(f"[Tools] {fn.get('name')}({str(fn.get('arguments'))[:160]})")
             result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
                                                 location)
+            if on_dm_lines and fn.get("name") in ("list_adventures", "start_adventure"):
+                note = await on_dm_lines(fn.get("name"), result)
+                if note:
+                    result += "\n\n" + note
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
-            if fn.get("name") in _dungeon.MODE_TOOLS and rebuild:
+            if fn.get("name") in _dungeon.TOOL_NAMES and rebuild:
                 payload = rebuild()
                 messages[0] = payload["messages"][0]
     return ""
 
 
 async def generate_response(history: list[dict], latest_message: str, location: dict | None = None,
-                            on_working=None, persona: str = "delamain",
-                            user_name: str = "") -> tuple[str, str | None, list[dict]]:
+                            on_working=None, persona: str = "delamain", user_name: str = "",
+                            on_dm_lines=None) -> tuple[str, str | None, list[dict], str | None]:
+    """The reply, its audio, navigation options and the game table's cue (a pre-recorded line such
+    as "A natural twenty." to play before it, or None)."""
     loop = asyncio.get_event_loop()
     search_context = ""
     if not config.flag("tools_enabled") and should_search(latest_message):
@@ -806,12 +818,20 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         search_context = await loop.run_in_executor(None, web_search, latest_message)
         print(f"[Search] Got context ({len(search_context)} chars)")
 
+    # In a fight (a hero attacking opens one, with "Roll for initiative"), the player's message
+    # carries a note on what the turn needs; the stored history keeps their words alone.
+    note = _dungeon.table_note(_dungeon.active() if config.flag("tools_enabled") else None, latest_message)
+    if note and history and history[-1]["role"] == "user":
+        history = history[:-1] + [{"role": "user", "content": history[-1]["content"] + "\n\n" + note}]
     payload = build_llm_payload(history, search_context, temperature=_personas.get(persona).temperature,
                                  location=location, persona=persona, user_name=user_name)
+    called: set[str] = set()
+    # Once the game's tools are in play (even just the menu), the original core takes the turn.
+    table = lambda: "delamain" if called & _dungeon.TOOL_NAMES else persona
     if config.flag("tools_enabled"):
         raw = await _run_tool_loop(payload, on_working, location, rebuild=lambda: build_llm_payload(
-            history, search_context, temperature=_personas.get(persona).temperature,
-            location=location, persona=persona, user_name=user_name))
+            history, search_context, temperature=_personas.get(table()).temperature,
+            location=location, persona=table(), user_name=user_name), on_dm_lines=on_dm_lines, called=called)
     else:
         response = await loop.run_in_executor(None, _post_llm, payload)
         response.raise_for_status()
@@ -819,6 +839,14 @@ async def generate_response(history: list[dict], latest_message: str, location: 
     if not raw.strip():
         raw = "I am afraid that took longer than it should have. Ask me once more, if you would."
     text, navigate_to = extract_navigate(raw)
+    cue = None
+    persona = table()
+    if config.flag("tools_enabled") and _dungeon.active():
+        text, cue = _dungeon.extract_cue(text)
+        cue = _dungeon.table_cue(_dungeon.active(), latest_message, cue)
+        if cue == "combat":
+            text = _dungeon.INITIATIVE_SAID.sub("", text).strip()   # the recording has just said it
+        persona = "delamain"
 
     navigate_options: list[dict] = []
     if navigate_to:
@@ -827,8 +855,8 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         navigate_options = await loop.run_in_executor(None, lambda: geocode_places(navigate_to, location=location))
         print(f"[Nav] Got {len(navigate_options)} result(s)")
 
-    audio_url = await synthesize_voice(text, persona)
-    return text, audio_url, navigate_options
+    audio_url = await synthesize_voice(text, persona) if text else None
+    return text, audio_url, navigate_options, cue
 
 
 class LoginRequest(BaseModel):
@@ -1017,7 +1045,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if not user_text:
                     continue
                 print(f"[WS] Talk from {client_id}: {user_text}")
-                persona_now = _persona(client_id)
+                campaign = _dungeon.active() if config.flag("tools_enabled") else None
+                persona_now = "delamain" if campaign else _persona(client_id)
                 loop = asyncio.get_event_loop()
                 loop.run_in_executor(None, _db.log_conversation, "user", user_text, None, persona_now)
                 history = conversation_history.setdefault(client_id, [])
@@ -1036,20 +1065,45 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     if tools and tools <= {"note_fact"}:
                         return False
                     if tools & _dungeon.TOOL_NAMES:
-                        line = _lines.pick(persona_now, "dm_working")
+                        await say_line("delamain", _lines.pick("delamain", "dm_working"), "working")
                     else:
-                        line = random.choice(_personas.get(persona_now).working)
-                    audio = await line_voice(line, persona_now)
-                    await _send_to(client_id, {"type": "response", "text": line,
-                                        "audio_url": audio, "speech_at": speech_onset(audio),
-                                        "video_url": line_video(persona_now, line), "source": "working"})
+                        await say_line(persona_now, random.choice(_personas.get(persona_now).working), "working")
                     return True
+
+                async def say_line(persona: str, line: str, source: str, continued: bool = False) -> None:
+                    """A fixed line, with its lip-synced clip when there is one."""
+                    audio = await line_voice(line, persona)
+                    await _send_to(client_id, {"type": "response", "text": line, "audio_url": audio,
+                                               "speech_at": speech_onset(audio), "source": source,
+                                               "video_url": line_video(persona, line), "continued": continued})
+
+                # The game table's pre-recorded narration: the menu, an adventure's pitch.
+                table_said: list[str] = []
+
+                async def say_dm_lines(tool: str, result: str) -> str:
+                    camp = _dungeon.active()
+                    if tool == "list_adventures":
+                        clips = _dungeon.menu()
+                        note = ("[You have just read them the menu: every ready-made adventure, by title and a few "
+                                "words, and the offer to invent a new one. Do not name or list any of them again, and "
+                                "never mention that it was recorded. Reply in one short sentence: mention an adventure "
+                                "in progress if there is one, otherwise simply ask which they would like.]")
+                    elif tool == "start_adventure" and camp and result.startswith("Started '"):
+                        # A new game opens with its pitch and opening scene, read from recordings.
+                        book = _dungeon.recorded(camp.meta.get("source", ""))
+                        clips = book["pitch"] + book["opening"]
+                        note = ""
+                    else:
+                        return ""
+                    for line in clips:
+                        await say_line("delamain", line, "working", continued=True)
+                    table_said.extend(clips)
+                    return note if clips else ""
 
                 # Everyday messages ("thanks", "how are you", "combat mode") get an
                 # instant pre-recorded reply instead of a model call.
                 # Not at the game table, though: there "thanks" or "you idiot" is said in character.
                 prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
-                campaign = _dungeon.active() if config.flag("tools_enabled") else None
                 kind = None if campaign else _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
                 if campaign and _lines.wants_pause(user_text):
                     # "Pause the game" is answered at once, without waiting on the model: the
@@ -1091,9 +1145,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     continue
 
                 try:
-                    text, audio_url, navigate_options = await generate_response(
+                    text, audio_url, navigate_options, cue = await generate_response(
                         history, user_text, location=msg.get("location"), on_working=say_working,
-                        persona=persona_now, user_name=msg.get("user_name", user_name))
+                        persona=persona_now, user_name=msg.get("user_name", user_name), on_dm_lines=say_dm_lines)
                 except Exception as e:
                     print(f"[WS] Response error: {e!r}")
                     history.pop()
@@ -1103,24 +1157,31 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                                                "audio_url": audio, "speech_at": speech_onset(audio),
                                                "video_url": line_video(persona_now, line), "source": "error"})
                     continue
-                history.append({"role": "assistant", "content": text})
-                loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
                 dungeon_now = _dungeon.active() if config.flag("tools_enabled") else None
-                await _send_to(client_id, {
-                    "type": "response",
-                    "text": text,
-                    "audio_url": audio_url,
-                    "speech_at": speech_onset(audio_url),
-                    "navigate_options": navigate_options,
-                    "dungeon": _dungeon.status() if dungeon_now else None,
-                })
+                # At the game table a cue ("A natural twenty.") plays before the narration, pre-recorded.
+                before = [_lines.pick("delamain", f"dm_{cue}")] if cue else []
+                for line in before:
+                    await say_line("delamain", line, "canned", continued=bool(table_said))
+                said = " ".join(table_said + before + [text]).strip()
+                history.append({"role": "assistant", "content": said})
+                loop.run_in_executor(None, _db.log_conversation, "assistant", said, audio_url, persona_now)
+                if text:
+                    await _send_to(client_id, {
+                        "type": "response",
+                        "text": text,
+                        "audio_url": audio_url,
+                        "speech_at": speech_onset(audio_url),
+                        "navigate_options": navigate_options,
+                        "dungeon": _dungeon.status() if dungeon_now else None,
+                        "continued": bool(table_said or before),
+                    })
                 # The table's transcript, and now and then the scribe, while the reply plays.
                 # The game that was just paused or finished gets its last lines written up too.
                 table = dungeon_now or campaign
                 if table:
                     # One microphone for the whole car: the line is the table's, not one passenger's.
                     table.add_line("Players", user_text)
-                    table.add_line("DM", text)
+                    table.add_line("DM", said)
                     asyncio.create_task(_scribe(table.folder, force=dungeon_now is None))
 
             elif msg_type == "persona":

@@ -19,6 +19,19 @@ To stop: "pause the game" (or "we're stopping for gas", "save it for later"). He
 
 When the page shows **Dungeon Master · *title*** under his name, a game is on.
 
+The game is always run by the original Delamain. Whatever personality core you have chosen, the table gets his voice, his face and his manners, and your core comes back when the game is paused or over. Nobody has to open Settings mid-drive.
+
+### Pre-recorded narration
+
+Every part of the game that is the same each time is pre-recorded, and can have a lip-synced clip like his other fixed lines:
+
+- **The menu**: "Pull up a chair…", with the twelve adventures by title. It plays the moment you ask, while the model is still thinking.
+- **Each adventure's pitch and opening scene** (its *Spoken Opening*): play the moment a game begins. Then he asks who is playing, and once everyone has a hero, the story carries on from the opening's question.
+- **Table cues**: "A natural twenty.", "A natural one. Oh dear.", "Roll for initiative.", "The last of them falls.", "A hero falls." He puts a cue in front of his narration when the moment calls for it, and it plays only if the reply bears it out: "A natural twenty." only when a twenty was really rolled, and "Roll for initiative." opens a fight by itself the moment a hero attacks, once per fight. Then everyone rolls initiative (d20 + Agility) and turns go in that order.
+- **Setting up and pausing**: "One moment. I am setting the table." and "Very well. The game is saved…".
+
+Long narration plays as a run of clips of about twelve seconds each, the length a lip-sync clip handles well. Everything else he says is written live, since it depends on what you do. An adventure written on the spot, or a ready-made one you have edited, uses his live voice for the parts whose text no longer matches the recording.
+
 ## The adventures
 
 Twelve ready-made one-shots ship in [`campaigns/`](../campaigns), each written to fill three to five hours:

@@ -45,6 +45,18 @@ Recurring details: the creak of wagon wheels on packed snow; breath freezing on 
 
 Dawn in the gate-yard of Thornwick, the last town before the mountains. Six wagons, twelve mules, frost on every rope. Oswin Harrowgate, plump and anxious, counts crates aloud. Hobb the cook passes out hot barley cakes with a grin. Maud Greyholt, the guide, squints at the grey sky and says: "Five days to Highmarrow. The big storm comes at dusk on the fifth. Not a minute later." The caravan has fourteen people and food for six days at full rations. Oswin asks the heroes to check the wagons before they leave. First choice: inspect the wagons, talk to the caravan folk, or head straight out.
 
+## Spoken Opening
+
+Dawn in the gate-yard of Thornwick, the last town before the mountains. Frost glitters on every rope and buckle. Six wagons stand in a line, and twelve mules stamp and blow clouds of steam into the cold.
+
+Oswin Harrowgate, plump and anxious, walks the line counting crates aloud. Six of those crates hold feverleaf, the only cure for the fever burning through Highmarrow, on the far side of the Greyspine Mountains. Hobb, the cook, goes down the line with a basket and a grin, pressing hot barley cakes into every hand.
+
+Maud Greyholt, the guide, stands apart with her eyes on the sky. It is low and grey. Five days to Highmarrow, she tells you. The great storm comes at dusk on the fifth day. Not a minute later.
+
+Fourteen people. Food for six days, at full rations. Above the town, the Frostfall Pass climbs white into the clouds, and the first flakes of snow are already drifting down.
+
+Oswin wrings his gloves and asks if you would check the wagons before you set out. Do you inspect the wagons, talk with the caravan folk, or head straight for the pass?
+
 ## Acts
 
 ### Act 1: The Lower Road (Days 1 and 2)

@@ -49,6 +49,20 @@ Dawn at Kettle Flats. The town well is dry and the last cottonwood is dead. Four
 
 First choice: which vehicle each hero rides, and who scouts ahead. Ask each player who they are.
 
+## Spoken Opening
+
+Dawn at Kettle Flats, twenty-six years after the Burning. The town well is dry. The last cottonwood tree stands dead and white beside the road. Red dust lies over everything.
+
+Four vehicles wait in a line on the main street. Big Mother, the school bus, painted yellow beneath the rust, with the Still, the convoy's water purifier, strapped to her roof under a tarp. The Rattler, an armored pickup welded with steel plates. Dolly, the fuel tanker, ticking softly as her engine warms. And Juniper, a lean motorcycle, nose pointed west.
+
+June Harker, the convoy leader, gray braid down her back and a rifle on her shoulder, climbs the steps of the bus and turns to face you all. Eight hundred and forty miles, she says. Twelve drums of fuel. Thirty-one people. Nobody gets left.
+
+Children press their faces to the bus windows and wave. Big Mother sounds her two-tone horn, and they cheer. Far off on the horizon, a dust devil spins and wanders.
+
+Somewhere out there, beyond the salt and the glass, is Meridian. Nobody here has ever seen it.
+
+Which vehicle do you ride, and who scouts ahead?
+
 ## Acts
 
 ### Act 1: The Saltglass Pan

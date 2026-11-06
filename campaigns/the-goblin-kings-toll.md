@@ -46,6 +46,24 @@ Recurring details: goblins say "Oi!" to start every sentence; the bridge toll ga
 
 A sunny autumn morning on the road to Puddlewick. Apple trees, fat bumblebees, the River Dimble glittering. The heroes reach the old stone bridge to find a gold-painted garden gate across it and a sign: TOLE. Behind the gate, on a throne made from an upturned wheelbarrow, sits a goblin the size of a large dog, wearing a teapot lid as a crown. He blows a whistle. "Oi! Halt! By order of King Grizzlewick the Magnificent, First and Only, all who cross must pay TODAY'S TOLL!" He unrolls a scroll. "Today's toll is: a feather from the finest bird in Puddlewick!" The heroes have no feather. What do they do?
 
+## Spoken Opening
+
+A sunny autumn morning on the road to Puddlewick. Apple trees lean over the lane, fat bumblebees drift lazily through the orchard, and the River Dimble glitters below. You can smell fresh bread on the breeze, all the way from the village bakery.
+
+Then you reach the old stone bridge, and stop.
+
+Across it stands a garden gate, rather broken, painted gold. Beside it hangs a sign with one word in big crooked letters. Tole. Spelled T, O, L, E.
+
+Behind the gate, on a throne made from an upturned wheelbarrow, sits a goblin about the size of a large dog. He wears a teapot lid for a crown. He blows a whistle, very loudly.
+
+"Oi! Halt!"
+
+By order of King Grizzlewick the Magnificent, First and Only, he declares, all who cross must pay today's toll. He unrolls a scroll with great ceremony, clears his throat, and reads it out. Today's toll is a feather from the finest bird in Puddlewick.
+
+Far off in the village, a goose honks furiously.
+
+You do not have a feather. What do you do?
+
 ## Acts
 
 ### Act 1: The Bridge

@@ -46,6 +46,24 @@ Recurring details: the hum, a low note just under hearing that you feel in your 
 
 The ring turns slowly, every window black, against an asteroid the color of old coal. Docking clamps catch with a long groan through both hulls. On the other side of the airlock, the station is cold (4 Celsius), air is breathable but stale, and the lights are at emergency red, one strip in three working. Then, from somewhere in the station, the PA chime sounds: two soft tones. A voice says, "Welcome to Kepler-Nine. Welcome to Kepler-Nine." Then silence. Scanners show no life signs, confused by something in the metal itself. Ask each player who they are, then: do they go in together, split up, or call out?
 
+## Spoken Opening
+
+Station Kepler-Nine turns slowly against the dark, a great ring bolted to an asteroid the color of old coal. Every window is black. Your docking lights are the only lights anywhere on it.
+
+The clamps catch. A long groan travels through both hulls and into your bones, and then the Halfpenny is still.
+
+Eleven days ago this station stopped talking. Thirty-eight people worked here. You are four days late.
+
+The airlock cycles open. The air on the other side is breathable, but stale, and cold. Four degrees. Your breath fogs. The corridor lights burn emergency red, one strip in three, and the rest is shadow.
+
+Then, from somewhere deep inside the station, the public address chime sounds. Two soft tones. A calm voice says, "Welcome to Kepler-Nine. Welcome to Kepler-Nine."
+
+Then nothing.
+
+Your scanners show no life signs. The readings flicker and slide, confused, as if something in the metal itself is interfering. Beneath it all there is a hum, a low note just under hearing, that you feel in your teeth.
+
+Do you go in together, split up, or call out?
+
 ## Acts
 
 ### Act 1: The Quiet Ring
