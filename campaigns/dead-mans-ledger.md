@@ -49,6 +49,20 @@ Recurring details: the clack of rails, slowing on curves. Kettridge's pocket wat
 
 Noon at Bitterroot Flats. The Sorrel Flyer hisses at the platform, steam rolling over the heroes' boots. Ambrose Kettridge, tall and silver-haired in dove gray, watches the boarding from the last car, pocket watch in hand. In the mail car, Hollis Dorrance, 22, sits in chains and sings a hymn badly. A preacher in a dusty black coat, Reverend Stroud, boards without a ticket and stares at Kettridge's breast pocket. The whistle blows. As the train pulls out, every watch aboard ticks once, all together, loud enough to hear. Ask each player who they are and where on the train they sit, then let them roam.
 
+## Spoken Opening
+
+Noon at Bitterroot Flats, and the desert sun sits directly overhead. The Sorrel Flyer waits at the platform, hissing, and steam rolls warm and white across your boots. The air smells of coal smoke and sage.
+
+From the last car, a tall, silver-haired man in dove gray watches the boarding. This is Ambrose Kettridge, president of the railroad. A pocket watch rests in his palm. He opens it, and snaps it shut.
+
+Up in the mail car, a young outlaw named Hollis Dorrance sits in chains, singing a hymn, and singing it badly. A preacher in a dusty black coat climbs aboard without a ticket. He does not look for a seat. He stares instead at Kettridge's breast pocket, as if something there might bite.
+
+The whistle blows. The couplings jolt, and the platform begins to slide away.
+
+And then every watch on the train ticks once. All together. Loud enough to hear over the engine.
+
+By midnight, the Flyer will cross the trestle over Coldwater Canyon. Where on the train are you sitting, and what do you do?
+
 ## Acts
 
 ### Act 1: Clocks on the Rails

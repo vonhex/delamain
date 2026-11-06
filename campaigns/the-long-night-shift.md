@@ -51,6 +51,20 @@ Recurring details: the jukebox song "Same Time Tomorrow" by the Dalton Sisters, 
 
 First: ask each player who they are and why they stopped. Then play the first loop straight, without hinting at the loop until 3:14.
 
+## Spoken Opening
+
+Eleven thirty at night, the sixth of November. The Night Heron Diner sits alone at Harlow Crossing on Highway fifty-one, and rain streams down its big front windows. Outside, the neon sign buzzes red. Eat, it says. Eat.
+
+Inside, it is warm and bright. The air smells of burnt coffee and cherry pie. The jukebox drops a record with a soft click, and the Dalton Sisters begin to sing Same Time Tomorrow.
+
+Behind the counter, Marlene Tibbs, sixty-one, moves along with the pot, topping up cups. On her wrist is a small gold watch. Back in the kitchen, the cook, Hank, scrapes the grill in long, slow strokes.
+
+The clock above the counter reads eleven thirty. Through the glass, Highway fifty-one is empty in both directions, nothing but wet black road and rain.
+
+You came in out of that rain, each of you alone. Some of you sit in a booth, some on a stool, and some of you may be working tonight. The coffee is hot. The night is long.
+
+Why did you stop here tonight, and what do you do?
+
 ## Acts
 
 ### Act 1: The First Night

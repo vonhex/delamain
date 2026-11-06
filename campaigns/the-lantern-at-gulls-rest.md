@@ -49,6 +49,18 @@ Morning. The supply cart creaks down the cliff road into Gull's Rest under a sky
 
 First choice: the inn, the harbor crowd, or straight to the lighthouse. Ask each player who they are and why they came.
 
+## Spoken Opening
+
+Morning, under a sky the color of old pewter. The supply cart creaks down the cliff road into Gull's Rest, forty-one houses clinging to the rock above a grey and restless sea. The village smells of tar, fish, and peat smoke. Gulls wheel overhead, screaming.
+
+A mile to the north, out on Harrow Point, the white lighthouse stands dark against the sky. Six nights ago its keeper, Osric Venn, vanished. Every dusk since, his lamp has lit itself, and burned green. Two boats have followed that light onto the rocks.
+
+As the cart rolls past, a fishwife looks up from her nets. Nobody asked her, but she tells you anyway. It will be green again tonight, she says. Green as a drowned man's eye.
+
+The cart stops before the Drowned Gull inn. On the step, the innkeeper, Nell Crane, waits with her arms folded, watching you climb down. And below, at the harbor, a crowd is gathering around something wrapped in sailcloth.
+
+The tide will turn tonight, and the village wants answers before it does. Where do you go first, the inn, the harbor, or the lighthouse?
+
 ## Acts
 
 ### Act 1: The Village by Daylight

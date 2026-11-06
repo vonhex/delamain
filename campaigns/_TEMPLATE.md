@@ -53,6 +53,10 @@ Four to six ready-made heroes, for players who would rather not make their own. 
 
 Where the heroes are when the game begins, what they see, hear and smell, and the first choice in front of them. Delamain narrates this first, then asks each player who they are.
 
+## Spoken Opening
+
+The opening scene as Delamain will say it, word for word, straight after the Pitch and before anyone has chosen a hero: 120 to 200 words of narration for the ear, ending with a question to the whole table. It must fit any party (ready-made heroes or the players' own, two to six of them), so never name a hero. No headings, lists or brackets. Ready-made adventures get it pre-recorded, with a lip-synced clip.
+
 ## Acts
 
 Three to five acts, roughly 45 to 75 minutes each. For every act: its goal, its scenes, and how it ends.

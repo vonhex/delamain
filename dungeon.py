@@ -89,6 +89,56 @@ def library() -> list[dict]:
     return out
 
 
+# ── pre-recorded narration ───────────────────────────────────────────────────
+# The menu, each adventure's Pitch and its Spoken Opening are fixed text, so they are
+# pre-recorded (and can have lip-synced clips) like the other fixed lines: lines.registry()
+# lists them. Long text is played as a run of short clips, split at sentence ends.
+
+SEGMENT_WORDS = 32   # about twelve seconds of speech: the length a lip-sync clip handles well
+
+MENU = [
+    "Very well. Pull up a chair, figuratively speaking. Tonight I can offer twelve adventures, each long enough "
+    "to fill a good stretch of road.",
+    "For a mystery: The Lantern at Gull's Rest, a lighthouse burning green. The Thirteenth Course, a death at a "
+    "snowbound banquet. Or The Long Night Shift, a diner where one night repeats.",
+    "For something darker: Station Kepler-Nine Is Silent, horror aboard a mining station. Beneath Blackwater "
+    "Hollow, a flooded tomb under a village well. Or Dead Man's Ledger, a cursed book on a desert train.",
+    "For adventure: Salt and Sorrow, a race for sunken treasure. The Frostfall Pass, a caravan against the winter. "
+    "The Last Road Out, a convoy across a ruined land. Or Neon Fare, a heist in a city of rain.",
+    "And for the youngest passengers: The Clockwork Carnival, where the rides have come alive, and The Goblin "
+    "King's Toll, a very small king with a very strange bridge. Or I can invent something new.",
+]
+
+
+def segments(text: str, max_words: int = SEGMENT_WORDS) -> list[str]:
+    """Text split into clips of whole sentences, each at most max_words long where a sentence allows."""
+    sentences = re.findall(r"[^.!?]+[.!?]+[\"')]*|[^.!?]+$", re.sub(r"\s+", " ", text).strip())
+    out, cur = [], []
+    for sentence in (x.strip() for x in sentences if x.strip()):
+        if cur and len(" ".join(cur + [sentence]).split()) > max_words:
+            out.append(" ".join(cur))
+            cur = []
+        cur.append(sentence)
+    if cur:
+        out.append(" ".join(cur))
+    return out
+
+
+def menu() -> list[str]:
+    """The pre-recorded menu, or none when the library has changed since it was written."""
+    said = " ".join(MENU).lower()
+    return MENU if all(b["title"].lower() in said for b in library()) else []
+
+
+def recorded(slug: str) -> dict[str, list[str]]:
+    """A library adventure's Pitch and Spoken Opening, as the clips they are recorded in."""
+    path = LIBRARY_DIR / f"{slug}.md"
+    if not path.is_file() or slug.startswith("_"):
+        return {"pitch": [], "opening": []}
+    text = path.read_text(encoding="utf-8")
+    return {"pitch": segments(section(text, "Pitch")), "opening": segments(section(text, "Spoken Opening"))}
+
+
 # ── adventures in play ───────────────────────────────────────────────────────
 
 class Campaign:
@@ -393,7 +443,12 @@ DM_RULES = (
     "• Use the numbers in the DICE TRAY below, in order, for every roll: yours and the players'. Never make up a roll "
     "and never fudge one. Say each roll aloud with what it was for: \"Mara, Agility, for the jump: fourteen, plus "
     "two, sixteen. You make it.\"\n"
-    "• Track hit points exactly, from the chronicle and the rolls, and say them when they change.\n\n"
+    "• Track hit points exactly, from the chronicle and the rolls, and say them when they change.\n"
+    "• CUES: a few moments have a short pre-recorded line. Put its tag at the very start of your reply and do not say "
+    "the same thing in words: [CUE:nat20] when a roll you narrate is a natural twenty, [CUE:nat1] for a natural one, "
+    "[CUE:combat] when weapons are drawn and a real fight begins, [CUE:victory] when the last foe in a fight is defeated, "
+    "[CUE:down] when a hero drops to 0 HP. Talking, bargaining, sneaking, a scuffle without weapons or a friendly offer is "
+    "never a fight. At most one cue in a reply, and none when in doubt.\n\n"
     + TABLE_RULES + "\n"
     "SPEAKING AT THE TABLE\n"
     "• This is heard, not read: no lists, headings, asterisks, stage directions or bracketed notes. Vivid, concrete "
@@ -416,12 +471,47 @@ DM_RULES = (
 
 def dice_tray() -> str:
     rng = random.SystemRandom()
-    rolls = [f"d20: {', '.join(str(rng.randint(1, 20)) for _ in range(8))}"]
+    _tray_d20[:] = [rng.randint(1, 20) for _ in range(8)]
+    rolls = [f"d20: {', '.join(map(str, _tray_d20))}"]
     for sides in (4, 6, 8, 10, 12):
         rolls.append(f"d{sides}: {', '.join(str(rng.randint(1, sides)) for _ in range(4))}")
     rolls.append(f"d100: {rng.randint(1, 100)}, {rng.randint(1, 100)}")
     return ("[DICE TRAY: fresh, truly random rolls for this reply. Use them in order, and only as many as you need]\n"
             + "\n".join(rolls))
+
+
+_CUE = re.compile(r"\[\s*CUE:\s*(nat20|nat1|combat|victory|down)\s*\]", re.IGNORECASE)
+
+
+def extract_cue(text: str) -> tuple[str, str | None]:
+    """Strip the table's cue tags from a reply: (clean text, the first cue, if the reply bears it out)."""
+    m = _CUE.search(text)
+    clean = re.sub(r"\s{2,}", " ", _CUE.sub("", text)).strip()
+    if not m:
+        return clean, None
+    cue = confirm_cue(m.group(1).lower(), clean)
+    print(f"[Dungeon] Cue {m.group(1).lower()}: {'played' if cue else 'held back, the reply does not bear it out'}")
+    return clean, cue
+
+
+# A cue plays only when the reply bears it out: the dice tray it was given held that roll,
+# or the narration speaks of that moment. A model that tags a friendly offer as a fight is
+# better left unheard than contradicted.
+_CUE_CHECK = {
+    "combat": re.compile(r"\b(initiative|attacks?|attacking|fight|fighting|battle|combat|strikes? at|swings? at)\b", re.I),
+    "victory": re.compile(r"\b(defeated|slain|victory|victorious|won|last of them|surrenders?|flees|fled|is over)\b", re.I),
+    "down": re.compile(r"\b(zero|0) (hit points|hp)\b|\b(unconscious|collapses?|falls? (down|still)|drops? to)\b", re.I),
+}
+_tray_d20: list[int] = []   # the d20s in the dice tray the model was last given
+
+
+def confirm_cue(cue: str | None, text: str) -> str | None:
+    if cue == "nat20":
+        return cue if 20 in _tray_d20[:4] else None
+    if cue == "nat1":
+        return cue if 1 in _tray_d20[:4] else None
+    check = _CUE_CHECK.get(cue or "")
+    return cue if check and check.search(text) else None
 
 
 def _transcript_tail(camp: Campaign) -> str:
@@ -536,6 +626,13 @@ def _start_text(camp: Campaign, resumed: bool) -> str:
                 f"Where they are: {section(camp.chronicle(), 'Where We Are')}\n"
                 "Now give a short spoken 'previously' recap in two or three sentences, remind each player which hero "
                 "they play, set the scene where they left off, and ask what they do.")
+    if recorded(camp.meta.get("source", ""))["opening"]:
+        # The pitch and the opening scene are pre-recorded and play as the game starts.
+        return (f"Started '{camp.title}' (Dungeon Master mode is on; the full adventure is now in your instructions).\n"
+                "The Pitch and then the Spoken Opening have just been narrated to them. Never repeat them, and never "
+                "mention that anything was recorded. Now, in a few sentences: ask who is playing, and offer each player "
+                "a ready-made hero from Characters (name and a few words each) or to describe their own. Once everyone "
+                "has a hero, carry on from the opening scene's closing question.")
     return (f"Started '{camp.title}' (Dungeon Master mode is on; the full adventure is now in your instructions).\n"
             "Now: welcome them to the table in a sentence, read the Pitch, then ask who is playing. Offer each player "
             "a ready-made hero from Characters (name and a few words each) or to describe their own. When everyone "

@@ -135,6 +135,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   // Dungeon Master mode: the adventure being played, if any.
   const [dungeon, setDungeon] = useState<{ title: string; scene?: string } | null>(null);
   const dungeonRef = useRef(dungeon);
+  // The game is run by the original core, whichever is chosen: his face too.
+  const facePersona: PersonaKey = dungeon ? 'delamain' : settings.persona;
   useEffect(() => { dungeonRef.current = dungeon; }, [dungeon]);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const personaRef = useRef(settings.persona);
@@ -276,7 +278,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
         if ('dungeon' in msg) setDungeon(msg.dungeon ?? null);
-        playResponsePing();
+        // One chime per answer: the clips that carry it on (a game's narration) follow without one.
+        if (!msg.continued) playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0,
           msg.source !== 'working' && !msg.song && endsWithQuestion(msg.text || ''));
         if (msg.song) { setSong(msg.song); triggerAngry(); }
@@ -866,9 +869,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
             </div>
           </div>
 
-          <div className={`flex-1 min-h-0 w-full ${settings.persona === 'delamain' ? '' : `core-${settings.persona}`}`}>
+          <div className={`flex-1 min-h-0 w-full ${facePersona === 'delamain' ? '' : `core-${facePersona}`}`}>
             <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
-              persona={settings.persona} listening={isListening} thinking={isLoading} />
+              persona={facePersona} listening={isListening} thinking={isLoading} />
           </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}

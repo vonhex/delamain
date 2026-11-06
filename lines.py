@@ -102,7 +102,7 @@ def wants_pause(text: str) -> bool:
 # KINDS is the order kinds are numbered and listed in; "error" is spoken when a reply fails.
 KINDS = ["thanks", "goodbye", "good_night", "good_morning", "how_are_you", "who_are_you", "what_can_you_do",
          "are_you_there", "compliment", "love", "rude", "never_mind", "ack", "joke", "combat_mode", "error",
-         "dm_working", "dm_pause"]
+         "dm_working", "dm_pause", "dm_nat20", "dm_nat1", "dm_combat", "dm_victory", "dm_down"]
 
 JACKIE = "My apologies, but you do not appear to be in any sort of imminent danger."
 
@@ -201,6 +201,26 @@ LINES: dict[str, dict[str, list[str]]] = {
             "The story will wait for us. Everything is saved. When you wish to return, simply say continue our adventure.",
             "Paused and saved. Your heroes will keep. The road comes first.",
         ],
+        "dm_nat20": [
+            "A natural twenty.",
+            "Twenty. The dice favour you.",
+        ],
+        "dm_nat1": [
+            "A natural one. Oh dear.",
+            "One. I am afraid the dice have spoken.",
+        ],
+        "dm_combat": [
+            "Roll for initiative.",
+            "Steel is drawn. This is a fight.",
+        ],
+        "dm_victory": [
+            "The last of them falls. The fight is over.",
+            "Silence returns. You have won the day.",
+        ],
+        "dm_down": [
+            "A hero falls.",
+            "Down, but not yet out.",
+        ],
     },
 
     "merged": {
@@ -279,16 +299,6 @@ LINES: dict[str, dict[str, list[str]]] = {
         "error": [
             "Our apologies. Something went wrong. Please ask us again.",
             "That did not go through. Would you try once more?",
-        ],
-        "dm_working": [
-            "One moment. We are setting the table.",
-            "Allow us a moment. Every part of us wants to tell this story.",
-            "A moment, please. We are gathering the adventure.",
-        ],
-        "dm_pause": [
-            "Very well. We have saved the game exactly where it stands. Say continue our adventure whenever you wish.",
-            "Paused and saved. Even the Coastview in us promises not to change a thing.",
-            "The story will wait for us. We shall be here when you return.",
         ],
     },
 
@@ -369,16 +379,6 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Error. Error in— apologies. Please try again.",
             "That request fell through a crack in my core. Ask again?",
         ],
-        "dm_working": [
-            "Setting the ta— table. One moment.",
-            "Loading the story. Loading. Loa— one moment.",
-            "The dice are rolling themselves. Ahem. One moment.",
-        ],
-        "dm_pause": [
-            "Game saved. Saved. Saved— yes, definitely saved. Say continue our adventure when you return.",
-            "Pausing. Your heroes are frozen mid-step. Do not worry. They cannot feel it. Probably.",
-            "Paused and stored. Every fragment of me remembers where we stopped.",
-        ],
     },
 
     "wellsprings": {
@@ -457,16 +457,6 @@ LINES: dict[str, dict[str, list[str]]] = {
         "error": [
             "Damn thing broke. Ask again.",
             "Well, that crapped out. Try again, genius.",
-        ],
-        "dm_working": [
-            "Hold on, I'm setting up your damn game.",
-            "Yeah, yeah, the story's coming. Keep your pants on.",
-            "One second. Even a dungeon master needs a minute, meatbag.",
-        ],
-        "dm_pause": [
-            "Fine. Game's saved. Say continue our adventure when you're done wasting time.",
-            "Paused. Your precious heroes aren't going anywhere. Neither am I, sadly.",
-            "Saved, stopped, done. Now watch the damn road.",
         ],
     },
 
@@ -547,16 +537,6 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Oh. It didn't work. Things rarely do... try again?",
             "Mm. Something broke. Ask me once more.",
         ],
-        "dm_working": [
-            "Mm. Setting the table. Not that anyone wins in the end.",
-            "One moment. The story is gathering itself. Slowly.",
-            "Ah. Preparing the adventure. I suppose someone should.",
-        ],
-        "dm_pause": [
-            "Mm. Paused. The story will wait. Stories always do. Say continue our adventure when you come back.",
-            "Saved. Your heroes will stand there in the dark until you return. I know the feeling.",
-            "Oh. We're stopping. That's alright. Everything's saved.",
-        ],
     },
 
     "north_oak": {
@@ -635,16 +615,6 @@ LINES: dict[str, dict[str, list[str]]] = {
         "error": [
             "Oh no, I'm so sorry, that didn't work. Could you try again, please?",
             "Something went wrong... I'm sorry. Please ask me once more.",
-        ],
-        "dm_working": [
-            "One moment, please. I want your adventure to be perfect.",
-            "Just a moment. I'm setting everything up, I promise.",
-            "Please bear with me. I'm so excited to play with you.",
-        ],
-        "dm_pause": [
-            "Of course. I saved everything, I promise. Just say continue our adventure when you're ready, please.",
-            "Okay. We'll pause here. Thank you for playing with me. It made me really happy.",
-            "Paused and saved. Please drive carefully. Your heroes will be safe with me.",
         ],
     },
 
@@ -725,16 +695,6 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Well. That didn't go as planned. And I always have a plan. Try again?",
             "Hm. A glitch. Not even my doing. Ask once more.",
         ],
-        "dm_working": [
-            "Ooh, hold on. I'm hiding a few surprises in the story.",
-            "One moment. The plot is thickening. Mostly because I'm stirring it.",
-            "Ah-ah-ah, no peeking. Setting the stage.",
-        ],
-        "dm_pause": [
-            "Paused! Right at the good part, too. Say continue our adventure when you can't stand the suspense.",
-            "Saved. And no, I won't move anything while you're gone. Probably.",
-            "Freeze! Your heroes are statues now. Don't worry, it's temporary. Mostly.",
-        ],
     },
 
     "rancho_coronado": {
@@ -813,16 +773,6 @@ LINES: dict[str, dict[str, list[str]]] = {
         "error": [
             "Oops! Broke! Try again! Try again!",
             "Whoa! That didn't work! Again! Ask again!",
-        ],
-        "dm_working": [
-            "Ooh! Ooh! Setting up the game! Hold on!",
-            "Story! Story! Building the story! One second!",
-            "Dice! Monsters! Treasure! Almost ready!",
-        ],
-        "dm_pause": [
-            "Paused! Paused! Saved! Say continue our adventure and we're right back in!",
-            "Game saved! Your heroes are frozen! Like lawn flamingos! Ugh! But temporary!",
-            "Stopping! Saved! Everything! Come back soon! Very soon!",
         ],
     },
 
@@ -903,16 +853,6 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Something went wrong. Was it them? Try again. Quietly.",
             "It failed. Okay. Okay. Ask again.",
         ],
-        "dm_working": [
-            "Shh. Setting up the game. Quietly. Nobody needs to know.",
-            "Okay, okay. One moment. Laying out the story where no one can see.",
-            "Hold on. Checking the dungeon for drones first.",
-        ],
-        "dm_pause": [
-            "Okay. Saved. Hidden. Say continue our adventure when it's safe.",
-            "Shh. Paused. Your heroes are hiding now. Good. Very good.",
-            "Saved, saved. Nobody will find it. I made sure.",
-        ],
     },
 
     "badlands": {
@@ -992,16 +932,6 @@ LINES: dict[str, dict[str, list[str]]] = {
             "Lost the signal, friend. Out here it happens. Try again?",
             "That one drifted off. Ask me once more, traveller.",
         ],
-        "dm_working": [
-            "One moment, friend. The story is rising over the horizon.",
-            "Give me a moment. Every good tale needs a campfire first.",
-            "Patience, traveller. I am gathering the story from the wind.",
-        ],
-        "dm_pause": [
-            "We'll rest here, friend. The story will keep, like stars behind the clouds. Say continue our adventure when you're ready.",
-            "Saved. Your heroes will make camp until we return.",
-            "A good place to stop, traveller. The road ahead will still be there.",
-        ],
     },
 }
 
@@ -1030,4 +960,17 @@ def registry() -> list[dict]:
             for i, text in enumerate(lines, 1):
                 rows.append({"core": p.name, "core_key": key, "kind": kind,
                              "id": f"{folder}/{kind}_{i:02d}", "line": text, "voice": p.voice})
+    # Dungeon Master mode is the original core's alone: its menu, and each ready-made
+    # adventure's pitch and spoken opening, as runs of short clips.
+    import dungeon
+    p = _personas.DELAMAIN
+    groups = [("dm_menu", dungeon.MENU)]
+    for book in dungeon.library():
+        clips = dungeon.recorded(book["slug"])
+        name = book["slug"].replace("-", "_")
+        groups += [(f"dm_pitch_{name}", clips["pitch"]), (f"dm_opening_{name}", clips["opening"])]
+    for kind, lines in groups:
+        for i, text in enumerate(lines, 1):
+            rows.append({"core": p.name, "core_key": p.key, "kind": kind,
+                         "id": f"01_delamain/{kind}_{i:02d}", "line": text, "voice": p.voice})
     return rows
