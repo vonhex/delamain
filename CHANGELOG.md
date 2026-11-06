@@ -4,33 +4,21 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
-
-### Added
-- **Dungeon Master mode remembers more**: each reply now carries the newest part of the game's transcript word for word, on top of the adventure and the chronicle. Set how much with `DM_TRANSCRIPT_CHARS` (default 40,000 characters, about 10k tokens) and raise it for a long-context model. The prompt is ordered so llama.cpp's prompt cache rereads only the new part, and the chronicle's story so far is kept up to 30,000 characters.
-- **Instant "pause the game"**: at the game table, "pause the game", "let's stop here", "save it for later" or "let's take a break" saves the adventure and is answered at once with a pre-recorded line in the current core's voice, without waiting on the model. Setting up a game has its own "one moment" lines ("I am setting the table"), and writing down a fact mid-game no longer says "Consulting the net". That makes 60 new fixed lines, ready for lip-synced clips.
-
----
-
-## [Unreleased]
-
-### Changed
-- **Dungeon Master mode is the original Delamain's**: a game is always run in his voice, with his face and manners, whichever personality core is chosen. The core returns when the game is paused or over. The other cores' game lines are gone.
-
-### Added
-- **Pre-recorded Dungeon Master narration**: the adventure menu, every ready-made adventure's pitch and spoken opening, and table cues (natural twenty, natural one, a fight breaking out, victory, a hero down) are fixed lines with stable clip ids (`01_delamain/dm_…`), ready for lip-synced clips. The menu, and a new game's pitch and opening scene, play the moment they are asked for, while the model writes the rest. A cue plays only when the reply bears it out (the dice really came up twenty). "Roll for initiative" needs no help from the model: a hero attacking opens a fight, once, and the model is told to roll initiative (d20 + Agility, a new table rule) and run the fight in turn order. Long narration plays as a run of clips of about twelve seconds. Each adventure has a new *Spoken Opening* section, also in the template.
-
----
-
 ## [2.4.0] — 2026-11-06 — Dungeon Master
 
 ### Added
-- **Dungeon Master mode**: Delamain runs a tabletop role-playing one-shot by voice for everyone in the car ("let's play a role-playing game", "continue our adventure", "pause the game"). There are twelve ready-made adventures in `campaigns/`, or he writes a new one from your idea. The adventure and a chronicle of play are kept in the Obsidian vault under `Delamain/Dungeon/` and read before every reply, and a scribe call updates the chronicle every few exchanges, so facts from hours ago stay straight. Dice are rolled on the server. See [docs/dungeon-master.md](docs/dungeon-master.md).
+- **Dungeon Master mode**: Delamain runs a tabletop role-playing one-shot by voice for everyone in the car ("let's play a role-playing game", "continue our adventure", "pause the game"). There are twelve ready-made adventures in `campaigns/`, or he writes a new one from your idea. The adventure and a chronicle of play are kept in the Obsidian vault under `Delamain/Dungeon/` and read before every reply, and a scribe call updates the chronicle every few exchanges, so facts from hours ago stay straight. Dice are rolled on the server. The game is always run by the original Delamain, whichever personality core is chosen. See [docs/dungeon-master.md](docs/dungeon-master.md).
 - **API key for the LLM endpoint** ([#10](https://github.com/vonhex/delamain/issues/10)): hosted and key-protected servers (OpenAI, OpenRouter, llama.cpp `--api-key`, LiteLLM) can now be used. Set it under Settings → Integrations → API key, or with `LLM_API_KEY` in `.env`, Docker or the Unraid template. It is sent as `Authorization: Bearer <key>`, kept on the server, and never shown in the browser again once saved.
+- **Dungeon Master mode remembers more**: each reply now carries the newest part of the game's transcript word for word, on top of the adventure and the chronicle. Set how much with `DM_TRANSCRIPT_CHARS` (default 40,000 characters, about 10k tokens) and raise it for a long-context model. The prompt is ordered so llama.cpp's prompt cache rereads only the new part, and the chronicle's story so far is kept up to 30,000 characters.
+- **Pre-recorded Dungeon Master narration**: the adventure menu, every ready-made adventure's pitch and spoken opening, and table cues (natural twenty, natural one, a fight breaking out, victory, a hero down) are fixed lines with stable clip ids (`01_delamain/dm_…`), ready for lip-synced clips. The menu, and a new game's pitch and opening scene, play the moment they are asked for, while the model writes the rest. A cue plays only when the reply bears it out (the dice really came up twenty). "Roll for initiative" needs no help from the model: a hero attacking opens a fight, once, and the model is told to roll initiative (d20 + Agility, a new table rule) and run the fight in turn order. Long narration plays as a run of clips of about twelve seconds. Each adventure has a new *Spoken Opening* section, also in the template.
+- **Instant "pause the game"**: at the game table, "pause the game", "let's stop here", "save it for later" or "let's take a break" saves the adventure and is answered at once with a pre-recorded line, without waiting on the model. Setting up a game has its own "one moment" lines ("I am setting the table"), and writing down a fact mid-game happens in silence.
 
 ### Fixed
 - **The mic closed mid-sentence**: the browser's speech recognition stops at the first pause, so anyone who paused to think was cut off and the rest of what they said was lost. The mic now stays open through pauses and closes after 1.5 seconds of quiet (2.8 seconds during a game).
 - **Long replies stopped mid-word**: a reply that ran into the token limit was spoken up to wherever it was cut. It now ends at its last full sentence.
+
+### Security
+- **Frontend dependencies**: `follow-redirects` 1.16.2 (high: credentials could follow a cross-origin redirect), `zod` 4.6.7 (high), and `minimatch` pinned to 11 (moderate: denial of service through glob patterns; it comes in with ESLint). `npm audit` reports no vulnerabilities.
 
 ---
 
