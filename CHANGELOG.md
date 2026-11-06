@@ -4,10 +4,15 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.4.0] — 2026-11-06 — Dungeon Master
 
 ### Added
+- **Dungeon Master mode**: Delamain runs a tabletop role-playing one-shot by voice for everyone in the car ("let's play a role-playing game", "continue our adventure", "pause the game"). There are twelve ready-made adventures in `campaigns/`, or he writes a new one from your idea. The adventure and a chronicle of play are kept in the Obsidian vault under `Delamain/Dungeon/` and read before every reply, and a scribe call updates the chronicle every few exchanges, so facts from hours ago stay straight. Dice are rolled on the server. See [docs/dungeon-master.md](docs/dungeon-master.md).
 - **API key for the LLM endpoint** ([#10](https://github.com/vonhex/delamain/issues/10)): hosted and key-protected servers (OpenAI, OpenRouter, llama.cpp `--api-key`, LiteLLM) can now be used. Set it under Settings → Integrations → API key, or with `LLM_API_KEY` in `.env`, Docker or the Unraid template. It is sent as `Authorization: Bearer <key>`, kept on the server, and never shown in the browser again once saved.
+
+### Fixed
+- **The mic closed mid-sentence**: the browser's speech recognition stops at the first pause, so anyone who paused to think was cut off and the rest of what they said was lost. The mic now stays open through pauses and closes after 1.5 seconds of quiet (2.8 seconds during a game).
+- **Long replies stopped mid-word**: a reply that ran into the token limit was spoken up to wherever it was cut. It now ends at its last full sentence.
 
 ---
 
