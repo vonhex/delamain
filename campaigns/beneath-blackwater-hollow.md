@@ -46,6 +46,18 @@ Recurring details: wet stone and peat smoke; dripping water that sounds like cou
 
 Dusk in Blackwater Hollow, twenty stilt-houses in the reeds under low peat smoke. The village stands around the well with lanterns. The water below is black and gives back no reflection. Pell's mother, Edda Rushby, is weeping. Old Nan Rushby, bent and white-haired, grips the well's edge and says: "You'll need the song. Don't go down without the song." Reeve Gammon says the Lantern Company went down three weeks ago and never came up. The first choice: talk to Old Nan and the villagers, or climb straight down.
 
+## Spoken Opening
+
+Dusk settles over Blackwater Hollow. Twenty stilt-houses crouch in the reeds, and peat smoke hangs low over the water like a damp grey blanket. The whole village has gathered around the old well, lanterns raised, and nobody is speaking.
+
+You step to the edge and look down. The water at the bottom is black as ink. It gives back no reflection at all, not the lanterns, not the sky, not your faces. Somewhere below, water drips slowly, and the drips sound almost like counting.
+
+Edda Rushby weeps for her daughter Pell, nine years old, who climbed down that rope two nights ago and did not come back. Reeve Gammon tells you, grimly, that a band of treasure-hunters called the Lantern Company went down three weeks ago. They have not come up either.
+
+Then old Nan Rushby, bent and white-haired, grips the stones of the well with both hands. She fixes you with a hard stare and tells you that you will need the song. Do not go down, she says, without the song.
+
+The rope hangs still. The lanterns flicker. What do you do?
+
 ## Acts
 
 ### Act 1: The Well and the Weir Door

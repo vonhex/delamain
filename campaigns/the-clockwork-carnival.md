@@ -49,6 +49,18 @@ The carnival meadow at Puddingford, mid-morning. Striped tents, bunting, brass g
 
 First choice: chase the popcorn, go to the ringmaster's wagon, or ask the carousel horses. Ask each player who they are.
 
+## Spoken Opening
+
+Mid-morning in the meadow outside Puddingford, and Madame Ottilie Sprocket's Clockwork Carnival is wide awake. Rather too awake.
+
+Striped tents flap in the breeze. Bunting snaps. Brass gleams everywhere, and the air smells of popcorn and warm machine oil. The Ferris Wheel is turning all by itself, slow and gentle, with nobody at the lever. The carousel horses have stepped down off their poles and are trotting around in a circle, giggling. A runaway popcorn engine on brass wheels chugs past you, firing popcorn in every direction. Somewhere, very faintly, something goes tick, tick, tick.
+
+At the gate stands Mayor Hollyhock Pim, clutching her hat with both hands. Madame Sprocket is gone, she tells you. Nobody can find her. The sale of the carnival is at sunset, and Mister Gristle is on his way. She lifts her hat. It is full of popcorn.
+
+Ahead of you lie the Carousel, the Hall of Mirrors, and the enormous Grand Calliope. Behind you, the popcorn engine toots and turns around for another pass.
+
+Do you chase the popcorn, search the ringmaster's wagon, or ask the carousel horses?
+
 ## Acts
 
 ### Act 1: The Midway Goes Wild

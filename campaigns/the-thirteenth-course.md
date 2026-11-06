@@ -58,6 +58,20 @@ Recurring details: wind moaning in the chimneys. The empty thirteenth chair and 
 
 7:00 in the evening. Snow hisses at tall windows; two hundred candles light the great hall. Thirteen chairs at the long table: at the head, the Countess, in gray silk; at the foot, an empty chair with a silver-domed plate. She raises a glass: "Twelve courses for the living, the thirteenth for those we have lost. And tonight nobody leaves at all; the road is gone." Oysters arrive. Seating, going down the table from the Countess: Corwin, Philippa, Fennick, Graye, Valden, then the heroes; Junia sits directly across from her uncle. Philippa is at Fennick's right hand and Graye at his left. Ask each player who they are, then play the courses quickly: Fennick is loud and drunk, complains of indigestion at the venison, and at the sorbet a hero may notice (Wits DC 16) Graye lean toward his dish.
 
+## Spoken Opening
+
+Seven o'clock on midwinter night, at Morrow Fell Hall, high on the Brannoch Moors. Snow hisses against the tall windows, and the wind moans in the chimneys. Two hundred candles light the great hall. Juniper boughs hang along the walls, and the air smells of wax and pine.
+
+Thirteen chairs stand at the long table. At its head sits the Countess, in gray silk, very straight. At its foot waits an empty chair, and before it, a single plate under a silver dome.
+
+The Countess rises with her glass. Twelve courses for the living, she says, and the thirteenth for those we have lost. Then she adds, quite calmly, that tonight nobody leaves at all. The snow has taken the road.
+
+You take your seats among the other guests. There is her son Corwin, and young Miss Philippa Thorne. There is Lord Tobias Fennick, red-faced and already loud with wine. There is Doctor Graye, the county physician, polishing his spectacles, and Captain Valden, a retired cavalry officer, with his wooden leg stretched beneath the table.
+
+The footmen bring in the oysters. The hall clock strikes the hour.
+
+What do you do?
+
 ## Acts
 
 ### Act 1: The Feast and the Fall
