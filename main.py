@@ -26,6 +26,7 @@ import lines as _lines
 import db as _db
 import auth as _auth
 import assistant_tools as _tools
+import dungeon as _dungeon
 import config
 
 # The LLM endpoint, tools switch and search URL come from config (Settings panel, .env
@@ -526,7 +527,14 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         memory = _tools.memory_context()
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
-    system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more; a news bulletin reads the headlines.]"
+    # Dungeon Master mode: the adventure, what has happened in it and the dice go in
+    # with every reply, and narration gets room beyond the usual one or two sentences.
+    campaign = _dungeon.active() if config.flag("tools_enabled") else None
+    if campaign:
+        system += "\n\n" + _dungeon.context(campaign) + "\n\n" + _dungeon.REMINDER
+        max_tokens = max(max_tokens, _dungeon.DM_MAX_TOKENS)
+    else:
+        system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more; a news bulletin reads the headlines.]"
 
     if search_context:
         system += f"\n\nCurrent web search results for context:\n{search_context}"
@@ -668,8 +676,43 @@ def _post_llm(payload: dict) -> requests.Response:
     return requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=90)
 
 
-async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None) -> str:
-    """Let the model call assistant_tools until it produces a spoken reply."""
+def _reply_text(choice: dict) -> str:
+    """The reply in a chat completion choice. One cut off by max_tokens ends at its last whole
+    sentence, so he never stops speaking mid-word."""
+    content = (choice.get("message") or {}).get("content") or ""
+    if choice.get("finish_reason") == "length":
+        print(f"[LLM] Reply hit max_tokens ({len(content)} chars); ending at the last full sentence")
+        cut = max(content.rfind(p) for p in (". ", "! ", "? ", '." ', '?" ', '!" '))
+        if cut > len(content) // 3:
+            content = content[:cut + 1].rstrip() + ('"' if content[cut + 1:cut + 2] == '"' else "")
+    return content
+
+
+def _generate_text(system: str, user: str) -> str:
+    """One long, tool-free completion: a new adventure written for Dungeon Master mode."""
+    payload = {"model": config.get("llm_model"), "temperature": 0.9, "max_tokens": 8000,
+               "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+               **llm_payload_extras()}
+    resp = requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=600)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"].get("content") or ""
+
+
+def _run_any_tool(name: str, arguments: str, location: dict | None) -> str:
+    if name in _dungeon.TOOL_NAMES:
+        try:
+            args = json.loads(arguments) if isinstance(arguments, str) else (arguments or {})
+        except ValueError:
+            args = {}
+        return _dungeon.run_tool(name, args if isinstance(args, dict) else {}, generate=_generate_text)
+    return _tools.run_tool(name, arguments, location)
+
+
+async def _run_tool_loop(payload: dict, on_working=None, location: dict | None = None, rebuild=None) -> str:
+    """Let the model call assistant_tools until it produces a spoken reply.
+
+    rebuild() gives a fresh payload when a tool changes the instructions themselves
+    (Dungeon Master mode starting or stopping), so the rest of the reply follows them."""
     loop = asyncio.get_event_loop()
     messages = payload["messages"]
     announced = False
@@ -684,14 +727,19 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
         if not last_round:
             choice = ({"type": "function", "function": {"name": "get_news"}}
                       if wants_news and round_no == 0 else "auto")
-            body.update(tools=_tools.TOOL_SCHEMAS, tool_choice=choice)
+            body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas(), tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
         response = await loop.run_in_executor(None, _post_llm, body)
         response.raise_for_status()
-        message = response.json()["choices"][0]["message"]
+        reply = response.json()["choices"][0]
+        message = reply["message"]
         calls = message.get("tool_calls") or []
         if not calls:
-            content = message.get("content") or ""
+            content = _reply_text(reply)
+            # At the game table the characters make promises and claims of their own
+            # ("I will remember your face"); they are story, not undone actions.
+            if _dungeon.active():
+                return content
             # The model sometimes claims to have saved something without calling a tool.
             # Send it back once to actually do it (or correct the reply).
             if (not nudged and not last_round and _SAVE_CLAIM.search(content)
@@ -740,9 +788,12 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             fn = call.get("function", {})
             called.add(fn.get("name", ""))
             print(f"[Tools] {fn.get('name')}({str(fn.get('arguments'))[:160]})")
-            result = await loop.run_in_executor(None, _tools.run_tool, fn.get("name", ""), fn.get("arguments", "{}"),
+            result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
                                                 location)
             messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": result})
+            if fn.get("name") in _dungeon.MODE_TOOLS and rebuild:
+                payload = rebuild()
+                messages[0] = payload["messages"][0]
     return ""
 
 
@@ -759,11 +810,13 @@ async def generate_response(history: list[dict], latest_message: str, location: 
     payload = build_llm_payload(history, search_context, temperature=_personas.get(persona).temperature,
                                  location=location, persona=persona, user_name=user_name)
     if config.flag("tools_enabled"):
-        raw = await _run_tool_loop(payload, on_working, location)
+        raw = await _run_tool_loop(payload, on_working, location, rebuild=lambda: build_llm_payload(
+            history, search_context, temperature=_personas.get(persona).temperature,
+            location=location, persona=persona, user_name=user_name))
     else:
         response = await loop.run_in_executor(None, _post_llm, payload)
         response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"]
+        raw = _reply_text(response.json()["choices"][0])
     if not raw.strip():
         raw = "I am afraid that took longer than it should have. Ask me once more, if you would."
     text, navigate_to = extract_navigate(raw)
@@ -948,6 +1001,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 "video_url": line_video(_persona(client_id), greeting),
             })
         _ready_clients.add(client_id)
+        if config.flag("tools_enabled") and _dungeon.active():
+            await websocket.send_json({"type": "dungeon", "dungeon": _dungeon.status()})
 
         async for raw in websocket.iter_text():
             try:
@@ -986,8 +1041,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
 
                 # Everyday messages ("thanks", "how are you", "combat mode") get an
                 # instant pre-recorded reply instead of a model call.
+                # Not at the game table, though: there "thanks" or "you idiot" is said in character.
                 prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
-                kind = _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
+                campaign = _dungeon.active() if config.flag("tools_enabled") else None
+                kind = None if campaign else _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
                 song = insult_song() if kind == "rude" else None
                 if song:
                     # Now and then an insult gets a song instead of a comeback (Settings → Integrations).
@@ -1024,13 +1081,23 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     continue
                 history.append({"role": "assistant", "content": text})
                 loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
+                dungeon_now = _dungeon.active() if config.flag("tools_enabled") else None
                 await _send_to(client_id, {
                     "type": "response",
                     "text": text,
                     "audio_url": audio_url,
                     "speech_at": speech_onset(audio_url),
                     "navigate_options": navigate_options,
+                    "dungeon": _dungeon.status() if dungeon_now else None,
                 })
+                # The table's transcript, and now and then the scribe, while the reply plays.
+                # The game that was just paused or finished gets its last lines written up too.
+                table = dungeon_now or campaign
+                if table:
+                    # One microphone for the whole car: the line is the table's, not one passenger's.
+                    table.add_line("Players", user_text)
+                    table.add_line("DM", text)
+                    asyncio.create_task(_scribe(table.folder, force=dungeon_now is None))
 
             elif msg_type == "persona":
                 choice = msg.get("persona", "delamain")
@@ -1057,6 +1124,38 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 _last_canned.pop(key, None)
             conversation_history.pop(client_id, None)
             print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
+
+
+_scribing: set = set()
+
+
+async def _scribe(folder, force: bool = False) -> None:
+    """Fold the game's new transcript lines into its chronicle, every few exchanges
+    (or all that is left, when the game stops), so the facts are written down."""
+    if folder in _scribing:
+        return
+    camp = _dungeon.Campaign(folder)
+    lines = camp.unscribed()
+    if not lines or (len(lines) < _dungeon.SCRIBE_EVERY and not force):
+        return
+    _scribing.add(folder)
+    loop = asyncio.get_event_loop()
+    try:
+        through = camp.meta.get("scribed", 0) + len(lines)
+        payload = {"model": config.get("llm_model"), "temperature": 0.2, "max_tokens": 2000,
+                   "messages": _dungeon.scribe_messages(camp, lines), **llm_payload_extras()}
+        response = await loop.run_in_executor(None, _post_llm, payload)
+        response.raise_for_status()
+        update = _dungeon.parse_json(response.json()["choices"][0]["message"].get("content") or "")
+        if update is None:
+            print(f"[Dungeon] Scribe reply was not JSON; the lines stay for the next pass")
+            return
+        _dungeon.apply_scribe(_dungeon.Campaign(folder), update, through)
+        print(f"[Dungeon] Chronicle of '{camp.title}' updated through line {through}")
+    except Exception as e:
+        print(f"[Dungeon] Scribe failed (lines kept for the next pass): {e!r}")
+    finally:
+        _scribing.discard(folder)
 
 
 async def _announce_reminder(reminder: dict) -> bool:
