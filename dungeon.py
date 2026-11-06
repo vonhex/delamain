@@ -15,6 +15,7 @@ happened is written down rather than left to the model's memory of a long conver
 """
 
 import json
+import os
 import random
 import re
 import shutil
@@ -27,7 +28,11 @@ import config
 LIBRARY_DIR = Path(__file__).resolve().parent / "campaigns"
 SCRIBE_EVERY = 6           # transcript lines (three exchanges) between scribe passes
 IDLE_PAUSE = 3 * 60 * 60   # an adventure left this long is paused: the next drive starts as usual
-STORY_CHARS = 6000         # the newest part of "Story So Far" that goes into the prompt
+STORY_CHARS = 30000        # the newest part of "Story So Far" that goes into the prompt
+# The newest part of the table's transcript that goes into the prompt, word for word, on top of
+# the adventure and the chronicle (about 4 characters a token). Raise it for a model with a long
+# context; each turn the model may have to read it all again, at the cost of a slower reply.
+TRANSCRIPT_CHARS = int(os.environ.get("DM_TRANSCRIPT_CHARS", 40000))
 DM_MAX_TOKENS = 1000       # room for narration; the usual reply is held to 150
 
 CHRONICLE_SECTIONS = ("Where We Are", "Progress", "The Party", "Established Facts", "People Met",
@@ -419,15 +424,31 @@ def dice_tray() -> str:
             + "\n".join(rolls))
 
 
+def _transcript_tail(camp: Campaign) -> str:
+    tail, size = [], 0
+    for line in reversed(camp.lines()):
+        size += len(line) + 1
+        if size > TRANSCRIPT_CHARS:
+            break
+        tail.append(line)
+    return "\n".join(reversed(tail))
+
+
 def context(camp: Campaign) -> str:
-    """The Dungeon Master's half of the system prompt: rules, the adventure, the chronicle, the dice."""
+    """The Dungeon Master's half of the system prompt: rules, the adventure, the table's transcript,
+    the chronicle and the dice. What changes least comes first, so a server that caches the
+    start of the prompt (llama.cpp) reads only the new part again."""
     chronicle = camp.chronicle()
     story = section(chronicle, "Story So Far")
     if len(story) > STORY_CHARS:
         # Older entries are summarized by the newer ones; the rest stays in the vault.
         chronicle = chronicle.replace(story, "…" + story[-STORY_CHARS:])
+    transcript = _transcript_tail(camp) if TRANSCRIPT_CHARS > 0 else ""
     return (DM_RULES
             + f"\n\n[ADVENTURE: {camp.title}]\n{camp.adventure()}\n[END OF ADVENTURE]"
+            + (("\n\n[TABLE TRANSCRIPT: what was said at the table, oldest first. Anything older is summed up in "
+                "the chronicle; the newest exchanges are also in the conversation below]\n" + transcript
+                + "\n[END OF TRANSCRIPT]") if transcript else "")
             + "\n\n[CHRONICLE: what has happened in play so far. Where it differs from your memory of the conversation, it is right]\n"
             + chronicle + "\n[END OF CHRONICLE]\n\n" + dice_tray())
 

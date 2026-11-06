@@ -781,8 +781,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                 continue
             return content
         if on_working and not announced:
-            announced = True
-            await on_working()
+            announced = await on_working({c.get("function", {}).get("name", "") for c in calls})
         messages = messages + [{"role": "assistant", "content": message.get("content") or "", "tool_calls": calls}]
         for call in calls:
             fn = call.get("function", {})
@@ -1032,12 +1031,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
 
-                async def say_working(persona_now=persona_now):
-                    line = random.choice(_personas.get(persona_now).working)
+                async def say_working(tools: set[str], persona_now=persona_now) -> bool:
+                    # Writing down a fact mid-game happens in silence; setting up a game has its own lines.
+                    if tools and tools <= {"note_fact"}:
+                        return False
+                    if tools & _dungeon.TOOL_NAMES:
+                        line = _lines.pick(persona_now, "dm_working")
+                    else:
+                        line = random.choice(_personas.get(persona_now).working)
                     audio = await line_voice(line, persona_now)
                     await _send_to(client_id, {"type": "response", "text": line,
                                         "audio_url": audio, "speech_at": speech_onset(audio),
                                         "video_url": line_video(persona_now, line), "source": "working"})
+                    return True
 
                 # Everyday messages ("thanks", "how are you", "combat mode") get an
                 # instant pre-recorded reply instead of a model call.
@@ -1045,6 +1051,24 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
                 campaign = _dungeon.active() if config.flag("tools_enabled") else None
                 kind = None if campaign else _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
+                if campaign and _lines.wants_pause(user_text):
+                    # "Pause the game" is answered at once, without waiting on the model: the
+                    # car usually needs the attention back.
+                    await loop.run_in_executor(None, _dungeon.pause_adventure)
+                    text = _lines.pick(persona_now, "dm_pause", last=_last_canned.get((client_id, "dm_pause")))
+                    _last_canned[(client_id, "dm_pause")] = text
+                    audio_url = await line_voice(text, persona_now)
+                    history.append({"role": "assistant", "content": text})
+                    loop.run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
+                    campaign.add_line("Players", user_text)
+                    campaign.add_line("DM", text)
+                    asyncio.create_task(_scribe(campaign.folder, force=True))
+                    print(f"[Dungeon] Paused '{campaign.title}' for {client_id}")
+                    await _send_to(client_id, {"type": "response", "text": text, "audio_url": audio_url,
+                                               "speech_at": speech_onset(audio_url),
+                                               "video_url": line_video(persona_now, text), "source": "canned",
+                                               "dungeon": None})
+                    continue
                 song = insult_song() if kind == "rude" else None
                 if song:
                     # Now and then an insult gets a song instead of a comeback (Settings → Integrations).

@@ -4,6 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Dungeon Master mode remembers more**: each reply now carries the newest part of the game's transcript word for word, on top of the adventure and the chronicle. Set how much with `DM_TRANSCRIPT_CHARS` (default 40,000 characters, about 10k tokens) and raise it for a long-context model. The prompt is ordered so llama.cpp's prompt cache rereads only the new part, and the chronicle's story so far is kept up to 30,000 characters.
+- **Instant "pause the game"**: at the game table, "pause the game", "let's stop here", "save it for later" or "let's take a break" saves the adventure and is answered at once with a pre-recorded line in the current core's voice, without waiting on the model. Setting up a game has its own "one moment" lines ("I am setting the table"), and writing down a fact mid-game no longer says "Consulting the net". That makes 60 new fixed lines, ready for lip-synced clips.
+
+---
+
 ## [2.4.0] — 2026-11-06 — Dungeon Master
 
 ### Added
