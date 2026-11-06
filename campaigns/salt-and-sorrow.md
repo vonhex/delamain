@@ -46,6 +46,18 @@ Recurring details: the creak of the Merrow's Hope sounds like an old woman hummi
 
 Night in the harbor of Port Vellum. Lanterns sway over the Gallows Wharf; a fiddle saws in the Crooked Anchor tavern. The heroes stand on the deck of the Merrow's Hope, a two-masted brigantine with a crew of eighteen. Captain Jory Marlowe coughs into a handkerchief, unrolls a map on a barrel, and says: "Three days to the Teeth. The Sorrow's down there, and she's ours." Then Wick runs up the gangplank, out of breath: the Red Gannet just slipped her moorings, and Wick heard her captain say "the Teeth." First choice: sail now, half-provisioned, or spend the night in port finding out how the Gannet knew.
 
+## Spoken Opening
+
+Night in the harbor of Port Vellum. Lanterns sway above the Gallows Wharf, and from the Crooked Anchor tavern a fiddle saws away at a reel. The air is thick with tar and salt pork.
+
+You stand on the deck of the Merrow's Hope, a two-masted brigantine with a crew of eighteen. Her old timbers creak beneath you, and the sound is almost like an old woman humming.
+
+Captain Jory Marlowe, gray and thin, coughs into a handkerchief. Then he unrolls a weathered map across a barrel head and pins its corners with his pale hands. Three days to the Teeth, he tells you. The Sorrow lies down there, forty years drowned, with her silver and her famous pearl. And she is yours.
+
+Before anyone can cheer, a deckhand comes pounding up the gangplank, out of breath. The Red Gannet, the fastest crew in the Scattered Isles, has just slipped her moorings. Her captain was heard to name one place as she cast off. The Teeth.
+
+The ship is half provisioned. The tide is turning. Do you sail tonight, or stay and learn how the Gannet knew?
+
 ## Acts
 
 ### Act 1: Port Vellum

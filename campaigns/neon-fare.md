@@ -46,6 +46,18 @@ Recurring details: the rain, always warm, smelling of salt and hot circuitry. Th
 
 If asked who the client is, Ash says "Someone who very much wants this to go well." If asked why 06:00, Ash says "After six, there is nothing worth stealing." (Literally true.)
 
+## Spoken Opening
+
+Eleven forty at night, in the city of Saltmere, where it never stops raining. You sit together in the back of a Lantern Line cab, number seven seven one eight, parked beneath the elevated train on Gasket Street. Rain drums on the roof. Pink and teal neon smears down the windows, and every puddle holds a second city, upside down.
+
+The speaker chimes. Ding, ding-dong. A dry, polite voice wishes you good evening, and tells you that you may call it Mister Ash. Your client, it says, wishes to remain unnamed.
+
+The job is simple to say. Break into the Core Vault on floor thirty-one of Lantern Tower. Take the memory core. Deliver it to Suds and Sons laundromat, on Fourth Canal, before six in the morning. The pay is sixty thousand scrip. Your phones chime at once. Ten thousand of it is already yours.
+
+Mister Ash offers three facts for free. The vault wants a senior engineer's palm and a spoken passphrase. The only engineer left with clearance is a woman named Odalys Fenn. And at six, Corvane Dynamics takes the tower.
+
+Then the voice asks whether you have questions, before the meter starts. What do you ask?
+
 ## Acts
 
 ### Act 1: Legwork in the Rain
