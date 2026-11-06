@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { SongPlayer, type Song } from './components/SongPlayer';
@@ -64,8 +64,16 @@ const DEFAULT_SETTINGS: AppSettings = {
 const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 // "Delamain", "hey Delamain", and the ways speech recognition tends to spell it.
 const WAKE_WORD = /\b(?:(?:hey|hi|ok|okay)\s+)?(?:delamain|dela\s?main|della\s?main|delamaine|delamane|dela\s?mane|delaman|the\s?la\s?main)\b[\s,.!?]*/i;
-// How long the mic stays open for an answer after he asks a question.
+// How long the mic stays open for an answer after he asks a question; at the game table
+// the players may talk it over first.
 const FOLLOW_UP_MS = 7000;
+const DM_FOLLOW_UP_MS = 15000;
+// The mic stays open through pauses in what is said, and closes once nothing new has been
+// heard for this long. Players stop to think mid-sentence, so the game table waits longer.
+const PAUSE_MS = 1500;
+const DM_PAUSE_MS = 2800;
+// The mic closes by itself when nobody says anything at all.
+const NO_SPEECH_MS = 8000;
 const endsWithQuestion = (text: string) => /\?["'\u201d\u2019)\]]*\s*$/.test(text);
 
 
@@ -124,6 +132,10 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [navOptions, setNavOptions] = useState<NavOption[]>([]);
   const [faceMode, setFaceMode] = useState<'idle' | 'angry'>('idle');
   const [isListening, setIsListening] = useState(false);
+  // Dungeon Master mode: the adventure being played, if any.
+  const [dungeon, setDungeon] = useState<{ title: string; scene?: string } | null>(null);
+  const dungeonRef = useRef(dungeon);
+  useEffect(() => { dungeonRef.current = dungeon; }, [dungeon]);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const personaRef = useRef(settings.persona);
   const userNameRef = useRef(settings.userName);
@@ -183,7 +195,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         audioPlayingRef.current = false;
         setIsTalking(false);
         // He asked something: open the mic briefly so the answer needs no button.
-        if (askedRef.current && settingsRef.current.listenAfterQuestion) startCommandRef.current(FOLLOW_UP_MS);
+        if (askedRef.current && settingsRef.current.listenAfterQuestion)
+          startCommandRef.current(dungeonRef.current ? DM_FOLLOW_UP_MS : FOLLOW_UP_MS);
         else resumeWakeRef.current();
         askedRef.current = false;
         return;
@@ -257,9 +270,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
         playConnectChime();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
+      } else if (msg.type === 'dungeon') {
+        setDungeon(msg.dungeon ?? null);
       } else if (msg.type === 'response') {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
         if (msg.source !== 'working') setIsLoading(false);
+        if ('dungeon' in msg) setDungeon(msg.dungeon ?? null);
         playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0,
           msg.source !== 'working' && !msg.song && endsWithQuestion(msg.text || ''));
@@ -418,40 +434,73 @@ function MainApp({ token, onLogout }: MainAppProps) {
     else scheduleWake(retryMs);
   };
 
+  // A recognizer ends by itself at the first pause, which cut people off mid-sentence. A
+  // command instead keeps listening across pauses, starting the recognizer again when it
+  // stops early, and is sent once nothing new has been heard for PAUSE_MS.
   const startCommand = (timeoutMs?: number) => {
     if (!SpeechRec) return;
     stopRecognizer(() => {
-      const rec = new SpeechRec();
-      rec.lang = 'en-US';
-      rec.interimResults = false;
-      rec.maxAlternatives = 1;
+      const pauseMs = dungeonRef.current ? DM_PAUSE_MS : PAUSE_MS;
+      const parts: string[] = [];   // the phrases heard so far
+      let interim = '';
       let heard = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      rec.onstart = () => {
-        if (settingsRef.current.listenTone) playListenTone();
-        setIsListening(true);
-        // A follow-up closes on its own when no answer comes.
-        if (timeoutMs) timer = setTimeout(() => { if (!heard) rec.stop(); }, timeoutMs);
+      let done = false;
+      let quiet: ReturnType<typeof setTimeout> | undefined;
+      let rec: any;
+      const finish = () => { done = true; clearTimeout(quiet); try { rec.stop(); } catch { /* already ended */ } };
+      const closeAfter = (ms: number) => { clearTimeout(quiet); quiet = setTimeout(finish, ms); };
+      // Chrome on Android repeats a growing sentence as new results ("What", "What do",
+      // "What do you…"): a phrase that extends the last one replaces it.
+      const add = (phrase: string) => {
+        const t = phrase.trim();
+        const last = parts[parts.length - 1]?.toLowerCase();
+        if (!t) return;
+        if (last && t.toLowerCase().startsWith(last)) parts[parts.length - 1] = t;
+        else if (!last || !last.startsWith(t.toLowerCase())) parts.push(t);
       };
-      rec.onspeechstart = () => { heard = true; };
-      // Chrome on Android fires a result for every word as the sentence grows ("What",
-      // "What do", "What do you…"), even with interim results off, so the request is
-      // sent once, when the recognizer ends, with the last transcript it gave.
-      let said = '';
-      rec.onresult = (e: any) => {
-        heard = true;
-        said = e.results[e.results.length - 1][0].transcript;
-        setIsListening(false);
+      const begin = (first: boolean) => {
+        rec = new SpeechRec();
+        rec.lang = 'en-US';
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.maxAlternatives = 1;
+        rec.onstart = () => {
+          if (!first) return;
+          if (settingsRef.current.listenTone) playListenTone();
+          setIsListening(true);
+          closeAfter(timeoutMs ?? NO_SPEECH_MS);
+        };
+        rec.onspeechstart = () => { heard = true; clearTimeout(quiet); };
+        rec.onresult = (e: any) => {
+          heard = true;
+          interim = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const t: string = e.results[i][0].transcript;
+            if (e.results[i].isFinal) add(t); else interim += t;
+          }
+          closeAfter(pauseMs);
+        };
+        rec.onerror = (e: any) => {
+          // No mic, or no recognition service: starting again would only fail again.
+          if (e.error !== 'no-speech' && e.error !== 'aborted') done = true;
+        };
+        rec.onend = () => {
+          // Stopped early by a pause: carry on listening, unless the time is up.
+          if (!done && heard && !rec.cancelled && recRef.current?.rec === rec) {
+            begin(false);
+            return;
+          }
+          clearTimeout(quiet);
+          setIsListening(false);
+          const said = [...parts, interim].join(' ').replace(/\s+/g, ' ').trim();
+          if (said && !rec.cancelled) handleSendRef.current(said);
+          if (!heard && settingsRef.current.listenTone) playListenEndTone();
+          ended(rec);
+        };
+        recRef.current = { rec, mode: 'command' };
+        try { rec.start(); } catch { recRef.current = null; setIsListening(false); }
       };
-      rec.onend = () => {
-        clearTimeout(timer);
-        setIsListening(false);
-        if (said.trim() && !rec.cancelled) handleSendRef.current(said);
-        if (!heard && settingsRef.current.listenTone) playListenEndTone();
-        ended(rec);
-      };
-      recRef.current = { rec, mode: 'command' };
-      try { rec.start(); } catch { recRef.current = null; setIsListening(false); }
+      begin(true);
     });
   };
 
@@ -805,7 +854,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
             </h1>
             <div className="face-subtitle flex items-center gap-2 xl:gap-3">
               <div className="h-px w-10 xl:w-16 bg-linear-to-r from-transparent to-cyber-blue/35" />
+              {dungeon ? (
+                <span className="flex items-center gap-1.5 text-[8px] xl:text-[9px] tracking-[0.3em] text-amber-300/80 font-mono uppercase truncate max-w-[70vw]"
+                  title={dungeon.scene}>
+                  <Swords size={11} className="shrink-0" /> Dungeon Master · {dungeon.title}
+                </span>
+              ) : (
               <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
+              )}
               <div className="h-px w-10 xl:w-16 bg-linear-to-l from-transparent to-cyber-blue/35" />
             </div>
           </div>

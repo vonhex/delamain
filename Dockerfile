@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # App source and the built web UI
 COPY *.py delamain_ref_10s.wav ./
+COPY campaigns/ ./campaigns/
 COPY --from=frontend /frontend/dist /app/frontend_dist
 
 # Directories mounted at runtime via volumes:

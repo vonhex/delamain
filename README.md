@@ -106,6 +106,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 
 ## Features
 
+- **Dungeon Master mode**: on a long drive, say "Delamain, let's play a role-playing game" and he runs a tabletop one-shot for everyone in the car, by voice, playing every character himself. Twelve ready-made adventures of three to five hours each ship with him, from a haunted lighthouse and a time-looping highway diner to a pirate treasure race and two family-friendly romps. He can also write a new one from your idea on the spot. He never refuses what your hero tries, only makes it count, and rolls real dice. The game is kept in your Obsidian vault: the adventure, a chronicle a scribe updates as you play (party, hit points, facts, people met) and the full transcript. So he doesn't lose track of the facts hours in, and "continue our adventure" picks it up days later. See [docs/dungeon-master.md](docs/dungeon-master.md).
 - **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
 - **Personality cores**: under Settings → Personality Core, swap the original for one of the rogue sub-personalities that escaped when Delamain's core fractured. Each has its own temperament, greetings, reminder lines, face color and voice, made by post-processing the synthesized audio:
 
@@ -150,6 +151,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 ## Troubleshooting
 
 - **He doesn't answer anything except the pre-recorded lines.** Delamain cannot reach the AI model. Check the LLM endpoint and model id in Settings → Integrations, and that Ollama or LM Studio is running. In Docker, use the computer's network address, not `localhost`.
+- **Dungeon Master mode forgets the start of the adventure.** The model's context is too small to hold the adventure. Give it at least 16k tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=32768`); see [docs/dungeon-master.md](docs/dungeon-master.md#requirements).
 - **The mic button does nothing on the phone.** The page has to be opened over `https://` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)), and the browser must be allowed to use the microphone.
 - **The wake word doesn't respond, or the phone chimes over and over.** The wake word keeps the browser's speech recognition running, and not every browser allows that: some Android phones play their listening chime each time it restarts, and some in-app browsers don't support it at all. Turn it off under Settings → Listening and use the mic button; the tone and listening after a question still work.
 - **Replies take a long time to be spoken.** Speech that is not pre-recorded is made on the spot. With a graphics card that takes a second or two; on a CPU it can take much longer. Pre-recorded lines are always instant.
