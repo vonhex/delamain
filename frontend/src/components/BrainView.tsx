@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
-import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen } from 'lucide-react';
+import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen, ZoomIn, ZoomOut, Crosshair, Zap } from 'lucide-react';
 import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
@@ -115,7 +115,12 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const [full, setFull] = useState(() => { try { return localStorage.getItem('brainFull') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('brainFull', full ? '1' : '0'); } catch { /* private mode */ } }, [full]);
   const [draft, setDraft] = useState('');
-  const [hud, setHud] = useState({ signals: 0, lit: 0, neurons: 0, session: 0 });
+  const [hud, setHud] = useState({ signals: 0, lit: 0, neurons: 0, session: 0, zoom: 1 });
+  // The node picked in the brain (tap a dot), refreshed live for the inspector card
+  type NodeInfo = NonNullable<ReturnType<Brain['inspect']>>;
+  const [node, setNode] = useState<NodeInfo | null>(null);
+  const nodeRef = useRef<NodeInfo | null>(null);
+  useEffect(() => { nodeRef.current = node; });
   const lineId = useRef(0);
   const toolsRunning = useRef(new Map<string, string>());
   const talkRef = useRef(talk);
@@ -138,7 +143,8 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
     const id = setInterval(() => {
       setPhase(b.phase());
       const s = b.stats();
-      setHud({ signals: s.signals, lit: s.lit, neurons: s.neurons, session: Math.floor((Date.now() - opened) / 1000) });
+      setHud({ signals: s.signals, lit: s.lit, neurons: s.neurons, session: Math.floor((Date.now() - opened) / 1000), zoom: s.zoom });
+      setNode(b.inspect());
     }, 250);
     return () => { clearInterval(id); b.destroy(); brainRef.current = null; };
   }, []);
@@ -212,7 +218,11 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') { if (nodeRef.current) brainRef.current?.select(null); else onClose(); }
+      const typingNow = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (!typingNow && (e.key === '+' || e.key === '=')) brainRef.current?.zoomBy(1.4);
+      if (!typingNow && (e.key === '-' || e.key === '_')) brainRef.current?.zoomBy(1 / 1.4);
+      if (!typingNow && e.key === '0') brainRef.current?.resetView();
       const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
       if (!typing && (e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) setFull(v => !v);
       // Space opens the mic, unless you are typing
@@ -246,6 +256,9 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
     ['Tools', String(toolCount)],
     ['Self-checks', String(today.corrections)],
   ] : [];
+
+  const regionName = (r: string) => r === 'stem' ? { code: 'BRAIN STEM', label: 'Relay', sub: 'carries signals between the parts', color: '#607dbe' }
+    : r === 'core' ? { ...REGION_INFO.core, color: core.color } : REGION_INFO[r as keyof typeof REGION_INFO];
   const load = hud.neurons ? Math.round((hud.lit / hud.neurons) * 100) : 0;
   const wake = !talk.micSupported
     ? { text: 'NO SPEECH RECOGNITION IN THIS BROWSER · TYPE INSTEAD', color: '#64748b' }
@@ -306,6 +319,54 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
               {model && <span className="max-w-[220px] truncate">UPLINK <span className="text-cyber-blue">{model.toUpperCase()}</span></span>}
               <span>SESSION <span className="text-cyber-blue">{String(Math.floor(hud.session / 60)).padStart(2, '0')}:{String(hud.session % 60).padStart(2, '0')}</span></span>
             </div>
+            {/* zoom: pinch, scroll, double-tap, or these */}
+            <div className="absolute left-4 bottom-[15%] flex items-center gap-1 font-mono text-[10px] text-cyber-blue/80">
+              <button onClick={() => brainRef.current?.zoomBy(1.4)} title="Zoom in (+, scroll or pinch)" className="w-8 h-8 flex items-center justify-center border border-cyber-blue/40 bg-[#05060a]/80 hover:border-cyber-blue/80"><ZoomIn size={15} /></button>
+              <button onClick={() => brainRef.current?.zoomBy(1 / 1.4)} disabled={hud.zoom <= 1.01} title="Zoom out (−)" className="w-8 h-8 flex items-center justify-center border border-cyber-blue/40 bg-[#05060a]/80 hover:border-cyber-blue/80 disabled:opacity-30"><ZoomOut size={15} /></button>
+              {hud.zoom > 1.01 && (
+                <button onClick={() => brainRef.current?.resetView()} title="Back to the whole brain (0)" className="h-8 px-2 flex items-center gap-1 border border-cyber-blue/40 bg-[#05060a]/80 hover:border-cyber-blue/80">
+                  <Crosshair size={13} /> {hud.zoom.toFixed(1)}×
+                </button>
+              )}
+              {hud.zoom <= 1.01 && !node && <span className="ml-2 hidden sm:inline text-gray-500">PINCH OR SCROLL TO ZOOM · TAP A DOT TO INSPECT IT</span>}
+            </div>
+
+            {/* the node inspector */}
+            {node && (() => {
+              const r = regionName(node.region), firing = node.energy > 0.2;
+              const nbs = Object.entries(node.neighbours).sort((a, b) => b[1] - a[1]);
+              return (
+                <div className={`absolute left-3 sm:left-4 top-9 w-[min(320px,calc(100%-24px))] p-3 border bg-[#05060a]/92 text-sm shadow-xl space-y-1.5 ${cut(10)}`}
+                  style={{ borderColor: `${r.color}99` }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rotate-45 shrink-0" style={{ background: r.color, boxShadow: `0 0 8px ${r.color}` }} />
+                    <span className="font-mono text-xs tracking-[0.2em] text-gray-300">NODE #{node.id}</span>
+                    <span className="ml-auto font-mono text-[10px] tracking-[0.15em]" style={{ color: firing ? r.color : '#64748b' }}>
+                      {firing ? `◉ FIRING ${Math.round(node.energy * 100)}%` : '○ RESTING'}
+                    </span>
+                    <button onClick={() => brainRef.current?.select(null)} title="Close (Esc)" className="text-gray-500 hover:text-cyber-red"><X size={15} /></button>
+                  </div>
+                  <div>
+                    <div className="font-mono text-[13px]" style={{ color: r.color }}>{r.code}</div>
+                    <div className="text-gray-400 text-xs">{r.label} · {r.sub}</div>
+                  </div>
+                  <div className="h-1 bg-white/5 overflow-hidden"><div className="h-full transition-all" style={{ width: `${Math.round(node.energy * 100)}%`, background: r.color }} /></div>
+                  <div className="text-gray-300 leading-snug">
+                    {node.fires ? <>Fired <b className="text-white">{node.fires}</b> time{node.fires === 1 ? '' : 's'} since you opened this view · last <b className="text-white">{node.lastAgo}s</b> ago.</> : 'Has not fired since you opened this view.'}
+                  </div>
+                  {node.lastBy && <div className="text-gray-400 leading-snug text-xs">Last signal through it: <span className="text-gray-200">{node.lastBy}</span>.</div>}
+                  <div className="text-gray-400 leading-snug text-xs">
+                    Wired to {node.links} neighbour{node.links === 1 ? '' : 's'}: {nbs.map(([k, v]) => `${v} ${regionName(k).code}`).join(', ')}. Signals hop along these to get around.
+                  </div>
+                  <div className="hidden sm:block text-gray-500 text-[11px] leading-snug">{node.surface ? 'On the surface of the brain.' : 'Deep inside the brain.'} One of {node.total.toLocaleString()} nodes; each is a stand-in for part of the work this subsystem does, not a literal neuron.</div>
+                  <button onClick={() => brainRef.current?.ping()} className="mt-1 flex items-center gap-1.5 px-2.5 py-1 border font-mono text-[10px] tracking-[0.15em] hover:bg-white/5"
+                    style={{ borderColor: `${r.color}88`, color: r.color }}>
+                    <Zap size={12} /> PING · SEND A PULSE FROM HERE
+                  </button>
+                </div>
+              );
+            })()}
+
             {full && (
               <button onClick={() => setFull(false)} title="Show the numbers and the thought stream again (F)"
                 className="absolute right-4 bottom-[15%] flex items-center gap-1.5 px-2.5 py-1.5 border border-cyber-blue/40 bg-[#05060a]/80 font-mono text-[10px] tracking-[0.15em] text-cyber-blue/80 hover:text-cyber-blue hover:border-cyber-blue/80">

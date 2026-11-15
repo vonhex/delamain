@@ -55,11 +55,12 @@ const EAR: [number, number, number] = [0.02, -0.08, 0.66];
 type Neuron = {
   x: number; y: number; z: number; region: RegionKey; size: number; ph: number;
   energy: number; lit: RGB | null; nb: number[]; shell: boolean;
+  fires: number; lastFired: number; lastBy: string;   // what passed through it, for the node inspector
 };
 type Signal = {
   pts: number[][]; cum: number[]; len: number; s: number; speed: number; c0: RGB; c1: RGB | null;
   tail: number; w: number; alpha: number; hops: number[]; hopS: number[]; hopAt: number;
-  onEnd?: () => void; ended?: boolean;
+  onEnd?: () => void; ended?: boolean; why?: string;
 };
 type Spark = { x: number; y: number; z: number; vx: number; vy: number; vz: number; life: number; decay: number; col: RGB };
 type Glyph = { w: string; x: number; y: number; z: number; vx: number; vy: number; life: number; ph: number; col: RGB; inbound: boolean; tx?: number; ty?: number; tz?: number };
@@ -78,7 +79,7 @@ function rng(seed: number) {
   };
 }
 
-export type BrainOptions = { reducedMotion?: boolean; onRegionTap?: (r: RegionKey) => void };
+export type BrainOptions = { reducedMotion?: boolean; onRegionTap?: (r: RegionKey) => void; onNodeSelect?: (id: number | null) => void };
 
 export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts: BrainOptions = {}) {
   const ctx = canvas.getContext('2d')!;
@@ -150,7 +151,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const target = clamp(Math.round((width * height) / 260), 650, 2100);
     neurons = [];
     const add = (x: number, y: number, z: number, region: RegionKey, shell: boolean, size?: number) =>
-      neurons.push({ x, y, z, region, shell, size: size ?? 0.4 + rand() * 0.8, ph: rand() * TAU, energy: 0, lit: null, nb: [] });
+      neurons.push({ x, y, z, region, shell, size: size ?? 0.4 + rand() * 0.8, ph: rand() * TAU, energy: 0, lit: null, nb: [],
+      fires: 0, lastFired: -1, lastBy: '' });
 
     let tries = 0;
     const cerebrumTarget = Math.round(target * 0.76);
@@ -214,8 +216,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   }
 
   /* ── camera ────────────────────────────────────────────────────────── */
-  const cam = { yaw: -0.28, pitch: -0.12, tYaw: 0, tPitch: 0, dragging: false };
-  let vp = { cx: 0, cy: 0, scale: 1, eegTop: 0, eegH: 0 };
+  const cam = { yaw: -0.28, pitch: -0.12, tYaw: 0, tPitch: 0, dragging: false, zoom: 1, panX: 0, panY: 0 };
+  let vp = { cx: 0, cy: 0, scale: 1, eegTop: 0, eegH: 0, baseCx: 0, baseCy: 0, baseScale: 1 };
   const rot = { cy: 1, sy: 0, cp: 1, sp: 0 };
   const P = [0, 0, 0, 1], P2 = [0, 0, 0];
 
@@ -227,7 +229,22 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     // room on the left for the incoming words and on the right for the outgoing ones
     const wide = width >= 760;
     const scale = Math.min((availW - (wide ? 2 * 150 : 0)) / (portrait ? 2.4 : narrow ? 2.9 : 2.25), availH / 1.85);
-    vp = { cx: width * 0.5, cy: padTop + availH * 0.44, scale, eegTop, eegH };
+    const baseCx = width * 0.5, baseCy = padTop + availH * 0.44;
+    vp = { cx: baseCx + cam.panX, cy: baseCy + cam.panY, scale: scale * cam.zoom, eegTop, eegH, baseCx, baseCy, baseScale: scale };
+  }
+  // Zoom about a point on screen (the pinch centre, the cursor), keeping that point still.
+  function zoomAt(fx: number, fy: number, z1: number, from = { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fx, fy }) {
+    z1 = clamp(z1, 1, 8);
+    const vx = (from.fx - vp.baseCx - from.panX) / from.zoom, vy = (from.fy - vp.baseCy - from.panY) / from.zoom;
+    cam.zoom = z1;
+    cam.panX = z1 <= 1.001 ? 0 : fx - vp.baseCx - vx * z1;
+    cam.panY = z1 <= 1.001 ? 0 : fy - vp.baseCy - vy * z1;
+    clampPan();
+  }
+  function clampPan() {
+    const lim = vp.baseScale * 1.2 * cam.zoom;
+    cam.panX = clamp(cam.panX, -lim, lim);
+    cam.panY = clamp(cam.panY, -lim, lim);
   }
   function project(x: number, y: number, z: number, out = P) {
     const x1 = x * rot.cy + z * rot.sy, z1 = -x * rot.sy + z * rot.cy;
@@ -239,6 +256,33 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     out[3] = persp;
     return out;
   }
+
+  /* ── node inspector ─────────────────────────────────────────────────── */
+  const same = (a: RGB | null, b: RGB) => !!a && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const regionOfColour = (c: RGB | null): RegionKey | null => {
+    if (!c) return null;
+    if (same(c, st.coreColor)) return 'core';
+    for (const k of Object.keys(REGION_INFO) as Exclude<RegionKey, 'stem'>[]) if (k !== 'core' && same(c, colorOf(k))) return k;
+    return null;
+  };
+  const codeOf = (r: RegionKey) => (r === 'stem' ? 'BRAIN STEM' : REGION_INFO[r].code);
+  function describeSignal(sg: Signal): string {
+    const from = regionOfColour(sg.c0), to = regionOfColour(sg.c1);
+    if (same(sg.c0, COL.idle)) return 'background activity while he rests';
+    if (from === 'hearing') return to === 'reflex' ? 'your words, recognised as an everyday phrase' : 'your words, heading in to be understood';
+    if (from === 'reflex') return 'an instant pre-recorded reply, skipping the model';
+    if (from === 'core' && to === 'voice') return 'his reply, on its way to be spoken';
+    if (from === 'core' && to) {
+      const tool = [...st.activeTools.entries()].find(([, r]) => r === to);
+      return tool ? `a request to ${codeOf(to)}: ${TOOL_WORDS[tool[0]] ?? tool[0]}` : `the core reaching into ${codeOf(to)}`;
+    }
+    if (to === 'core' && from) return from === 'memory' ? 'a thought: memory feeding the cognition core' : `a result from ${codeOf(from)}, back to the core`;
+    if (from === 'conscience') return 'a self-check';
+    if (from) return `activity inside ${codeOf(from)}`;
+    return 'a signal';
+  }
+  let sel: number | null = null;
+  let sx = new Float32Array(0), sy = new Float32Array(0), sr = new Float32Array(0);   // where each node was drawn
 
   /* ── signals ───────────────────────────────────────────────────────── */
   let signals: Signal[] = [], sparks: Spark[] = [];
@@ -504,6 +548,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       while (sg.hopAt < sg.hops.length && sg.hopS[sg.hopAt] <= sg.s) {
         const n = neurons[sg.hops[sg.hopAt]];
         n.energy = Math.min(1, n.energy + 0.75 * sg.w);
+        n.fires++; n.lastFired = now(); n.lastBy = sg.why ?? (sg.why = describeSignal(sg));
         n.lit = sg.c1 && sg.s / sg.len > 0.5 ? sg.c1 : sg.c0;
         sg.hopAt++;
       }
@@ -589,7 +634,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   }
 
   /* ── drawing ───────────────────────────────────────────────────────── */
-  const unit = () => clamp(vp.scale / 300, 0.8, 1.6);
+  // dots grow a little with zoom (not fully, so the nodes separate as you zoom in)
+  const unit = () => clamp(vp.baseScale / 300, 0.8, 1.6) * Math.sqrt(cam.zoom);
   const regionHot = (r: RegionKey) => {
     const p = st.phase;
     if (r === 'core') return st.thinking ? 1 : p === 'hearing' ? 0.4 : 0;
@@ -619,12 +665,15 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const hot: Partial<Record<RegionKey, number>> = {};
     for (const r of Object.keys(COL)) hot[r as RegionKey] = regionHot(r as RegionKey);
     ctx.globalCompositeOperation = 'lighter';
-    for (const n of neurons) {
+    if (sx.length !== neurons.length) { sx = new Float32Array(neurons.length); sy = new Float32Array(neurons.length); sr = new Float32Array(neurons.length); }
+    for (let i = 0; i < neurons.length; i++) {
+      const n = neurons[i];
       project(n.x, n.y, n.z);
       const depth = clamp((P[2] + 0.8) / 1.6, 0, 1), e = n.energy;
       let a = 0.11 + depth * 0.3 + (hot[n.region] || 0) * 0.22 + Math.sin(clock * 1.7 + n.ph) * 0.04 + breath * 0.03;
       if (n.region === 'conscience') a *= 0.55 + st.conscience;           // a quiet band until it fires
       const s = (1.5 + n.size * 1.6) * P[3] * u * (1 + e * 0.6);
+      sx[i] = P[0]; sy[i] = P[1]; sr[i] = s;
       ctx.globalAlpha = clamp(a + e * 0.6, 0, 1);
       const base = n.region === 'core' ? st.coreColor : colorOf(n.region);
       ctx.drawImage(sprite(base, true), P[0] - s, P[1] - s, s * 2, s * 2);
@@ -635,6 +684,31 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  function drawSelection() {
+    if (sel == null || !neurons[sel]) return;
+    const n = neurons[sel], c = n.region === 'core' ? st.coreColor : colorOf(n.region);
+    project(n.x, n.y, n.z);
+    const x0 = P[0], y0 = P[1];
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 1.2;
+    for (const j of n.nb) {                       // its connections: the paths signals can hop along
+      const m = neurons[j], mc = m.region === 'core' ? st.coreColor : colorOf(m.region);
+      project(m.x, m.y, m.z);
+      const g = ctx.createLinearGradient(x0, y0, P[0], P[1]);
+      g.addColorStop(0, `rgba(${c.join(',')},0.8)`); g.addColorStop(1, `rgba(${mc.join(',')},0.6)`);
+      ctx.strokeStyle = g;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(P[0], P[1]); ctx.stroke();
+      ctx.strokeStyle = `rgba(${mc.join(',')},0.8)`;
+      ctx.beginPath(); ctx.arc(P[0], P[1], 3 + 1.5 * Math.sqrt(cam.zoom), 0, TAU); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    const r = 8 + 2 * Math.sqrt(cam.zoom) + Math.sin(clock * 5) * 1.5;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x0, y0, r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = `rgba(${c.join(',')},0.9)`;
+    ctx.beginPath(); ctx.arc(x0, y0, r + 4, 0, TAU); ctx.stroke();
   }
 
   const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -922,36 +996,98 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     }
     return best;
   }
-  let down: { x: number; y: number; yaw: number; pitch: number; t: number } | null = null;
+  function hitNode(mx: number, my: number): number | null {
+    let best: number | null = null, bestD = Infinity;
+    for (let i = 0; i < sx.length; i++) {
+      const d = Math.hypot(sx[i] - mx, sy[i] - my), lim = Math.max(9, sr[i] * 1.6);
+      if (d < lim && d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+  function select(i: number | null) { sel = i; opts.onNodeSelect?.(i); }
+  const pointers = new Map<number, { x: number; y: number }>();
+  let down: { x: number; y: number; yaw: number; pitch: number; panX: number; panY: number; t: number; moved: boolean } | null = null;
+  let pinch: { d: number; zoom: number; panX: number; panY: number; fx: number; fy: number } | null = null;
+  let lastTap = { t: 0, x: 0, y: 0 };
+  const local = (e: { clientX: number; clientY: number }) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const onMove = (e: PointerEvent) => {
     const rect = canvas.getBoundingClientRect();
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size >= 2) {                     // two fingers: zoom about their midpoint
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2 - rect.left, my = (a.y + b.y) / 2 - rect.top;
+      zoomAt(mx, my, pinch.zoom * d / pinch.d, pinch);
+      return;
+    }
     if (down) {
+      const dx = e.clientX - down.x, dy = e.clientY - down.y;
+      if (Math.hypot(dx, dy) > 6) down.moved = true;
+      if (!down.moved) return;
       cam.dragging = true;
-      cam.tYaw = clamp(down.yaw + ((e.clientX - down.x) / rect.width) * 1.4, -0.7, 0.7);
-      cam.tPitch = clamp(down.pitch + ((e.clientY - down.y) / rect.height) * 0.6, -0.3, 0.3);
+      if (cam.zoom > 1.01) {                              // zoomed in: drag to look around
+        cam.panX = down.panX + dx; cam.panY = down.panY + dy; clampPan();
+      } else {                                            // whole brain: drag to tilt it
+        cam.tYaw = clamp(down.yaw + (dx / rect.width) * 1.4, -0.7, 0.7);
+        cam.tPitch = clamp(down.pitch + (dy / rect.height) * 0.6, -0.3, 0.3);
+      }
     } else if (e.pointerType === 'mouse') {
-      cam.tYaw = ((e.clientX - rect.left) / rect.width - 0.5) * 0.35;
-      cam.tPitch = ((e.clientY - rect.top) / rect.height - 0.5) * 0.12;
+      if (cam.zoom <= 1.01) {
+        cam.tYaw = ((e.clientX - rect.left) / rect.width - 0.5) * 0.35;
+        cam.tPitch = ((e.clientY - rect.top) / rect.height - 0.5) * 0.12;
+      }
+      const [mx, my] = local(e);
+      canvas.style.cursor = hitNode(mx, my) != null ? 'pointer' : cam.zoom > 1.01 ? 'grab' : 'default';
       const k = hitRegion(e.clientX, e.clientY);
-      if (k && (!tooltip || tooltip.key !== k || now() > tooltip.until)) tooltip = { key: k, until: now() + 3 };
+      if (k && cam.zoom <= 1.01 && (!tooltip || tooltip.key !== k || now() > tooltip.until)) tooltip = { key: k, until: now() + 3 };
     }
   };
-  const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY, yaw: cam.tYaw, pitch: cam.tPitch, t: performance.now() }; };
+  const onDown = (e: PointerEvent) => {
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()], rect = canvas.getBoundingClientRect();
+      pinch = { d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), zoom: cam.zoom, panX: cam.panX, panY: cam.panY,
+        fx: (a.x + b.x) / 2 - rect.left, fy: (a.y + b.y) / 2 - rect.top };
+      if (down) down.moved = true;                        // a pinch is not a tap
+      return;
+    }
+    down = { x: e.clientX, y: e.clientY, yaw: cam.tYaw, pitch: cam.tPitch, panX: cam.panX, panY: cam.panY, t: performance.now(), moved: false };
+  };
   const onUp = (e: PointerEvent) => {
-    if (down && performance.now() - down.t < 300 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8) {
-      const k = hitRegion(e.clientX, e.clientY);
-      if (k) { tooltip = { key: k, until: now() + 3.5 }; opts.onRegionTap?.(k); }
+    pointers.delete(e.pointerId);
+    if (pinch) { if (pointers.size < 2) { pinch = null; down = null; cam.dragging = false; } return; }
+    if (down && !down.moved && performance.now() - down.t < 350) {
+      const [mx, my] = local(e), t = performance.now();
+      if (t - lastTap.t < 320 && Math.hypot(mx - lastTap.x, my - lastTap.y) < 30) {   // double tap: zoom in, or back out
+        if (cam.zoom < 1.6) zoomAt(mx, my, 2.6); else zoomAt(mx, my, 1);
+        lastTap.t = 0;
+      } else {
+        lastTap = { t, x: mx, y: my };
+        const node = hitNode(mx, my);
+        if (node != null) select(node);
+        else {
+          if (sel != null) select(null);
+          const k = cam.zoom <= 1.01 ? hitRegion(e.clientX, e.clientY) : null;
+          if (k) { tooltip = { key: k, until: now() + 3.5 }; opts.onRegionTap?.(k); }
+        }
+      }
     }
     down = null;
     cam.dragging = false;
   };
-  const onLeave = () => { if (!down) { cam.tYaw = 0; cam.tPitch = 0; } };
+  const onLeave = () => { if (!down && cam.zoom <= 1.01) { cam.tYaw = 0; cam.tPitch = 0; } };
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const [mx, my] = local(e);
+    zoomAt(mx, my, cam.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018)));   // ctrlKey: a trackpad pinch
+  };
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
   canvas.addEventListener('pointerleave', onLeave);
-  canvas.style.touchAction = 'pan-y';
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.style.touchAction = 'none';   // the brain handles pinch and drag itself
   canvas.style.cursor = 'pointer';
 
   /* ── loop ──────────────────────────────────────────────────────────── */
@@ -964,7 +1100,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (rebuild) { signals = []; build(); }
+    if (rebuild) { signals = []; build(); if (sel != null) select(null); }
     buildHexGrid();
   }
   function frame(ts: number) {
@@ -982,6 +1118,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     drawBackdrop();
     drawNeurons();
     drawSignals();
+    drawSelection();
     drawLabels();
     drawWords();   // over the tags, so his words stay readable where they cross them
     drawEeg();
@@ -1032,7 +1169,32 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       if (fresh.length && !reduced()) { queueWords(fresh.join(' '), colorOf('hearing'), true); st.liveFedAt = now(); }
     },
     phase: () => st.phase,
-    stats: () => ({ glyphs: glyphs.length, queued: wordQ.length, signals: signals.length, neurons: neurons.length, width, height,
+    /** Zoom by a factor about the middle of the view (the +/− buttons). */
+    zoomBy(f: number) { const fx = vp.baseCx, fy = vp.baseCy; zoomAt(fx, fy, cam.zoom * f, { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fx, fy }); },
+    resetView() { cam.zoom = 1; cam.panX = 0; cam.panY = 0; },
+    select,
+    /** The selected node, for the inspector card. */
+    inspect() {
+      if (sel == null || !neurons[sel]) return null;
+      const n = neurons[sel];
+      const nbs: Record<string, number> = {};
+      for (const j of n.nb) { const r = neurons[j].region; nbs[r] = (nbs[r] ?? 0) + 1; }
+      return { id: sel, region: n.region, energy: +n.energy.toFixed(2), fires: n.fires,
+        lastAgo: n.lastFired < 0 ? null : +(now() - n.lastFired).toFixed(1), lastBy: n.lastBy, surface: n.shell,
+        neighbours: nbs, links: n.nb.length, total: neurons.length };
+    },
+    /** Send a pulse out from the selected node along its connections. */
+    ping() {
+      if (sel == null) return;
+      const from = sel, n = neurons[from], c = n.region === 'core' ? st.coreColor : colorOf(n.region);
+      const far = neurons.map((_, j) => j).filter(j => Math.hypot(neurons[j].x - n.x, neurons[j].y - n.y) > 0.35);
+      for (let i = 0; i < 5 && far.length; i++) {
+        const goal = pick(far), m = neurons[goal];
+        makeSignal(walk(from, goal), { c0: c, c1: m.region === 'core' ? st.coreColor : colorOf(m.region), speed: 1.4, tail: 0.3, w: 1.2, why: 'a test pulse you sent from the inspector' });
+      }
+      n.energy = 1;
+    },
+    stats: () => ({ zoom: +cam.zoom.toFixed(2), selected: sel, glyphs: glyphs.length, queued: wordQ.length, signals: signals.length, neurons: neurons.length, width, height,
       lit: neurons.reduce((n, x) => n + (x.energy > 0.25 ? 1 : 0), 0),
       said: utter ? utter.words.filter(w => w.out).length : -1, words: utter ? utter.words.length : 0, audio: utter ? +utter.clock.time().toFixed(2) : null }),
     destroy() {
@@ -1044,6 +1206,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
       canvas.removeEventListener('pointerleave', onLeave);
+      canvas.removeEventListener('wheel', onWheel);
     },
   };
 }
