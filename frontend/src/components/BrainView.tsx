@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
-import { X, Info, Mic, Send, Radio } from 'lucide-react';
+import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen } from 'lucide-react';
 import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
@@ -111,6 +111,9 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const [model, setModel] = useState('');
   const [tps, setTps] = useState<number | null>(null);
   const [showKey, setShowKey] = useState(false);
+  // Full brain: the panels under the mic (numbers, thought stream, face) fold away. Remembered per browser.
+  const [full, setFull] = useState(() => { try { return localStorage.getItem('brainFull') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('brainFull', full ? '1' : '0'); } catch { /* private mode */ } }, [full]);
   const [draft, setDraft] = useState('');
   const [hud, setHud] = useState({ signals: 0, lit: 0, neurons: 0, session: 0 });
   const lineId = useRef(0);
@@ -210,6 +213,8 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (!typing && (e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) setFull(v => !v);
       // Space opens the mic, unless you are typing
       if (e.code === 'Space' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)
           && !(e.target instanceof HTMLButtonElement)) {
@@ -255,9 +260,9 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#05060a] text-gray-200 font-rajdhani">
       {/* Header */}
-      <div className="relative flex items-center gap-3 px-4 py-2.5 border-b border-cyber-blue/25 bg-[#07090f]">
+      <div className="relative flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 border-b border-cyber-blue/25 bg-[#07090f]">
         <div className="flex flex-col leading-none shrink-0">
-          <span className="font-mono text-cyber-blue text-sm tracking-[0.25em]">DELAMAIN<span className="text-cyber-red">//</span><span className="hidden sm:inline">NEURAL CORE</span><span className="sm:hidden">CORE</span></span>
+          <span className="font-mono text-cyber-blue text-sm tracking-[0.25em]">DELAMAIN<span className="hidden sm:inline"><span className="text-cyber-red">//</span>NEURAL CORE</span></span>
           <span className="hidden sm:block font-mono text-[9px] tracking-[0.3em] text-gray-500 mt-1">SOVEREIGN TRANSPORT INTELLIGENCE · LIVE DIAGNOSTIC</span>
         </div>
         <span className={`flex items-center gap-2 px-2.5 py-1 border text-xs font-bold tracking-wider uppercase shrink-0 ${cut(6)}`}
@@ -265,10 +270,14 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
           <span className="w-2 h-2" style={{ background: core.color, boxShadow: `0 0 8px ${core.color}` }} />
           {core.name}
         </span>
-        <span className="flex-1 truncate text-sm text-gray-300 italic">{statusLine(phase, tool, core.name)}</span>
+        <span className="flex-1 min-w-0 truncate text-sm text-gray-300 italic">{statusLine(phase, tool, core.name)}</span>
         <span className={`hidden md:inline font-mono text-[11px] ${connected ? 'text-green-400/80' : 'text-cyber-red/90'}`}>
           {connected ? `▮ UPLINK${tps ? ` · ${tps} TOK/S` : ''}` : '▯ RECONNECTING'}
         </span>
+        <button onClick={() => setFull(v => !v)} title={full ? 'Show the panels again (F)' : 'Let the brain fill the screen (F)'}
+          className={`p-2 rounded transition-colors ${full ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
+          {full ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
+        </button>
         <button onClick={() => setShowKey(k => !k)} title="What each subsystem does"
           className={`p-2 rounded transition-colors ${showKey ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
           <Info size={20} />
@@ -297,6 +306,12 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
               {model && <span className="max-w-[220px] truncate">UPLINK <span className="text-cyber-blue">{model.toUpperCase()}</span></span>}
               <span>SESSION <span className="text-cyber-blue">{String(Math.floor(hud.session / 60)).padStart(2, '0')}:{String(hud.session % 60).padStart(2, '0')}</span></span>
             </div>
+            {full && (
+              <button onClick={() => setFull(false)} title="Show the numbers and the thought stream again (F)"
+                className="absolute right-4 bottom-[15%] flex items-center gap-1.5 px-2.5 py-1.5 border border-cyber-blue/40 bg-[#05060a]/80 font-mono text-[10px] tracking-[0.15em] text-cyber-blue/80 hover:text-cyber-blue hover:border-cyber-blue/80">
+                <PanelBottomOpen size={13} /> SHOW PANELS
+              </button>
+            )}
             {showKey && (
               <div className={`absolute left-1/2 -translate-x-1/2 top-8 w-[min(440px,92%)] p-3 border border-cyber-blue/40 bg-[#05060a]/95 text-sm space-y-1.5 shadow-xl ${cut(10)}`}>
                 <p className="text-gray-300 leading-snug">Each subsystem lights up when Delamain uses it. The dots stand in for the model's weights;
@@ -347,7 +362,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
         </div>
 
         {/* Thought stream + today */}
-        <aside className="md:w-[380px] shrink-0 flex flex-col min-h-0 border-t md:border-t-0 md:border-l border-cyber-blue/20 bg-[#07090f] max-h-[30vh] md:max-h-none">
+        <aside className={`md:w-[380px] shrink-0 flex-col min-h-0 border-t md:border-t-0 md:border-l border-cyber-blue/20 bg-[#07090f] max-h-[30vh] md:max-h-none ${full ? 'hidden' : 'flex'}`}>
           {/* His face, beside the brain (landscape only; the main page hands it over) */}
           {face && (
             <div className="relative shrink-0 h-[40vh] min-h-[220px] border-b border-cyber-blue/20 bg-black overflow-hidden">
@@ -374,7 +389,11 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
             ))}
           </div>
           <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-            <span className="font-mono text-[11px] tracking-[0.25em] text-cyber-blue/80 uppercase">Thought stream</span>
+            <span className="flex items-center gap-3">
+              <span className="font-mono text-[11px] tracking-[0.25em] text-cyber-blue/80 uppercase">Thought stream</span>
+              <button onClick={() => setFull(true)} title="Hide these panels so the brain fills the screen (F)"
+                className="font-mono text-[10px] tracking-[0.15em] text-gray-500 hover:text-cyber-blue">▾ HIDE</button>
+            </span>
             {model && <span className="font-mono text-[10px] text-gray-500 truncate max-w-[60%]">{model}</span>}
           </div>
           <ol className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 space-y-1.5">
