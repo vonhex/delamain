@@ -112,6 +112,21 @@ its layer, weight count and largest tensors. Missing files come back as `llm_err
 
 ---
 
+### Meeting notes
+
+All need the bearer token. See [meetings.md](meetings.md).
+
+| Call | |
+|---|---|
+| `POST /api/meetings` `{"title": "", "mime": "audio/webm;codecs=opus"}` | start one; returns it with its `id` and `status: "recording"` |
+| `PUT /api/meetings/{id}/chunk/{seq}` (raw audio body, up to 25 MB) | one piece of the recording; `seq` counts from 0 |
+| `POST /api/meetings/{id}/finish` `{"title": null}` | stop: queue it to be transcribed and written up (also retries a failed one) |
+| `GET /api/meetings` | the 30 most recent, newest first |
+| `GET /api/meetings/{id}` | one: `status` (`recording`, `queued`, `transcribing`, `summarising`, `done`, `error`), `progress` 0–1, `duration`, and when done `note` (its path in the vault) and `summary` |
+| `DELETE /api/meetings/{id}` | forget it here (and its recording); the note in the vault stays |
+
+While a meeting is written up, every open page gets `{"type": "meeting", "meeting": {…}}` over the WebSocket.
+
 ### `GET /api/brain/events?token=`
 
 The Brain view's live feed, as Server-Sent Events. The browser's `EventSource` cannot send

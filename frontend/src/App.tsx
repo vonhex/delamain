@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon, NotebookPen } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { BrainView } from './components/BrainView';
+import { MeetingPanel, type Meeting } from './components/MeetingPanel';
+import { useMeetingRecorder, fmtClock } from './components/meetingRecorder';
 import type { SpeechClock } from './components/brain/brainRenderer';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing, playListenTone, playListenEndTone } from './utils/sounds';
@@ -122,6 +124,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
+  // Meeting notes: the recorder lives here, so closing the panel does not stop a meeting.
+  const [isMeetingOpen, setIsMeetingOpen] = useState(false);
+  const [meetingUpdate, setMeetingUpdate] = useState<Meeting | null>(null);
+  const meetingRecRef = useRef(false);
+  const meeting = useMeetingRecorder(token, rec => {
+    meetingRecRef.current = rec;   // the wake word would fight the recorder for the mic, and hear "Delamain" in the meeting
+    if (rec) pauseWakeRef.current(); else resumeWakeRef.current();
+  });
   // The Brain view; #brain in the address opens it straight away (a second screen or a phone)
   const [isBrainOpen, setIsBrainOpen] = useState(() => location.hash === '#brain');
   useEffect(() => {
@@ -303,6 +313,10 @@ function MainApp({ token, onLogout }: MainAppProps) {
         playConnectChime();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0);
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
+      } else if (msg.type === 'meeting') {
+        const m = msg.meeting as Meeting;
+        setMeetingUpdate(m);
+        if (m.status === 'done') setMessages(prev => [...prev, { role: 'delamain', content: `📝 The notes from “${m.title}” are in your vault: ${m.note}` }]);
       } else if (msg.type === 'dungeon') {
         setDungeon(msg.dungeon ?? null);
       } else if (msg.type === 'response') {
@@ -544,7 +558,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     });
   };
 
-  const wakeAllowed = () => settingsRef.current.wakeWord && !wakeBlockedRef.current && !!SpeechRec
+  const wakeAllowed = () => settingsRef.current.wakeWord && !wakeBlockedRef.current && !!SpeechRec && !meetingRecRef.current
     && !audioPlayingRef.current && !loadingRef.current && document.visibilityState === 'visible';
 
   // Listen in the background for "Delamain". Speech recognition ends now and then by
@@ -712,6 +726,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
           title="Data explorer"
         >
           <Database size={24} />
+        </button>
+        <button
+          onClick={() => setIsMeetingOpen(o => !o)}
+          className={`relative p-2 rounded-lg transition-colors ${isMeetingOpen ? 'bg-cyber-blue/20 text-cyber-blue' : meeting.state !== 'idle' ? 'text-red-400' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title={meeting.state !== 'idle' ? `Recording a meeting (${fmtClock(meeting.elapsed)})` : 'Meeting notes: record a meeting'}
+        >
+          <NotebookPen size={24} />
+          {meeting.state !== 'idle' && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />}
         </button>
         <button
           onClick={() => setIsBrainOpen(true)}
@@ -974,6 +996,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
         )}
 
         {/* Data Explorer Panel */}
+        {isMeetingOpen && (
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[440px]">
+            <MeetingPanel token={token} recorder={meeting} update={meetingUpdate} onClose={() => setIsMeetingOpen(false)} />
+          </div>
+        )}
+
         {isDataOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden transition-all duration-300 w-full md:w-[560px]">
             <DataDashboard token={token} onClose={() => setIsDataOpen(false)} />
