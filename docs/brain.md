@@ -1,9 +1,10 @@
 # Delamain's brain
 
-The **Brain** view shows what Delamain is doing while he does it. Open it with the brain
-button in the left sidebar, or add `#brain` to the address
-(`http://localhost:8888/#brain`) to open it straight away, for example on a second screen
-or a phone propped on the dash. Esc or the ✕ closes it.
+The **Brain view** (the *neural core*) shows what Delamain is doing while he does it, as a
+live diagnostic of a sovereign transport intelligence. Open it with the brain button in the
+left sidebar, or add `#brain` to the address (`http://localhost:8888/#brain`) to open it
+straight away, for example on a second screen or a phone propped on the dash. Esc or the ✕
+closes it.
 
 <img src="../Screenshots/brain.png" alt="The Brain view: Delamain thinking, with two tools in flight" />
 
@@ -12,58 +13,87 @@ backend: the moment he hears you, each call to the language model (with its toke
 and timing), each tool he uses, each time he catches himself out, the voice being
 synthesized, and the reply leaving his mouth.
 
+## Talk to him from the neural core
+
+You don't have to leave the view to see it in action. The bar under the brain is the main
+page's own mic and chat:
+
+- **SPEAK** (or press **Space**) opens the mic, exactly like the big mic button.
+  While it is open the audio intake glows, and **your words fly into it as they are
+  recognized**, before the message is even sent.
+- **Type** in the box and press Enter to send a message without speaking.
+- **The wake word** works here too: say "Delamain", or "Delamain, what's the weather?".
+  The line under the bar shows its state: *WAKE WORD ARMED · SAY "DELAMAIN"*, *MIC OPEN ·
+  SPEAK NOW*, *WAKE WORD OFF* (tap *turn on*; it is the same switch as Settings →
+  Listening), or *WAKE WORD BLOCKED* when the browser has refused the microphone for this
+  site. Speech recognition needs a browser that has it (Chrome, Edge, Safari) and, on a phone,
+  the page opened over `https://`.
+
+His replies play through the speaker as usual; the vocoder glows exactly while his voice is
+heard.
+
+**His face** moves into the view when the screen is in landscape: it sits to the right of the
+brain, above the thought stream, still lip-synced and reacting, with a readout of what he is
+doing (*TRANSMITTING* while he speaks, *RECEIVING* while the mic is open, *PROCESSING* while
+he thinks). Close the view and it goes back to the main screen. In portrait the brain keeps
+the whole screen.
+
 ## Reading the brain
 
-The dots are a map of jobs, not real neurons. Each region lights up when Delamain uses it.
-Tap a region (or hover it with a mouse) for a one-line explanation, and press ⓘ for the key.
+The dots are a map of jobs, not real neurons. Each subsystem is labelled with its name
+and, in plain words, what it does; it lights up when Delamain uses it. Tap a part (or hover
+it with a mouse) for a one-line explanation, and press ⓘ for the key.
 
-| Region | Where | Lights up when |
-|---|---|---|
-| **Hearing** | auditory cortex, side of the brain | your message arrives. Your words fly into it from the left. |
-| **Core** | frontal lobe | the language model is thinking. It takes the colour of the active **personality core**: cyan for the original, orange for Wellsprings, and so on. Switching core sends a ripple through it. |
-| **Senses** | visual cortex, back of the brain | he looks at the world: `web_search`, `read_webpage`, `get_news`, `get_weather` |
-| **Navigation** | parietal lobe | `get_route`, and finding the places in a `[NAVIGATE:]` reply |
-| **Plans** | strip across the top | `set_reminder`, `list_reminders`, `cancel_reminder` |
-| **Imagination** | top of the back | Dungeon Master mode: the adventure tools, and the scribe writing up the chronicle in the background |
-| **Memory** | temporal lobe and the hippocampus curl inside | `remember`, `forget` and the Obsidian note tools |
-| **Voice** | Broca's area, front-low | F5-TTS synthesizing his reply. His words leave from here, in the core's colour. |
-| **Reflexes** | cerebellum | an instant pre-recorded reply ("thanks", "how are you", "pause the game", an insult song). The signal goes straight from Hearing to the cerebellum and on to Voice: a reflex arc that never touches the cortex, because no language model is needed. |
-| **Conscience** | the band deep inside | he catches himself promising something he has not done ("I shall check", "I have saved that") and is sent back to actually do it |
+| Subsystem | In plain words | Where | Lights up when |
+|---|---|---|---|
+| **AUDIO INTAKE** | Hearing | auditory cortex, side of the brain | the mic is open, and when your message arrives. Your words fly into it. |
+| **COGNITION CORE** | Core: the model thinking | frontal lobe | the language model is thinking. It takes the colour of the active **personality core**: cyan for the original, orange for Wellsprings, and so on. Switching core sends a ripple through it. |
+| **OPTIC ARRAY** | Senses | visual cortex, back of the brain | he looks at the world: `web_search`, `read_webpage`, `get_news`, `get_weather` |
+| **NAV-GRID** | Navigation | parietal lobe | `get_route`, and finding the places in a `[NAVIGATE:]` reply |
+| **SCHEDULER** | Plans | strip across the top | `set_reminder`, `list_reminders`, `cancel_reminder` |
+| **SIM ENGINE** | Imagination | top of the back | Dungeon Master mode: the adventure tools, and the scribe writing up the chronicle in the background |
+| **MEMORY BANKS** | Memory | temporal lobe and the hippocampus curl inside | `remember`, `forget` and the Obsidian note tools |
+| **VOCODER** | Voice | Broca's area, front-low | F5-TTS synthesizing his reply, and while his voice plays. His words leave from here, in the core's colour. |
+| **REFLEX ARC** | Reflexes | cerebellum | an instant pre-recorded reply ("thanks", "how are you", "pause the game", an insult song). The signal goes straight from the audio intake to the cerebellum and on to the vocoder, never touching the cortex, because no language model is needed. |
+| **ETHICS DAEMON** | Conscience | the band deep inside | he catches himself promising something he has not done ("I shall check", "I have saved that") and is sent back to actually do it. The display glitches for a moment. |
 
 **Signals.** There are no connecting lines. Each signal is a glowing particle with a comet
 tail that hops from neuron to neuron along a real path through the brain, lighting each
-neuron it passes. While the model thinks, comets run from Memory, Hearing and the senses
-into the Core. When it reaches for a tool they run from the Core to that tool's region and
-back with the result. When the LLM server publishes its speed, the thinking comets run at
-roughly one per generated token.
+neuron it passes. While the model thinks, comets run from memory, the audio intake and the
+senses into the cognition core. When it reaches for a tool they run from the core to that
+tool's subsystem and back with the result. When the LLM server publishes its speed, the
+thinking comets run at roughly one per generated token.
 
-**Flares** float up from a region for a moment: "48 tokens · 2.2 s · → 2 tools" when a
+**Flares** float up from a subsystem for a moment: "48 tokens · 2.2 s · → 2 tools" when a
 model call finishes, "checking the weather" as a tool starts, "reflex · thanks".
 
-**The EEG strip** along the bottom follows the phase: a slow resting wave when idle, a
-quicker one while hearing or speaking, dense spikes while thinking, and a jolt when his
-conscience fires.
+**Telemetry.** Along the top: *synaptic load* (how much of the brain is firing), signals in
+flight, the number of nodes, the model on the uplink, and how long the view has been open.
+Along the bottom, the **neural telemetry** strip follows the phase: a slow resting wave when
+idle, a quicker one while listening or speaking, dense spikes while thinking, and a jolt
+when his ethics daemon fires. The hex ticker beside it runs faster while he works.
 
 ## The thought stream
 
 The panel on the right (below the brain on a phone) narrates every event in plain words,
-newest first:
+newest first, tagged with the subsystem:
 
-> 👂 Heard you: "What is the weather like at home, and remind me to buy milk in twenty…"
-> 🧠 Thinking about your request.
-> 💭 Reaching for 2 tools: checking the weather, setting a reminder (48 tokens · 2.2 s).
-> 🛠️ Checking the weather…
-> 🫢 Caught himself claiming to have saved something without saving it. Going back to do it.
+> 👂 AUDIO INTAKE · Heard you: "What is the weather like at home, and remind me to buy milk in twenty…"
+> 🧠 COGNITION CORE · Thinking about your request.
+> 💭 COGNITION CORE · Reaching for 2 tools: checking the weather, setting a reminder (48 tokens · 2.2 s).
+> 🛠️ OPTIC ARRAY · Checking the weather…
+> 🫢 ETHICS DAEMON · Caught himself claiming to have saved something without saving it. Going back to do it.
 > 💬 Said: "It is a mild fourteen degrees at home…"
 
 Above it are today's numbers: messages heard, replies, reflex replies, model calls ("thoughts"),
-average thinking time, tokens in → out, tools used and self-corrections. They reset at midnight
+average thinking time, tokens in → out, tools used and self-checks. They reset at midnight
 and when the backend restarts.
 
 ## How it works
 
 `brain.py` is a small event bus. `main.py` calls `brain.emit()` at the real moments of a
-turn; nothing in it changes a reply. The page subscribes with Server-Sent Events.
+turn; nothing in it changes a reply. The page subscribes with Server-Sent Events. The mic,
+the live transcript and the speaker come straight from the page itself.
 
 | Event | Sent when | Notable fields |
 |---|---|---|

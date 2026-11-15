@@ -14,17 +14,17 @@ export type RegionKey =
 
 type RGB = [number, number, number];
 
-export const REGION_INFO: Record<Exclude<RegionKey, 'stem'>, { label: string; color: string; tip: string }> = {
-  hearing:     { label: 'Hearing',     color: '#fcd34d', tip: 'Hearing: your words arrive here, transcribed from the microphone.' },
-  core:        { label: 'Core',        color: '#00f0ff', tip: 'Core: the language model thinking. It takes the colour of the active personality core.' },
-  senses:      { label: 'Senses',      color: '#38bdf8', tip: 'Senses: looking at the world: web search, web pages, news and weather.' },
-  navigation:  { label: 'Navigation',  color: '#4ade80', tip: 'Navigation: driving routes and finding the places you ask to go.' },
-  plans:       { label: 'Plans',       color: '#f472b6', tip: 'Plans: reminders and timers he will speak when they are due.' },
-  imagination: { label: 'Imagination', color: '#c084fc', tip: 'Imagination: Dungeon Master mode, the adventures and their chronicles.' },
-  memory:      { label: 'Memory',      color: '#2dd4bf', tip: 'Memory: what he remembers about you, and your notes in the Obsidian vault.' },
-  voice:       { label: 'Voice',       color: '#a5f3fc', tip: 'Voice: synthesizing his spoken reply. His words leave from here.' },
-  reflex:      { label: 'Reflexes',    color: '#fb923c', tip: 'Reflexes: instant pre-recorded replies ("thanks", "how are you") that skip the language model.' },
-  conscience:  { label: 'Conscience',  color: '#f87171', tip: 'Conscience: flashes when he catches himself promising something he has not done, and goes back to do it.' },
+export const REGION_INFO: Record<Exclude<RegionKey, 'stem'>, { code: string; label: string; sub: string; color: string; tip: string }> = {
+  hearing:     { code: 'AUDIO INTAKE',   label: 'Hearing',     sub: 'your words in',          color: '#fcd34d', tip: 'Hearing: your words arrive here, transcribed from the microphone.' },
+  core:        { code: 'COGNITION CORE', label: 'Core',        sub: 'the model thinking',     color: '#00f0ff', tip: 'Core: the language model thinking. It takes the colour of the active personality core.' },
+  senses:      { code: 'OPTIC ARRAY',    label: 'Senses',      sub: 'search · news · weather', color: '#38bdf8', tip: 'Senses: looking at the world: web search, web pages, news and weather.' },
+  navigation:  { code: 'NAV-GRID',       label: 'Navigation',  sub: 'routes · places',        color: '#4ade80', tip: 'Navigation: driving routes and finding the places you ask to go.' },
+  plans:       { code: 'SCHEDULER',      label: 'Plans',       sub: 'reminders · timers',     color: '#f472b6', tip: 'Plans: reminders and timers he will speak when they are due.' },
+  imagination: { code: 'SIM ENGINE',     label: 'Imagination', sub: 'adventures',             color: '#c084fc', tip: 'Imagination: Dungeon Master mode, the adventures and their chronicles.' },
+  memory:      { code: 'MEMORY BANKS',   label: 'Memory',      sub: 'facts · notes',          color: '#2dd4bf', tip: 'Memory: what he remembers about you, and your notes in the Obsidian vault.' },
+  voice:       { code: 'VOCODER',        label: 'Voice',       sub: 'speech out',             color: '#a5f3fc', tip: 'Voice: synthesizing his spoken reply. His words leave from here.' },
+  reflex:      { code: 'REFLEX ARC',     label: 'Reflexes',    sub: 'instant replies',        color: '#fb923c', tip: 'Reflexes: instant pre-recorded replies ("thanks", "how are you") that skip the language model.' },
+  conscience:  { code: 'ETHICS DAEMON',  label: 'Conscience',  sub: 'self-check',             color: '#f87171', tip: 'Conscience: flashes when he catches himself promising something he has not done, and goes back to do it.' },
 };
 
 const hex = (h: string): RGB => {
@@ -222,7 +222,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const narrow = width < 700, portrait = height > width * 1.4;
     const availW = width - (narrow ? 20 : 60), availH = eegTop - padTop - 8;
     // room on the left for the incoming words and on the right for the outgoing ones
-    const scale = Math.min(availW / (portrait ? 2.4 : narrow ? 2.9 : 3.0), availH / 1.9);
+    const wide = width >= 760;
+    const scale = Math.min((availW - (wide ? 2 * 150 : 0)) / (portrait ? 2.4 : narrow ? 2.9 : 2.25), availH / 1.85);
     vp = { cx: width * 0.5, cy: padTop + availH * 0.44, scale, eegTop, eegH };
   }
   function project(x: number, y: number, z: number, out = P) {
@@ -313,7 +314,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   const st = {
     phase: 'idle' as string, since: 0, coreColor: hex('#00f0ff'), thinking: 0, activeTools: new Map<string, RegionKey>(),
     voicing: 0, speakingUntil: 0, hearingUntil: 0, tps: null as number | null, round: 0, scribe: false,
-    conscience: 0, error: 0, carry: { think: 0, tool: 0, voice: 0, idle: 0, hear: 0 },
+    conscience: 0, error: 0, glitch: 0, listening: false, speaking: false, liveFedAt: -99, liveWords: 0,
+    carry: { think: 0, tool: 0, voice: 0, idle: 0, hear: 0 },
   };
   const wordQ: { w: string; col: RGB; inbound: boolean }[] = [];
   let wordCool = 0, lane = 0;
@@ -337,7 +339,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     switch (k) {
       case 'heard': {
         st.hearingUntil = t + 1.6;
-        if (!reduced() && typeof ev.text === 'string') queueWords(ev.text, colorOf('hearing'), true);
+        if (!reduced() && typeof ev.text === 'string' && t - st.liveFedAt > 15) queueWords(ev.text, colorOf('hearing'), true);
         burstAt('hearing', 8, 0.2);
         break;
       }
@@ -379,6 +381,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       }
       case 'correction': {
         st.conscience = 1;
+        st.glitch = 1;
         lightRegion('conscience', 1, 999);
         burstAt('conscience', 18, 0.35);
         ripple = { x: ANCHORS.conscience[0], y: ANCHORS.conscience[1], z: 0, r: 0, col: colorOf('conscience') };
@@ -402,7 +405,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         if (typeof ev.color === 'string') setCore(ev.color);
         break;
       }
-      case 'error': st.error = 1; break;
+      case 'error': st.error = 1; st.glitch = 1; break;
     }
   }
 
@@ -418,11 +421,12 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   const phaseNow = () => {
     const t = now();
     if (st.conscience > 0.4) return 'conscience';
+    if (st.listening) return 'listening';
     if (st.activeTools.size) return 'tool';
     if (st.thinking) return st.scribe ? 'scribe' : 'thinking';
     if (st.voicing) return 'voice';
     if (t < st.hearingUntil) return 'hearing';
-    if (t < st.speakingUntil) return 'speaking';
+    if (st.speaking || t < st.speakingUntil) return 'speaking';
     return 'idle';
   };
 
@@ -431,6 +435,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     for (const n of neurons) n.energy *= Math.exp(-dt * 3.2);
     st.conscience = Math.max(0, st.conscience - dt * 0.35);
     st.error = Math.max(0, st.error - dt * 0.6);
+    st.glitch = Math.max(0, st.glitch - dt * 2.2);
     const swayYaw = reduced() ? 0 : Math.sin(clock * 0.13) * 0.2, swayPitch = reduced() ? 0 : Math.sin(clock * 0.09) * 0.04;
     if (!cam.dragging) { cam.tYaw *= Math.exp(-dt * 1.5); cam.tPitch *= Math.exp(-dt * 1.5); }
     cam.yaw += (swayYaw + cam.tYaw - 0.28 - cam.yaw) * Math.min(1, dt * 4);
@@ -447,6 +452,11 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         const regs: RegionKey[] = ['core', 'memory', 'navigation', 'senses', 'hearing', 'core'];
         spawn(pick(regs), pick(regs), { c0: COL.idle, speed: 0.32, tail: 0.16, w: 0.7, alpha: 0.55 });
       }
+    }
+    if (phase === 'listening') {
+      lightRegion('hearing', 0.45 + 0.25 * Math.sin(clock * 6), 6);
+      c.hear += dt * 5;
+      while (c.hear >= 1) { c.hear--; spawn('hearing', 'hearing', { c0: colorOf('hearing'), speed: 0.9, tail: 0.2, w: 0.9 }); }
     }
     if (phase === 'hearing') {
       c.hear += dt * 14;
@@ -519,7 +529,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       if (inbound) {
         glyphs.push({ w, col, inbound, x: EAR[0] - 1.25, y: EAR[1] + L * 0.06 - 0.25, z: EAR[2], vx: 0, vy: 0, life: 1, ph: Math.random() * TAU, tx: EAR[0], ty: EAR[1], tz: EAR[2] });
       } else {
-        glyphs.push({ w, col, inbound, x: MOUTH[0] + Math.random() * 0.03, y: MOUTH[1] + L * 0.035, z: MOUTH[2], vx: 0.2 + Math.random() * 0.05, vy: L * 0.04 - 0.01, life: 1, ph: Math.random() * TAU });
+        glyphs.push({ w, col, inbound, x: MOUTH[0] + Math.random() * 0.03, y: MOUTH[1] + L * 0.035, z: MOUTH[2], vx: (width >= 760 ? 0.13 : 0.2) + Math.random() * 0.05, vy: L * 0.035 + (width >= 760 ? -0.13 : -0.01), life: 1, ph: Math.random() * TAU });
         burst(MOUTH[0], MOUTH[1], MOUTH[2], col, 3, 0.12);
         lightRegion('voice', 1, 4);
       }
@@ -551,7 +561,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   const regionHot = (r: RegionKey) => {
     const p = st.phase;
     if (r === 'core') return st.thinking ? 1 : p === 'hearing' ? 0.4 : 0;
-    if (r === 'hearing') return p === 'hearing' ? 1 : 0;
+    if (r === 'hearing') return p === 'hearing' || p === 'listening' ? 1 : 0;
     if (r === 'voice') return st.voicing || p === 'speaking' ? 1 : 0;
     if (r === 'conscience') return st.conscience;
     if ([...st.activeTools.values()].includes(r)) return 1;
@@ -672,7 +682,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       const p = st.phase, t = clock;
       let v: number;
       if (p === 'idle') v = Math.sin(t * TAU * 1.1) * 0.16 + Math.sin(t * TAU * 0.35) * 0.08 + (Math.random() - 0.5) * 0.04;
-      else if (p === 'hearing') v = Math.sin(t * TAU * 4) * 0.4 + (Math.random() - 0.5) * 0.2;
+      else if (p === 'hearing' || p === 'listening') v = Math.sin(t * TAU * 4) * 0.4 + (Math.random() - 0.5) * 0.2;
       else if (p === 'speaking' || p === 'voice') v = Math.sin(t * TAU * 6) * 0.35 * (0.6 + 0.4 * Math.sin(t * TAU * 1.3)) + (Math.random() - 0.5) * 0.25;
       else { v = (Math.sin(t * TAU * 7) * 0.4 + (Math.random() - 0.5) * 1.1) * 0.65; if (Math.random() < 0.04) eeg.spike = 1; }
       if (st.conscience > 0.3 && Math.random() < 0.1) eeg.spike = 1;
@@ -685,7 +695,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   function drawEeg() {
     const top = vp.eegTop, h = vp.eegH, x0 = 12, x1 = width - 12, mid = top + h * 0.5, amp = h * 0.34;
     const p = st.phase;
-    const col: RGB = p === 'hearing' ? colorOf('hearing') : p === 'speaking' || p === 'voice' ? colorOf('voice')
+    const col: RGB = p === 'hearing' || p === 'listening' ? colorOf('hearing') : p === 'speaking' || p === 'voice' ? colorOf('voice')
       : p === 'conscience' ? colorOf('conscience') : p === 'idle' ? colorOf('memory') : st.coreColor;
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = 'rgba(0,243,255,0.10)';
@@ -710,26 +720,83 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
 
   /* ── labels + tooltip ──────────────────────────────────────────────── */
   let tooltip: { key: Exclude<RegionKey, 'stem'>; until: number } | null = null;
+  function cutRect(x: number, y: number, w: number, h: number, cut: number) {   // an angular HUD tag
+    ctx.beginPath();
+    ctx.moveTo(x + cut, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - cut);
+    ctx.lineTo(x + w - cut, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + cut); ctx.closePath();
+  }
   function drawLabels() {
-    const compact = width < 560;
+    const compact = width < 760;
+    const keys = Object.keys(ANCHORS) as Exclude<RegionKey, 'stem'>[];
     ctx.globalCompositeOperation = 'source-over';
-    ctx.font = `${compact ? '600 10px' : '600 11px'} "Share Tech Mono", ui-monospace, monospace`;
-    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (const k of Object.keys(ANCHORS) as Exclude<RegionKey, 'stem'>[]) {
-      const hot = regionHot(k) >= 0.8;
-      if (k === 'conscience' && !hot) continue;
-      if (compact && !hot) continue;
+    // where each region is on screen
+    const items = keys.map(k => {
       const [x, y, z] = ANCHORS[k];
-      project(x, y + (LABEL_DY[k] ?? 0.13), z);
-      const text = REGION_INFO[k].label.toUpperCase(), c = k === 'core' ? st.coreColor : colorOf(k);
-      const tw = ctx.measureText(text).width + 14;
-      ctx.globalAlpha = hot ? 1 : 0.7;
-      ctx.fillStyle = hot ? 'rgba(6,10,20,0.85)' : 'rgba(6,10,20,0.4)';
-      ctx.beginPath(); ctx.roundRect(P[0] - tw / 2, P[1] - 9, tw, 18, 3); ctx.fill();
-      if (hot) { ctx.strokeStyle = `rgba(${c.join(',')},0.85)`; ctx.lineWidth = 1; ctx.stroke(); }
-      ctx.fillStyle = hot ? '#fff' : `rgba(${c.join(',')},0.9)`;
-      ctx.fillText(text, P[0], P[1] + 0.5);
+      project(x, y, z);
+      return { k, ax: P[0], ay: P[1], hot: phaseNowHot(k), c: k === 'core' ? st.coreColor : colorOf(k) };
+    });
+    if (compact) {
+      ctx.font = '600 9.5px "Share Tech Mono", ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      for (const it of items) {
+        const [x, y, z] = ANCHORS[it.k];
+        project(x, y + (LABEL_DY[it.k] ?? 0.13), z);
+        const text = REGION_INFO[it.k].code, tw = ctx.measureText(text).width + 12;
+        ctx.globalAlpha = it.hot ? 1 : 0.75;
+        ctx.fillStyle = it.hot ? 'rgba(6,10,20,0.88)' : 'rgba(6,10,20,0.55)';
+        cutRect(P[0] - tw / 2, P[1] - 8, tw, 16, 4); ctx.fill();
+        ctx.strokeStyle = `rgba(${it.c.join(',')},${it.hot ? 0.9 : 0.35})`; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = it.hot ? '#fff' : `rgba(${it.c.join(',')},0.95)`;
+        ctx.fillText(text, P[0], P[1] + 0.5);
+      }
+    } else {
+      // two columns at the sides, like a schematic; nudge apart so nothing overlaps
+      const boxW = 176, boxH = 34, gap = 6;
+      const left = items.filter(i => i.ax < vp.cx).sort((a, b) => a.ay - b.ay);
+      const right = items.filter(i => i.ax >= vp.cx).sort((a, b) => a.ay - b.ay);
+      const place = (col: typeof items, x: number) => {
+        let lastY = 8 - gap;
+        const placed = col.map(it => { const y = Math.max(it.ay - boxH / 2, lastY + gap); lastY = y + boxH; return { ...it, bx: x, by: y }; });
+        const overflow = lastY - (vp.eegTop - 8);
+        if (overflow > 0) placed.forEach(p2 => { p2.by -= overflow; });
+        return placed;
+      };
+      const margin = Math.max(14, Math.min(60, (width - vp.scale * 2.6) / 2 - boxW - 10));
+      const all = [...place(left, margin), ...place(right, width - margin - boxW)];
+      for (const it of all) {
+        const isLeft = it.bx < vp.cx;
+        const ex = isLeft ? it.bx + boxW : it.bx, ey = it.by + boxH / 2;
+        const a = it.hot ? 1 : 0.55;
+        // leader line with an elbow, and a small diamond on the region
+        ctx.globalAlpha = a * 0.7;
+        ctx.strokeStyle = `rgba(${it.c.join(',')},${it.hot ? 0.9 : 0.4})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const elbow = isLeft ? ex + 18 : ex - 18;
+        ctx.moveTo(ex, ey); ctx.lineTo(elbow, ey); ctx.lineTo(it.ax, it.ay); ctx.stroke();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = `rgb(${it.c.join(',')})`;
+        ctx.beginPath(); ctx.moveTo(it.ax, it.ay - 4); ctx.lineTo(it.ax + 4, it.ay); ctx.lineTo(it.ax, it.ay + 4); ctx.lineTo(it.ax - 4, it.ay); ctx.closePath(); ctx.fill();
+        // the tag
+        ctx.fillStyle = it.hot ? 'rgba(6,10,20,0.9)' : 'rgba(6,10,20,0.62)';
+        cutRect(it.bx, it.by, boxW, boxH, 7); ctx.fill();
+        ctx.strokeStyle = `rgba(${it.c.join(',')},${it.hot ? 0.95 : 0.35})`;
+        ctx.stroke();
+        ctx.fillStyle = `rgb(${it.c.join(',')})`;
+        ctx.fillRect(isLeft ? it.bx + boxW - 3 : it.bx, it.by + 6, 3, boxH - 12);   // accent bar on the line side
+        ctx.textAlign = 'left';
+        ctx.font = '600 11.5px "Share Tech Mono", ui-monospace, monospace';
+        ctx.fillStyle = it.hot ? '#ffffff' : `rgba(${it.c.join(',')},0.95)`;
+        ctx.fillText(REGION_INFO[it.k].code, it.bx + 10, it.by + 11);
+        ctx.font = '500 11px Rajdhani, system-ui, sans-serif';
+        ctx.fillStyle = it.hot ? 'rgba(226,232,240,0.95)' : 'rgba(148,163,184,0.85)';
+        ctx.fillText(`${REGION_INFO[it.k].label} · ${REGION_INFO[it.k].sub}`, it.bx + 10, it.by + 24, boxW - 18);
+        if (it.hot) {   // a live pip on the tag
+          ctx.fillStyle = `rgba(${it.c.join(',')},${0.6 + 0.4 * Math.sin(clock * 8)})`;
+          ctx.fillRect(isLeft ? it.bx + boxW - 14 : it.bx + boxW - 12, it.by + 8, 5, 5);
+        }
+      }
     }
     if (tooltip && now() < tooltip.until) {
       const [x, y, z] = ANCHORS[tooltip.key];
@@ -741,13 +808,77 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       ctx.globalAlpha = 1;
       ctx.fillStyle = 'rgba(8,12,24,0.95)';
       ctx.strokeStyle = `rgba(${(tooltip.key === 'core' ? st.coreColor : colorOf(tooltip.key)).join(',')},0.8)`;
-      ctx.beginPath(); ctx.roundRect(bx, by, tw, 26, 4); ctx.fill(); ctx.stroke();
+      cutRect(bx, by, tw, 26, 6); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#e2e8f0';
       ctx.textAlign = 'left';
       ctx.fillText(text, bx + 11, by + 13.5, tw - 22);
     }
     ctx.globalAlpha = 1;
   }
+  const phaseNowHot = (k: RegionKey) => regionHot(k) >= 0.8;
+
+  /* ── cyberpunk dressing: hex grid, hex ticker, glitch ─────────────────── */
+  let hexGrid: HTMLCanvasElement | null = null;
+  function buildHexGrid() {
+    hexGrid = document.createElement('canvas');
+    hexGrid.width = Math.ceil(width * dpr); hexGrid.height = Math.ceil(height * dpr);
+    const g = hexGrid.getContext('2d')!;
+    g.scale(dpr, dpr);
+    const r = 16, hh = Math.sqrt(3) * r;
+    g.strokeStyle = 'rgba(0,243,255,0.045)';
+    g.lineWidth = 1;
+    for (let row = 0, y = 0; y < height + hh; row++, y += hh / 2) {
+      for (let x = (row % 2) * r * 1.5; x < width + r * 3; x += r * 3) {
+        g.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i;
+          const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
+          if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.closePath(); g.stroke();
+      }
+    }
+    // a soft vignette so the grid fades toward the edges
+    const v = g.createRadialGradient(width / 2, height * 0.45, Math.min(width, height) * 0.2, width / 2, height * 0.45, Math.max(width, height) * 0.75);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(5,6,10,0.85)');
+    g.fillStyle = v; g.fillRect(0, 0, width, height);
+  }
+  const HEX = '0123456789ABCDEF';
+  const ticker: string[] = [];
+  let tickerT = 0;
+  function drawTicker(dt: number) {
+    tickerT += dt;
+    const busy = st.phase !== 'idle';
+    if (!ticker.length || tickerT > (busy ? 0.08 : 0.5)) {
+      tickerT = 0;
+      ticker.push(HEX[(Math.random() * 16) | 0] + HEX[(Math.random() * 16) | 0]);
+      if (ticker.length > 64) ticker.shift();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '500 9.5px "Share Tech Mono", ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const y = vp.eegTop + 4;
+    ctx.fillStyle = 'rgba(0,243,255,0.55)';
+    ctx.fillText('NEURAL TELEMETRY', 12, y);
+    ctx.fillStyle = 'rgba(0,243,255,0.22)';
+    ctx.fillText(ticker.slice(-Math.floor((width * 0.45) / 19)).join(' '), 120, y, width * 0.5);
+  }
+  function glitch() {
+    if (st.glitch <= 0 || reduced()) return;
+    const bands = 3 + ((Math.random() * 5) | 0);
+    for (let i = 0; i < bands; i++) {
+      const h = 4 + Math.random() * 26, y = Math.random() * vp.eegTop, dx = (Math.random() - 0.5) * 40 * st.glitch;
+      ctx.drawImage(canvas, 0, y * dpr, canvas.width, h * dpr, dx, y, width, h);
+    }
+    // a red/cyan split for a moment
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.25 * st.glitch;
+    ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 3 * st.glitch, 0, width, height);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   function hitRegion(cx: number, cy: number): Exclude<RegionKey, 'stem'> | null {
     const rect = canvas.getBoundingClientRect(), mx = cx - rect.left, my = cy - rect.top;
     let best: Exclude<RegionKey, 'stem'> | null = null, bestD = 60;
@@ -802,6 +933,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     canvas.height = Math.floor(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (rebuild) { signals = []; build(); }
+    buildHexGrid();
   }
   function frame(ts: number) {
     if (document.hidden) { raf = 0; return; }
@@ -814,12 +946,15 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, width, height);
+    if (hexGrid) ctx.drawImage(hexGrid, 0, 0, width, height);
     drawBackdrop();
     drawNeurons();
     drawSignals();
-    drawWords();
     drawLabels();
+    drawWords();   // over the tags, so his words stay readable where they cross them
     drawEeg();
+    drawTicker(dt);
+    glitch();
     raf = requestAnimationFrame(frame);
   }
   const onVis = () => { if (!document.hidden && !raf) { last = 0; raf = requestAnimationFrame(frame); } };
@@ -833,8 +968,19 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     event,
     setCore,
     setTps(tps: number | null) { if (tps) st.tps = tps; },
+    setListening(on: boolean) { st.listening = on; if (!on) st.liveWords = 0; },
+    setSpeaking(on: boolean) { if (st.speaking && !on) st.speakingUntil = now() + 0.4; st.speaking = on; },
+    /** The words recognized so far while the mic is open: new ones fly into Hearing as they come. */
+    feedLive(text: string) {
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      if (words.length < st.liveWords) st.liveWords = 0;
+      const fresh = words.slice(st.liveWords);
+      st.liveWords = words.length;
+      if (fresh.length && !reduced()) { queueWords(fresh.join(' '), colorOf('hearing'), true); st.liveFedAt = now(); }
+    },
     phase: () => st.phase,
-    stats: () => ({ glyphs: glyphs.length, queued: wordQ.length, signals: signals.length, neurons: neurons.length, width, height }),
+    stats: () => ({ glyphs: glyphs.length, queued: wordQ.length, signals: signals.length, neurons: neurons.length, width, height,
+      lit: neurons.reduce((n, x) => n + (x.energy > 0.25 ? 1 : 0), 0) }),
     destroy() {
       cancelAnimationFrame(raf);
       ro.disconnect();
