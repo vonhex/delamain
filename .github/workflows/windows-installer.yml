@@ -1,0 +1,167 @@
+name: Windows installer
+
+# Builds Delamain-Setup-<version>.exe with Inno Setup on Windows and tests it.
+# - Called by release.yml for every release tag: the setup is attached to the release.
+# - On pull requests that touch the installer: built and tested, kept as a workflow artifact,
+#   and the full first-time setup (install.ps1) is run once to prove it still works.
+# - By hand (Actions → Windows installer → Run workflow): optionally attach to an existing release.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      upload:
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to build for and attach to (e.g. v2.5.1); leave empty to only build"
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-installer.yml"
+      - "install.ps1"
+      - "start.bat"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # attach the setup to the release
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Version
+        id: v
+        run: |
+          $v = '${{ inputs.version }}'
+          if (-not $v) { $v = '0.0.0-dev.${{ github.run_number }}' }
+          $v = $v.TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v" >> $env:GITHUB_OUTPUT
+          "Building Delamain-Setup-$v.exe"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The setup ships the built web UI, like the zip, so a first start works even before npm runs.
+      - name: Build the web UI
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Inno Setup
+        id: iscc
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Host }
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup is not available' }
+          "path=$iscc" >> $env:GITHUB_OUTPUT
+
+      - name: Build the setup
+        run: |
+          & '${{ steps.iscc.outputs.path }}' /Qp "/DAppVersion=${{ steps.v.outputs.version }}" windows\delamain.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-ChildItem dist-installer | Format-Table Name, @{n='MB'; e={[math]::Round($_.Length / 1MB, 1)}}
+
+      - name: Test the setup (silent install, check, uninstall)
+        run: |
+          $exe = (Get-ChildItem dist-installer\Delamain-Setup-*.exe | Select-Object -First 1).FullName
+          $dir = Join-Path $env:RUNNER_TEMP 'DelamainTest'
+          # /TASKS without installdeps: copy the files and make shortcuts, skip the big downloads
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", '/TASKS=desktopicon', '/LOG=install.log' -Wait -PassThru
+          if ($p.ExitCode) { Get-Content install.log; throw "setup exited with $($p.ExitCode)" }
+          foreach ($f in 'main.py', 'brain.py', 'install.ps1', 'start.bat', 'requirements.txt', 'windows\launch.ps1',
+                         'windows\first-setup.ps1', 'windows\delamain.ico', 'frontend\dist\index.html', 'delamain_ref_10s.wav') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "missing after install: $f" }
+          }
+          foreach ($f in 'windows\delamain.iss', '.git', 'frontend\node_modules') {
+            if (Test-Path (Join-Path $dir $f)) { throw "should not be installed: $f" }
+          }
+          $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Delamain\Delamain.lnk'
+          $desk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Delamain.lnk'
+          if (-not (Test-Path $menu)) { throw "no Start Menu shortcut at $menu" }
+          if (-not (Test-Path $desk)) { throw "no desktop shortcut at $desk" }
+          $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut($menu)
+          "Shortcut: $($lnk.TargetPath) $($lnk.Arguments)"
+          if ($lnk.Arguments -notmatch 'launch\.ps1') { throw 'shortcut does not run launch.ps1' }
+          foreach ($s in 'windows\launch.ps1', 'windows\first-setup.ps1', 'install.ps1') {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $dir $s), [ref]$null, [ref]$errs)
+            if ($errs) { throw "$s does not parse: $errs" }
+          }
+          $un = (Get-ChildItem (Join-Path $dir 'unins*.exe') | Select-Object -First 1).FullName
+          Start-Process $un -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          Start-Sleep 5
+          if (Test-Path (Join-Path $dir 'main.py')) { throw 'uninstall left the program files behind' }
+          if (Test-Path $menu) { throw 'uninstall left the Start Menu shortcut' }
+          'Install, shortcuts and uninstall OK'
+
+      # Only for pull requests: the real first-time setup, as a user's PC would run it (CPU PyTorch here).
+      - name: Test the first-time setup end to end
+        if: github.event_name == 'pull_request'
+        timeout-minutes: 60
+        run: |
+          $exe = (Get-ChildItem dist-installer\Delamain-Setup-*.exe | Select-Object -First 1).FullName
+          $dir = Join-Path $env:RUNNER_TEMP 'DelamainFull'
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", '/TASKS=' -Wait -PassThru
+          if ($p.ExitCode) { throw "setup exited with $($p.ExitCode)" }
+          $env:TORCH_INDEX = 'https://download.pytorch.org/whl/cpu'
+          # Windows PowerShell 5.1, as the setup and install.bat run it
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'install.ps1') -NoStart
+          if ($LASTEXITCODE) { throw "install.ps1 failed (exit $LASTEXITCODE)" }
+          if (-not (Test-Path (Join-Path $dir 'venv\Scripts\uvicorn.exe'))) { throw 'install.ps1 did not create the environment' }
+          # The memory notes' file lock has its own Windows code path (no fcntl there)
+          Push-Location $dir
+          & .\venv\Scripts\python.exe -c "import assistant_tools as t, config, pathlib, tempfile; d = pathlib.Path(tempfile.mkdtemp()); config.memory_dir = lambda: d; fd = t._memory_lock(); t._memory_unlock(fd); fd = t._memory_lock(); t._memory_unlock(fd); print('memory lock OK on Windows')"
+          if ($LASTEXITCODE) { throw 'the memory lock failed on Windows' }
+          Pop-Location
+          $env:DELAMAIN_CLIPS_URL = ''   # don't download the 240 MB of face clips in CI
+          $env:PYTHONUNBUFFERED = '1'
+          $server = Start-Process cmd.exe -ArgumentList '/c', "`"$dir\start.bat`"" -WorkingDirectory $dir -PassThru `
+            -RedirectStandardOutput server.out.log -RedirectStandardError server.err.log
+          $ok = $false
+          for ($i = 0; $i -lt 300 -and -not $ok; $i++) {
+            if ($server.HasExited) { 'start.bat exited early'; break }
+            Start-Sleep 2
+            try { $ok = (Invoke-RestMethod http://localhost:8888/health -TimeoutSec 2).status -eq 'operational' } catch { }
+          }
+          Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          Get-Process uvicorn, python -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          '--- server output ---'; Get-Content server.out.log -Tail 60 -ErrorAction SilentlyContinue
+          '--- server errors ---'; Get-Content server.err.log -Tail 80 -ErrorAction SilentlyContinue
+          if (-not $ok) { throw 'Delamain did not answer on /health after the first-time setup' }
+          'First-time setup OK: Delamain answered on http://localhost:8888/health'
+
+      - name: Keep the setup as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Delamain-Setup-${{ steps.v.outputs.version }}
+          path: dist-installer/*.exe
+          retention-days: 14
+
+      - name: Attach to the release
+        if: inputs.upload || (github.event_name == 'workflow_dispatch' && inputs.version != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          files: dist-installer/*.exe

@@ -62,8 +62,10 @@ if (-not (NodeOk 'node')) {
 Say 'Building the web UI'
 Push-Location frontend
 try {
-    Run npm ci --no-audit --no-fund --loglevel=error
-    Run npm run build
+    # npm.cmd, not npm: with Node.js installed, PowerShell would pick npm.ps1, and arguments
+    # passed on through Run do not reach a PowerShell script (npm then just prints its help).
+    Run npm.cmd ci --no-audit --no-fund --loglevel=error
+    Run npm.cmd run build
 } finally { Pop-Location }
 
 Say 'Done'

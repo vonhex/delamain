@@ -104,3 +104,13 @@ jobs:
             delamain-*.tar.gz
             delamain-*.zip
             checksums.txt
+
+  # ── Windows setup (.exe), built on Windows and attached to the release above ──
+  windows-installer:
+    needs: release
+    uses: ./.github/workflows/windows-installer.yml
+    with:
+      version: ${{ github.ref_name }}
+      upload: true
+    permissions:
+      contents: write

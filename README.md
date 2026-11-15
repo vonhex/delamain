@@ -26,7 +26,7 @@ Web search ([SearXNG](https://github.com/searxng/searxng)) and an [Obsidian](htt
 
 | System | Do this |
 |---|---|
-| **Windows** | [Download the latest release](https://github.com/vonhex/delamain/releases/latest) (the **delamain-v…zip** file under *Assets*), unzip it, and double-click **`install.bat`** |
+| **Windows** | [Download the latest release](https://github.com/vonhex/delamain/releases/latest) (the **Delamain-Setup-….exe** file under *Assets*) and run it. Windows may warn about an unrecognised app the first time: click **More info → Run anyway**. (Prefer no installer? Take the **.zip** instead, unzip it and double-click **`install.bat`**.) |
 | **macOS / Linux** | Open a terminal and run `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` |
 | **Docker / Unraid** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d`, or install **Delamain** from Community Apps on Unraid |
 
@@ -34,7 +34,7 @@ The installer gets everything it needs by itself (Python, PyTorch for your graph
 
 The first start takes a few minutes longer: Delamain downloads its voice model (about 1.3 GB) and his lip-synced face clips (about 240 MB), then records his fixed lines in the background. He answers in the meantime.
 
-To start Delamain again later, run `start.bat` (Windows) or `./start.sh` (macOS / Linux). To update, download the new release (or `git pull`) and run the installer again. On Linux, `./install.sh --service` makes Delamain start by itself when you log in.
+To start Delamain again later, use the **Delamain** shortcut in the Start Menu or on the desktop (Windows setup), `start.bat` (Windows zip) or `./start.sh` (macOS / Linux). To update, run the newer setup or download the new release (or `git pull`) and run the installer again; your settings and conversations are kept. On Windows, uninstall him like any app, from *Settings → Apps*. On Linux, `./install.sh --service` makes Delamain start by itself when you log in.
 
 ### 2. Choose a password
 
