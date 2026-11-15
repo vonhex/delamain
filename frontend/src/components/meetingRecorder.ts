@@ -11,6 +11,13 @@ type Session = {
 type RecState = 'idle' | 'starting' | 'recording' | 'stopping';
 const SLICE_MS = 10000;   // one uploaded piece every 10 s
 
+/** The API path for one meeting. Ids are 32 hex characters (meetings.py); anything else is refused,
+    so a bad id can never steer a request somewhere else. */
+export function meetingPath(id: string, ...rest: (string | number)[]): string {
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new Error('bad meeting id');
+  return '/api/meetings/' + [id, ...rest].map(p => encodeURIComponent(String(p))).join('/');
+}
+
 const pickMime = () => {
   const MR = window.MediaRecorder;
   if (!MR) return '';
@@ -44,7 +51,7 @@ export function useMeetingRecorder(token: string, onChange?: (recording: boolean
     while (cur.queue.length) {
       const { seq, blob } = cur.queue[0];
       try {
-        const res = await fetch(`/api/meetings/${cur.id}/chunk/${seq}`, { method: 'PUT', headers: auth({ 'Content-Type': 'application/octet-stream' }), body: blob });
+        const res = await fetch(meetingPath(cur.id, 'chunk', seq), { method: 'PUT', headers: auth({ 'Content-Type': 'application/octet-stream' }), body: blob });
         if (!res.ok && res.status !== 409) throw new Error(String(res.status));
         cur.queue.shift(); wait = 1000; setError(null);
       } catch {
@@ -118,7 +125,7 @@ export function useMeetingRecorder(token: string, onChange?: (recording: boolean
     while (cur.queue.length || cur.uploading) { void pump(); await sleep(500); }   // every piece is on the server
     for (let i = 0; ; i++) {
       try {
-        const res = await fetch(`/api/meetings/${cur.id}/finish`, { method: 'POST', headers: auth({ 'Content-Type': 'application/json' }), body: JSON.stringify({ title: title ?? null }) });
+        const res = await fetch(meetingPath(cur.id, 'finish'), { method: 'POST', headers: auth({ 'Content-Type': 'application/json' }), body: JSON.stringify({ title: title ?? null }) });
         if (res.ok) break;
       } catch { /* retry */ }
       setError('Could not reach Delamain to finish the meeting; retrying.');
@@ -134,7 +141,7 @@ export function useMeetingRecorder(token: string, onChange?: (recording: boolean
     try { cur.rec.stop(); } catch { /* stopped */ }
     release(); cur.queue = [];
     r.current = null; setPending(0); setLevel(0); setState('idle'); onChangeRef.current?.(false);
-    await fetch(`/api/meetings/${cur.id}`, { method: 'DELETE', headers: auth() }).catch(() => {});
+    await fetch(meetingPath(cur.id), { method: 'DELETE', headers: auth() }).catch(() => {});
   }, [auth]);
 
   // The screen lock is dropped when the page is hidden; take it again on return.

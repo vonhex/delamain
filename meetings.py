@@ -42,9 +42,15 @@ _lock = threading.Lock()
 # ── storage ───────────────────────────────────────────────────────────────────
 
 def _folder(mid: str) -> Path:
-    if not re.fullmatch(r"[0-9a-f]{32}", mid or ""):
+    """The folder for one meeting. Only a 32-character hex id is accepted, and the resolved path
+    must stay inside MEETINGS_DIR, so an id can never point anywhere else on disk."""
+    if not isinstance(mid, str) or not re.fullmatch(r"[0-9a-f]{32}", mid):
         raise KeyError(mid)
-    return MEETINGS_DIR / mid
+    base = os.path.realpath(MEETINGS_DIR)
+    path = os.path.realpath(os.path.join(base, mid))
+    if not path.startswith(base + os.sep):
+        raise KeyError(mid)
+    return Path(path)
 
 
 def load(mid: str) -> dict:

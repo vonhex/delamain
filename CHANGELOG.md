@@ -4,6 +4,15 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Security
+- Meeting files: a meeting id must be a 32-character hex id and its folder must resolve inside the meetings folder, so a crafted id can never read or write elsewhere on disk.
+- Meeting panel and recorder: request URLs are only built from valid meeting ids, and each part is URL-encoded.
+- Google sign-in: when it fails, the page shows a plain message; Google's raw error details go to the server log only.
+
+---
+
 ## [2.8.0] — 2026-11-15 — Calendar and email
 
 ### Added
