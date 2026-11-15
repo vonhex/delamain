@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { X, Info, Mic, Send, Radio } from 'lucide-react';
-import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey } from './brain/brainRenderer';
+import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
 // Delamain's neural core: a live view of what he is doing, fed by the backend's brain events
@@ -15,7 +15,7 @@ type Today = {
 type Line = { id: number; t: number; icon: string; text: string; color: string };
 
 export type TalkControls = {
-  listening: boolean; heardLive: string; talking: boolean; thinking: boolean;
+  listening: boolean; heardLive: string; speech: SpeechClock | null; talking: boolean; thinking: boolean;
   micSupported: boolean; wakeWord: boolean; wakeBlocked: boolean;
   onMic: () => void; onSend: (text: string) => void; onToggleWake: () => void;
 };
@@ -145,6 +145,8 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   useEffect(() => { brainRef.current?.setListening(talk.listening); }, [talk.listening]);
   useEffect(() => { brainRef.current?.setSpeaking(talk.talking); }, [talk.talking]);
   useEffect(() => { if (talk.heardLive) brainRef.current?.feedLive(talk.heardLive); }, [talk.heardLive]);
+  // his words leave the vocoder in time with his actual voice
+  useEffect(() => { if (talk.speech?.text) brainRef.current?.speak(talk.speech); }, [talk.speech]);
 
   // The live event feed.
   useEffect(() => {

@@ -8,6 +8,9 @@
 
 export type BrainEvent = { kind: string; t?: number; [k: string]: unknown };
 
+/** What he is saying right now and the playback clock behind it (the page's audio element). */
+export type SpeechClock = { id: number; text: string; speechAt: number; time: () => number; duration: () => number };
+
 export type RegionKey =
   | 'hearing' | 'core' | 'senses' | 'navigation' | 'plans' | 'imagination'
   | 'memory' | 'voice' | 'reflex' | 'conscience' | 'stem';
@@ -318,6 +321,10 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     carry: { think: 0, tool: 0, voice: 0, idle: 0, hear: 0 },
   };
   const wordQ: { w: string; col: RGB; inbound: boolean }[] = [];
+  // His words, timed to his actual voice: each word has a moment along the audio (by length,
+  // with pauses at commas and full stops) and leaves the vocoder when playback reaches it.
+  let utter: { id: number; words: { w: string; frac: number; out: boolean }[]; clock: SpeechClock; col: RGB; chars: number } | null = null;
+  let speechSynced = false;
   let wordCool = 0, lane = 0;
   const now = () => performance.now() / 1000;
 
@@ -398,7 +405,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       case 'spoke': {
         const text = typeof ev.text === 'string' ? ev.text : '';
         st.speakingUntil = t + clamp(text.length / 15, 1.5, 14);
-        if (!reduced() && text) queueWords(text, st.coreColor, false);
+        if (!reduced() && text && !speechSynced) queueWords(text, st.coreColor, false);
         break;
       }
       case 'core': {
@@ -520,6 +527,22 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     }
     for (let i = flares.length - 1; i >= 0; i--) { flares[i].life -= dt * 0.33; flares[i].y += dt * 0.05; if (flares[i].life <= 0) flares.splice(i, 1); }
 
+    // his words, released as the audio reaches them
+    if (utter && !reduced()) {
+      const u = utter, t = u.clock.time();
+      let dur = u.clock.duration();
+      if (!Number.isFinite(dur) || dur <= 0) dur = u.clock.speechAt + u.chars / 14;   // length not known yet
+      const span = Math.max(0.5, (dur - u.clock.speechAt) * 0.94);                    // a little trailing silence
+      const rate = u.words.length / span;                                               // words per second
+      const speed = clamp(rate / 2.6, 0.7, 1.7);
+      let left = 0;
+      for (const w of u.words) {
+        if (w.out) continue;
+        if (t >= u.clock.speechAt + w.frac * span) { w.out = true; emitOut(w.w, u.col, speed); } else left++;
+      }
+      if (!left || t > dur + 1) utter = null;
+    }
+
     // words: the passenger's fly in to the ear, Delamain's leave from the voice area
     wordCool -= dt;
     if (wordQ.length && wordCool <= 0) {
@@ -529,9 +552,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       if (inbound) {
         glyphs.push({ w, col, inbound, x: EAR[0] - 1.25, y: EAR[1] + L * 0.06 - 0.25, z: EAR[2], vx: 0, vy: 0, life: 1, ph: Math.random() * TAU, tx: EAR[0], ty: EAR[1], tz: EAR[2] });
       } else {
-        glyphs.push({ w, col, inbound, x: MOUTH[0] + Math.random() * 0.03, y: MOUTH[1] + L * 0.035, z: MOUTH[2], vx: (width >= 760 ? 0.13 : 0.2) + Math.random() * 0.05, vy: L * 0.035 + (width >= 760 ? -0.13 : -0.01), life: 1, ph: Math.random() * TAU });
-        burst(MOUTH[0], MOUTH[1], MOUTH[2], col, 3, 0.12);
-        lightRegion('voice', 1, 4);
+        emitOut(w, col, 1);
       }
       wordCool = width < 560 ? 0.2 : 0.15;
     }
@@ -554,6 +575,17 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         if (g.life <= 0) glyphs.splice(i, 1);
       }
     }
+  }
+
+  function emitOut(w: string, col: RGB, speed: number) {
+    const L = [0, 3, 1, 4, 2][lane++ % 5] - 2;
+    if (glyphs.length >= (width < 560 ? 10 : 18)) glyphs.shift();
+    const wide = width >= 760;
+    glyphs.push({ w, col, inbound: false, x: MOUTH[0] + Math.random() * 0.03, y: MOUTH[1] + L * 0.035, z: MOUTH[2],
+      vx: ((wide ? 0.13 : 0.2) + Math.random() * 0.05) * speed, vy: (L * 0.035 + (wide ? -0.13 : -0.01)) * speed,
+      life: 1, ph: Math.random() * TAU });
+    burst(MOUTH[0], MOUTH[1], MOUTH[2], col, 3, 0.12);
+    lightRegion('voice', 1, 4);
   }
 
   /* ── drawing ───────────────────────────────────────────────────────── */
@@ -970,6 +1002,27 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     setTps(tps: number | null) { if (tps) st.tps = tps; },
     setListening(on: boolean) { st.listening = on; if (!on) st.liveWords = 0; },
     setSpeaking(on: boolean) { if (st.speaking && !on) st.speakingUntil = now() + 0.4; st.speaking = on; },
+    /** A new utterance and its playback clock: his words leave the vocoder in time with his voice. */
+    speak(clock: SpeechClock) {
+      speechSynced = true;
+      if (utter?.id === clock.id) return;
+      const raw = clock.text.replace(/[*`#>_[\]]/g, '').split(/\s+/).filter(Boolean);
+      // weight = the word's length, plus a beat for the pause after a comma or a full stop
+      let total = 0;
+      const weights = raw.map(w => { const wt = w.length + 1 + (/[.!?…]$/.test(w) ? 5 : /[,;:—]$/.test(w) ? 3 : 0); total += wt; return wt; });
+      let cum = 0;
+      const now0 = clock.time();
+      let dur = clock.duration();
+      if (!Number.isFinite(dur) || dur <= 0) dur = clock.speechAt + clock.text.length / 14;
+      const span = Math.max(0.5, (dur - clock.speechAt) * 0.94);
+      const words = raw.map((w, i) => {
+        const frac = total ? cum / total : 0;
+        cum += weights[i];
+        // opened mid-sentence: words already said a while ago are not replayed in a burst
+        return { w: w.slice(0, 18), frac, out: now0 - (clock.speechAt + frac * span) > 0.8 };
+      });
+      utter = { id: clock.id, words, clock, col: st.coreColor, chars: clock.text.length };
+    },
     /** The words recognized so far while the mic is open: new ones fly into Hearing as they come. */
     feedLive(text: string) {
       const words = text.trim().split(/\s+/).filter(Boolean);
@@ -980,7 +1033,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     },
     phase: () => st.phase,
     stats: () => ({ glyphs: glyphs.length, queued: wordQ.length, signals: signals.length, neurons: neurons.length, width, height,
-      lit: neurons.reduce((n, x) => n + (x.energy > 0.25 ? 1 : 0), 0) }),
+      lit: neurons.reduce((n, x) => n + (x.energy > 0.25 ? 1 : 0), 0),
+      said: utter ? utter.words.filter(w => w.out).length : -1, words: utter ? utter.words.length : 0, audio: utter ? +utter.clock.time().toFixed(2) : null }),
     destroy() {
       cancelAnimationFrame(raf);
       ro.disconnect();
