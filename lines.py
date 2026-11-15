@@ -102,7 +102,8 @@ def wants_pause(text: str) -> bool:
 # KINDS is the order kinds are numbered and listed in; "error" is spoken when a reply fails.
 KINDS = ["thanks", "goodbye", "good_night", "good_morning", "how_are_you", "who_are_you", "what_can_you_do",
          "are_you_there", "compliment", "love", "rude", "never_mind", "ack", "joke", "combat_mode", "error",
-         "dm_working", "dm_pause", "dm_nat20", "dm_nat1", "dm_combat", "dm_victory", "dm_down"]
+         "dm_working", "dm_pause", "dm_nat20", "dm_nat1", "dm_combat", "dm_victory", "dm_down",
+         "brain_browse", "brain_ping"]
 
 JACKIE = "My apologies, but you do not appear to be in any sort of imminent danger."
 
@@ -974,3 +975,13 @@ def registry() -> list[dict]:
             rows.append({"core": p.name, "core_key": p.key, "kind": kind,
                          "id": f"01_delamain/{kind}_{i:02d}", "line": text, "voice": p.voice})
     return rows
+
+
+# What he says when you poke around in his brain (the Brain view) lives in its own file.
+def _merge_brain_lines() -> None:
+    from brain_lines import BRAIN_LINES
+    for core, kinds in BRAIN_LINES.items():
+        LINES.setdefault(core, {}).update(kinds)
+
+
+_merge_brain_lines()
