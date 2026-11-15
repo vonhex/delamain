@@ -6,6 +6,10 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Clearer voice**: replies are rewritten for speech before he says them. Numbers, years, times, money, temperatures, units, `#numbers`, code names like `write_note`, abbreviations and markdown are spoken as words, and curly quotes and apostrophes no longer split words apart ("I’m" was heard as "I m"). The text on screen is unchanged.
+- The voice now uses F5-TTS's full 32 steps (was 16), which mispronounces fewer words; set `TTS_NFE_STEPS` in `.env` to trade clarity for speed.
+
 ### Security
 - Meeting files: a meeting id must be a 32-character hex id and its folder must resolve inside the meetings folder, so a crafted id can never read or write elsewhere on disk.
 - Meeting panel and recorder: request URLs are only built from valid meeting ids, and each part is URL-encoded.

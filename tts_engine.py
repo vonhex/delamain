@@ -11,6 +11,8 @@ import torch
 import f5_tts.infer.utils_infer as _f5_infer
 from f5_tts.api import F5TTS
 
+from speech_text import speakable
+
 
 class _SameThreadExecutor:
     """Runs each submitted job at once, in the calling thread.
@@ -61,9 +63,9 @@ CACHE_DIR = os.path.join(OUTPUT_DIR, "static_cache")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Faster inference: 8 steps vs default 32. Quality is slightly lower but
-# imperceptible for short alert phrases, and latency drops 4x.
-NFE_STEPS = 16
+# Diffusion steps per clip. F5-TTS's default is 32; fewer is faster but slurs and
+# mispronounces more words. Set TTS_NFE_STEPS in .env to trade clarity for speed.
+NFE_STEPS = int(os.environ.get("TTS_NFE_STEPS", "32"))
 
 
 def _cache_key(text: str) -> str:
@@ -96,7 +98,7 @@ class F5TTSEngine:
         self.tts.infer(
             ref_file=REF_AUDIO_PATH,
             ref_text=REF_TEXT,
-            gen_text=text,
+            gen_text=speakable(text),
             file_wave=output_path,
             speed=1.0,
             nfe_step=NFE_STEPS,
