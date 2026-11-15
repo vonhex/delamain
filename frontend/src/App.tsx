@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
+import { BrainView } from './components/BrainView';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing, playListenTone, playListenEndTone } from './utils/sounds';
 import { PERSONAS, isPersona, type PersonaKey } from './personas';
@@ -117,6 +118,17 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
+  // The Brain view; #brain in the address opens it straight away (a second screen or a phone)
+  const [isBrainOpen, setIsBrainOpen] = useState(() => location.hash === '#brain');
+  useEffect(() => {
+    const onHash = () => setIsBrainOpen(location.hash === '#brain');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const closeBrain = useCallback(() => {
+    setIsBrainOpen(false);
+    if (location.hash === '#brain') history.replaceState(null, '', location.pathname + location.search);
+  }, []);
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('delamain_settings');
     if (saved) {
@@ -676,6 +688,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
         >
           <Database size={24} />
         </button>
+        <button
+          onClick={() => setIsBrainOpen(true)}
+          className={`p-2 rounded-lg transition-colors ${isBrainOpen ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title="Delamain's brain: watch him think"
+        >
+          <BrainIcon size={24} />
+        </button>
         <div className="mt-auto flex flex-col items-center gap-3 pb-1">
           <button
             onClick={onLogout}
@@ -898,6 +917,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
             </button>
           </div>
         </div>
+
+        {isBrainOpen && <BrainView token={token} onClose={closeBrain} />}
 
         {/* Data Explorer Panel */}
         {isDataOpen && (

@@ -23,6 +23,7 @@
 - **Auth** (`auth.py`): bcrypt password and 30-day JWTs
 
 - **Pre-recorded replies** (`lines.py`): short everyday messages are matched to an intent (thanks, goodbye, how are you, joke, combat mode and so on) and answered with a fixed line in the current core's voice, skipping the model. Every fixed line has a stable clip id; `line_video()` returns `/lines/<id>.mp4` when that clip exists in `DELAMAIN_LINES_DIR`, and `line_voice()` returns its soundtrack `/lines/<id>.wav` in place of the synthesized recording. `import_clips.py` installs finished clips.
+- **Brain feed** (`brain.py`): `main.py` reports each step of a turn (heard, reflex, every LLM call with its tokens and time, tool calls, self-corrections, navigation, voice synthesis, the reply) to an in-memory event bus, which `/api/brain/events` streams to the Brain view over Server-Sent Events. It only records; it never changes a reply. See [brain.md](brain.md).
 - **TTS thread**: all F5-TTS work runs on one dedicated thread; startup pre-records every fixed line one at a time, taking the TTS lock per line so live replies are not held up.
 
 ### Tools (`assistant_tools.py`)
@@ -38,6 +39,7 @@
 - `App.tsx`: WebSocket client, audio queue, push-to-talk, chat panel, settings and navigation hand-off
 - `DelamainFace`: animated face; each personality core tints and animates it differently (`index.css`, `core-*` classes)
 - `DataDashboard`: conversation log
+- `BrainView` and `brain/brainRenderer.ts`: Delamain's brain, a canvas point-cloud brain driven by the `/api/brain/events` feed (`#brain` opens it)
 
 ## Conversation flow
 

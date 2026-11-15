@@ -4,6 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased] — Delamain's brain
+
+### Added
+- **Delamain's brain**: a live view of what he is doing, from the new brain button in the sidebar or `/#brain`. A 3D point-cloud brain lights the region for each real step of a turn: **Hearing** as your message arrives (your words fly in), the frontal **Core** while the language model thinks (in the active personality core's colour), **Senses**, **Navigation**, **Plans**, **Memory** and **Imagination** for the tools that belong to them, **Voice** while F5-TTS speaks (his words fly out), the cerebellum for pre-recorded **reflex** replies that skip the model, and a **conscience** band when he catches himself promising something he has not done. Signals are comets hopping neuron to neuron. A thought stream narrates each step in plain words, with today's counts (messages, replies, reflexes, model calls, thinking time, tokens, tools, self-corrections) and an EEG strip. See [docs/brain.md](docs/brain.md).
+- **`brain.py`** and two endpoints, `GET /api/brain/snapshot` and `GET /api/brain/events` (Server-Sent Events, JWT in the query string like the WebSocket). Each LLM call now reports its time, token counts and chosen tools; when the LLM server publishes Prometheus `/metrics` (llama.cpp with `--metrics`), its generation speed is shown too. The feed lives in memory only.
+
+---
+
 ## [2.4.0] — 2026-11-06 — Dungeon Master
 
 ### Added
