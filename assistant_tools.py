@@ -637,6 +637,23 @@ TOOL_SCHEMAS = [
     _fn("delete_calendar_event", "Remove an event from the last get_calendar result. Only when the passenger "
         "clearly asks to cancel or delete that event.",
         {"ref": {"type": "string", "description": "The [E#] reference, e.g. 'E2'."}}, ["ref"]),
+    # Gmail (google_api.py): read, and save drafts. Nothing is ever sent.
+    _fn("get_email", "The passenger's Gmail: unread messages in the inbox by default, or any Gmail search. Each has "
+        "an [M#] reference for read_email and draft_reply.",
+        {"query": {"type": "string", "description": "Optional Gmail search, e.g. 'from:sam', 'subject:invoice newer_than:7d', "
+                                                    "'in:inbox newer_than:1d'. Default: in:inbox is:unread."},
+         "max_results": {"type": "integer", "description": "1 to 25; default 10."}}, []),
+    _fn("read_email", "Read one email in full, by its [M#] reference from get_email.",
+        {"ref": {"type": "string", "description": "e.g. 'M1'."}}, ["ref"]),
+    _fn("draft_reply", "Write a reply to an email from get_email and save it as a DRAFT in Gmail (never sent). The "
+        "passenger checks and sends it from Gmail.",
+        {"ref": {"type": "string", "description": "The [M#] reference."},
+         "body": {"type": "string", "description": "The reply text, signed off in the passenger's name if known."},
+         "reply_all": {"type": "boolean", "description": "Copy the other people on the email too."}}, ["ref", "body"]),
+    _fn("draft_email", "Write a new email and save it as a DRAFT in Gmail (never sent). The passenger checks and sends it.",
+        {"to": {"type": "string", "description": "Full email address(es), comma-separated."},
+         "subject": {"type": "string"}, "body": {"type": "string"},
+         "cc": {"type": "string", "description": "Optional full address(es)."}}, ["to", "subject", "body"]),
 ]
 
 _HANDLERS = {
