@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.5.2] — 2026-11-15 — Fly into his brain
 
 ### Added
 - **Fly into his brain**: the brain is now a real 3D space. Scroll, pinch or double-tap and the camera flies toward that spot, in among the nodes; drag to turn it, and right-drag, Shift-drag or two fingers to slide. The + / − buttons and the + − 0 keys work too. Up close, the nearest dots are labelled with what they are ("L7 · experts", "get_weather()").
