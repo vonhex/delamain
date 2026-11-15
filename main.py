@@ -592,7 +592,8 @@ def geocode_places(query: str, limit: int = 3, location: dict | None = None) -> 
             params["viewbox"] = f"{lon - 0.5},{lat + 0.5},{lon + 0.5},{lat - 0.5}"
         url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params)
         req = __import__('urllib.request', fromlist=['Request', 'urlopen'])
-        request = req.Request(url, headers={"User-Agent": "DelamainAI/1.0 necropsyk@gmail.com"})
+        # Nominatim asks for a User-Agent that identifies the application; a project link does that.
+        request = req.Request(url, headers={"User-Agent": "DelamainAI/1.0 (+https://github.com/vonhex/delamain)"})
         with req.urlopen(request, timeout=6) as resp:
             data = json.loads(resp.read())
         for r in data:
