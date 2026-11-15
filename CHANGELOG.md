@@ -4,6 +4,15 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Zoom into his brain**: pinch with two fingers, scroll, or double-tap to zoom in, and drag to look around; the + / − buttons and the + − 0 keys work too.
+- **Inspect a node**: tap any dot to see which part of him it belongs to, whether it is firing, how often it has fired and what the last signal through it was carrying (your words, a weather lookup, a thought heading to the core…). Its connections light up, and **Ping** sends a pulse out from it.
+- **Nodes pinned to the real model**: the cognition core's nodes now stand for the language model's real parts (the word-lookup table, each layer's attention, router and expert networks, the next-word scorer, the drafter), with their true sizes, read from the model file on your computer; the vocoder's nodes stand for his voice model's layers. Tap one to see, for example, "Layer 6 of 48 · Expert networks · 2.52 billion weights" and what that part does. The other parts show the program code behind them. The model file is found by itself for llama.cpp and Ollama, or set it in Settings → Integrations → Language model file.
+
+---
+
 ## [2.5.1] — 2026-11-14 — Windows setup
 
 ### Added
