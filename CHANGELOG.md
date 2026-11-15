@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.6.0] — 2026-11-15 — Ask him about his brain
 
 ### Added
 - **Ask him about his brain**: with *See him think* open, he knows what it shows, what his models are really made of and which dot you have selected. Tap one and ask "what's this one?", or ask how many layers he has.
