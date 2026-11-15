@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen } from 'lucide-react';
+import { createCore } from './brain/coreRenderer';
 import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
@@ -111,6 +112,9 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const [model, setModel] = useState('');
   const [tps, setTps] = useState<number | null>(null);
   const [showKey, setShowKey] = useState(false);
+  // How to picture him: the brain, or the core chamber (his mainframe). Remembered per browser.
+  const [style, setStyle] = useState<'brain' | 'core'>(() => { try { return localStorage.getItem('brainStyle') === 'core' ? 'core' : 'brain'; } catch { return 'brain'; } });
+  useEffect(() => { try { localStorage.setItem('brainStyle', style); } catch { /* private mode */ } }, [style]);
   // Full brain: the panels under the mic (numbers, thought stream, face) fold away. Remembered per browser.
   const [full, setFull] = useState(() => { try { return localStorage.getItem('brainFull') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('brainFull', full ? '1' : '0'); } catch { /* private mode */ } }, [full]);
@@ -119,6 +123,8 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const lineId = useRef(0);
   const toolsRunning = useRef(new Map<string, string>());
   const talkRef = useRef(talk);
+  const personaRef = useRef(persona);
+  useEffect(() => { personaRef.current = persona; });
   useEffect(() => { talkRef.current = talk; });
 
   const push = useCallback((ev: BrainEvent) => {
@@ -131,8 +137,14 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   useEffect(() => {
     if (!canvasRef.current || !stageRef.current) return;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const b = createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced });
+    const b: Brain = style === 'core'
+      ? createCore(canvasRef.current, stageRef.current, { reducedMotion: reduced })
+      : createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced });
     brainRef.current = b;
+    // a fresh renderer picks up where the other left off
+    b.setCore(coreOf(personaRef.current).color);
+    b.setListening(talkRef.current.listening);
+    b.setSpeaking(talkRef.current.talking);
     if (location.search.includes('debug')) (window as unknown as { __delamainBrain: Brain }).__delamainBrain = b;
     const opened = Date.now();
     const id = setInterval(() => {
@@ -141,7 +153,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
       setHud({ signals: s.signals, lit: s.lit, neurons: s.neurons, session: Math.floor((Date.now() - opened) / 1000) });
     }, 250);
     return () => { clearInterval(id); b.destroy(); brainRef.current = null; };
-  }, []);
+  }, [style]);
 
   // The mic and the speaker drive the brain directly: listening lights the audio intake,
   // recognized words fly in as you speak, and the vocoder glows exactly while he is heard.
@@ -274,15 +286,23 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
         <span className={`hidden md:inline font-mono text-[11px] ${connected ? 'text-green-400/80' : 'text-cyber-red/90'}`}>
           {connected ? `▮ UPLINK${tps ? ` · ${tps} TOK/S` : ''}` : '▯ RECONNECTING'}
         </span>
+        <div className="hidden sm:flex border border-cyber-blue/30 font-mono text-[10px] tracking-[0.15em]" role="group" aria-label="How to picture him">
+          {(['brain', 'core'] as const).map(s => (
+            <button key={s} onClick={() => setStyle(s)} title={s === 'brain' ? 'Picture him as a brain' : 'Picture him as his core chamber: the mainframe and its subsystems'}
+              className={`px-2 py-1 transition-colors ${style === s ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue'}`}>
+              {s === 'brain' ? 'BRAIN' : 'CORE'}
+            </button>
+          ))}
+        </div>
         <button onClick={() => setFull(v => !v)} title={full ? 'Show the panels again (F)' : 'Let the brain fill the screen (F)'}
-          className={`p-2 rounded transition-colors ${full ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
+          className={`p-1.5 sm:p-2 rounded transition-colors ${full ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
           {full ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
         </button>
         <button onClick={() => setShowKey(k => !k)} title="What each subsystem does"
-          className={`p-2 rounded transition-colors ${showKey ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
+          className={`p-1.5 sm:p-2 rounded transition-colors ${showKey ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
           <Info size={20} />
         </button>
-        <button onClick={onClose} title="Close (Esc)" className="p-2 rounded text-gray-500 hover:text-cyber-red hover:bg-cyber-gray transition-colors">
+        <button onClick={onClose} title="Close (Esc)" className="p-1.5 sm:p-2 rounded text-gray-500 hover:text-cyber-red hover:bg-cyber-gray transition-colors">
           <X size={22} />
         </button>
         <div className="absolute left-0 right-0 -bottom-px h-px bg-gradient-to-r from-transparent via-cyber-blue/70 to-transparent" />
@@ -353,6 +373,10 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
                 <Radio size={12} className={talk.wakeWord && !talk.wakeBlocked && talk.micSupported ? 'animate-pulse' : ''} />
                 {wake.text}
                 {talk.micSupported && !talk.wakeBlocked && !talk.listening && <span className="text-gray-500 underline decoration-dotted">{talk.wakeWord ? 'turn off' : 'turn on'}</span>}
+              </button>
+              <button onClick={() => setStyle(s => (s === 'brain' ? 'core' : 'brain'))} title="Switch between the brain and the core chamber"
+                className="sm:hidden ml-auto font-mono text-[10px] tracking-[0.15em] text-cyber-blue/80 underline decoration-dotted shrink-0">
+                VIEW: {style === 'brain' ? 'BRAIN' : 'CORE'}
               </button>
               {talk.listening && talk.heardLive && (
                 <span className="flex-1 truncate font-mono text-[11px] text-amber-200/90">▌{talk.heardLive}</span>
