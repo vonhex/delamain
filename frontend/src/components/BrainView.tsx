@@ -354,11 +354,12 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
               {['top-2 left-2 border-t-2 border-l-2', 'top-2 right-2 border-t-2 border-r-2', 'bottom-2 left-2 border-b-2 border-l-2', 'bottom-2 right-2 border-b-2 border-r-2'].map(c => (
                 <div key={c} className={`pointer-events-none absolute w-4 h-4 ${c}`} style={{ borderColor: `${core.color}99` }} />
               ))}
-              <div className="pointer-events-none absolute left-8 top-2.5 font-mono text-[10px] tracking-[0.2em]" style={{ color: `${core.color}cc` }}>
-                VISUAL INTERFACE · {core.name.toUpperCase()}
-              </div>
-              <div className="pointer-events-none absolute right-8 bottom-2.5 font-mono text-[10px] tracking-[0.2em] text-cyber-blue/70">
-                {talk.talking ? '◉ TRANSMITTING' : talk.listening ? '◉ RECEIVING' : talk.thinking ? '◌ PROCESSING' : '○ STANDBY'}
+              {/* Readouts stay in the top corner: the face draws its voice waveform along the bottom */}
+              <div className="pointer-events-none absolute left-8 top-2.5 font-mono text-[10px] tracking-[0.2em] leading-[1.5]">
+                <div style={{ color: `${core.color}cc` }}>VISUAL INTERFACE · {core.name.toUpperCase()}</div>
+                <div className="text-cyber-blue/70">
+                  {talk.talking ? '◉ TRANSMITTING' : talk.listening ? '◉ RECEIVING' : talk.thinking ? '◌ PROCESSING' : '○ STANDBY'}
+                </div>
               </div>
             </div>
           )}
