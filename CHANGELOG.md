@@ -6,6 +6,16 @@ All notable changes to Delamain are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Assistant mode**: in a browser Delamain is now a general personal assistant (questions, research, writing, planning, your calendar and email) instead of a cab, and can give fuller answers, which are shown on screen as well as spoken. The new **car button** in the sidebar turns on **Drive mode**, which brings back the car companion with short, eyes-free replies; each device remembers its choice. The Stack-chan robot and the car bridge stay in drive mode.
+- Assistant mode has its own greetings, "one moment" lines and replies to "who are you", "what can you do", goodbyes and jokes, plus more takes of the everyday replies in both modes. They are pre-recorded like the others.
+
+### Fixed
+- **Clearer voice**: replies are rewritten for speech before he says them. Numbers, years, times, money, temperatures, units, `#numbers`, code names like `write_note`, abbreviations and markdown are spoken as words, and curly quotes and apostrophes no longer split words apart ("I’m" was heard as "I m"). The text on screen is unchanged.
+- **Cleaner voice reference**: the clip his voice is copied from (`delamain_ref_clean.wav`) is now whole sentences with silence at both ends, and its transcript matches it word for word. The old clip started mid-phrase and ended partway into a word its transcript left out, which slurred and ran words together. Fixed lines are re-recorded with it on the next start (delete `audio_output/static_cache` to force this on an existing install).
+- **Dungeon Master narration**: signs and labels in capitals (MESS HALL) are read as words, initials (Director A. Rhee) no longer cause a full stop, double-barrelled names are two words, and dice and stats (2d6+3, d20, DC 15, HP, AC) are spoken out.
+- The voice now uses F5-TTS's full 32 steps (was 16), which mispronounces fewer words; set `TTS_NFE_STEPS` in `.env` to trade clarity for speed.
+
 ### Security
 - Meeting files: a meeting id must be a 32-character hex id and its folder must resolve inside the meetings folder, so a crafted id can never read or write elsewhere on disk.
 - Meeting panel and recorder: request URLs are only built from valid meeting ids, and each part is URL-encoded.

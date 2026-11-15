@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon, NotebookPen } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon, NotebookPen, Car } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { SongPlayer, type Song } from './components/SongPlayer';
@@ -50,6 +50,7 @@ interface AppSettings {
   listenTone: boolean;           // a tone when the mic opens
   listenAfterQuestion: boolean;  // open the mic for a moment after he asks a question
   wakeWord: boolean;             // listen for "Delamain" in the background
+  driveMode: boolean;            // in the car: brief, eyes-free replies; off = general assistant
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -63,6 +64,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   listenTone: true,
   listenAfterQuestion: true,
   wakeWord: false,
+  driveMode: false,
 };
 
 const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -177,6 +179,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   useEffect(() => { dungeonRef.current = dungeon; }, [dungeon]);
   const faceModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const personaRef = useRef(settings.persona);
+  const driveRef = useRef(settings.driveMode);
   const userNameRef = useRef(settings.userName);
 
   // Audio queue — keeps spoken replies from overlapping
@@ -201,6 +204,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
       wsRef.current.send(JSON.stringify({ type: 'persona', persona: settings.persona }));
     }
   }, [settings.persona]);
+
+  // Drive mode: brief, eyes-free replies for the car. Off, he is a general assistant.
+  useEffect(() => {
+    driveRef.current = settings.driveMode;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'mode', mode: settings.driveMode ? 'drive' : 'assistant' }));
+    }
+  }, [settings.driveMode]);
 
   // Handle 401s from data API — if token is rejected, log out
   useEffect(() => {
@@ -346,7 +357,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
     const connect = () => {
       // The core travels in the URL so the greeting is already spoken in the right voice.
       // resume=1 on an automatic reconnect: the conversation carries on, with no fresh greeting.
-      const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}&resume=${reconnecting ? 1 : 0}`);
+      const ws = new WebSocket(`${proto}://${location.host}/ws/${clientId}?token=${encodeURIComponent(token)}&persona=${personaRef.current}&user_name=${encodeURIComponent(userNameRef.current)}&resume=${reconnecting ? 1 : 0}&mode=${driveRef.current ? 'drive' : 'assistant'}`);
       wsRef.current = ws;
       ws.onmessage = onMessage;
       ws.onclose = (e) => {
@@ -734,6 +745,14 @@ function MainApp({ token, onLogout }: MainAppProps) {
         >
           <NotebookPen size={24} />
           {meeting.state !== 'idle' && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />}
+        </button>
+        <button
+          onClick={() => setSettings(s => ({ ...s, driveMode: !s.driveMode }))}
+          className={`p-2 rounded-lg transition-colors ${settings.driveMode ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title={settings.driveMode ? 'Drive mode is on: short, eyes-free replies for the car. Tap for assistant mode.' : 'Assistant mode. Tap for Drive mode (short, eyes-free replies for the car).'}
+          aria-pressed={settings.driveMode}
+        >
+          <Car size={24} />
         </button>
         <button
           onClick={() => setIsBrainOpen(true)}
