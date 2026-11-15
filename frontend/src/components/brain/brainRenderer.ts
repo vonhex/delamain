@@ -28,6 +28,19 @@ export type RegionKey =
 
 type RGB = [number, number, number];
 
+// The other parts are program code, not learned weights: the functions that do their work.
+export const NODE_CODE: Partial<Record<RegionKey, [string, string][]>> = {
+  hearing: [['speech recognition (in your browser)', 'turns your voice into text before it reaches Delamain'], ['WebSocket "talk" handler', 'receives your words on the server']],
+  reflex: [['lines.match()', 'spots everyday phrases such as "thanks" or "how are you"'], ['lines.pick()', "chooses a pre-recorded line in the current core's voice"]],
+  senses: [['web_search()', 'searches the web through SearXNG'], ['read_webpage()', 'reads a public web page'], ['get_news()', 'fetches headlines from Google News'], ['get_weather()', 'gets the forecast from Open-Meteo']],
+  navigation: [['get_route()', 'driving time and distance from OSRM'], ['geocode_places()', 'finds a destination with OpenStreetMap']],
+  plans: [['set_reminder()', 'stores a reminder in the database'], ['list_reminders()', 'reads the pending reminders'], ['cancel_reminder()', 'removes one'], ['reminder loop', 'speaks each reminder when it is due']],
+  memory: [['remember()', 'writes a fact to Delamain/Memory in your vault'], ['forget()', 'removes one'], ['write_note()', 'creates a note in your vault'], ['append_to_note()', 'adds to a note'], ['read_note()', 'reads a note'], ['search_notes()', 'searches your notes'], ['memory_context()', 'puts what he remembers into every prompt']],
+  imagination: [['list_adventures()', 'the adventure menu'], ['start_adventure()', 'opens a campaign'], ['note_fact()', 'writes a fact into the chronicle'], ['scribe', 'a background model call that updates the chronicle']],
+  conscience: [['save check', 'catches "I have saved that" without a save'], ['promise check', 'catches "I shall check" without a tool call'], ['news check', 'catches a bulletin with no headlines']],
+  stem: [['WebSocket link', 'carries messages between the page and the server'], ['brain event feed', 'tells this view what he is doing']],
+};
+
 export const REGION_INFO: Record<Exclude<RegionKey, 'stem'>, { code: string; label: string; sub: string; color: string; tip: string }> = {
   hearing:     { code: 'AUDIO INTAKE',   label: 'Hearing',     sub: 'your words in',          color: '#fcd34d', tip: 'Hearing: your words arrive here, transcribed from the microphone.' },
   core:        { code: 'COGNITION CORE', label: 'Core',        sub: 'the model thinking',     color: '#00f0ff', tip: 'Core: the language model thinking. It takes the colour of the active personality core.' },
@@ -709,7 +722,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
 
   function drawBackdrop() {
     project(-0.05, 0.02, 0);
-    const [cx, cy] = P, R = vp.scale * 1.2;
+    const cx = Number.isFinite(P[0]) ? P[0] : vp.cx, cy = Number.isFinite(P[1]) ? P[1] : vp.cy, R = vp.scale * 1.2 * Math.max(1, zoomLevel());
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
     const [r, gg, b] = st.coreColor;
     const busy = st.thinking || st.activeTools.size ? 1 : 0;
@@ -757,12 +770,13 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     if (sel == null || !neurons[sel]) return;
     const n = neurons[sel], c = n.region === 'core' ? st.coreColor : colorOf(n.region);
     project(n.x, n.y, n.z);
-    const x0 = P[0], y0 = P[1];
+    const x0 = P[0], y0 = P[1], selS = sr[sel] || 0;
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineWidth = 1.2;
     for (const j of n.nb) {                       // its connections: the paths signals can hop along
       const m = neurons[j], mc = m.region === 'core' ? st.coreColor : colorOf(m.region);
       project(m.x, m.y, m.z);
+      if (!Number.isFinite(x0) || !Number.isFinite(P[0])) continue;   // one end is behind the camera
       const g = ctx.createLinearGradient(x0, y0, P[0], P[1]);
       g.addColorStop(0, `rgba(${c.join(',')},0.8)`); g.addColorStop(1, `rgba(${mc.join(',')},0.6)`);
       ctx.strokeStyle = g;
@@ -771,8 +785,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       if (P[3] > 0) { ctx.beginPath(); ctx.arc(P[0], P[1], 3 + 2 * P[3], 0, TAU); ctx.stroke(); }
     }
     ctx.globalCompositeOperation = 'source-over';
-    if (!(P[3] > 0) && !Number.isFinite(x0)) return;
-    const r = 7 + 2.5 * Math.sqrt(zoomLevel()) + Math.sin(clock * 5) * 1.5;
+    if (!Number.isFinite(x0)) return;
+    const r = Math.max(7 + 2.5 * Math.sqrt(zoomLevel()), selS * 0.6 + 4) + Math.sin(clock * 5) * 1.5;
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x0, y0, r, 0, TAU); ctx.stroke();
     ctx.strokeStyle = `rgba(${c.join(',')},0.9)`;
@@ -899,7 +913,59 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     ctx.moveTo(x + cut, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h - cut);
     ctx.lineTo(x + w - cut, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + cut); ctx.closePath();
   }
+  // Close up, the nearest big dots get a name: the model part a core/voice dot is pinned to, or the
+  // piece of program code another dot stands for.
+  const SHORT: Record<string, string> = {
+    embedding: 'word lookup', attention: 'attention', linear_attention: 'fast attention', router: 'router', shared: 'shared expert',
+    experts: 'experts', ffn: 'feed-forward', output: 'next-word scorer', drafter: 'drafter', voice_text: 'text encoder',
+    voice_input: 'audio input', voice_time: 'step timing', voice_block: 'voice block', voice_output: 'sound output',
+  };
+  function nodeLabel(i: number): string {
+    const pin = pins.get(i);
+    if (pin) {
+      const u = pin.unit, w = SHORT[u.kind] ?? u.kind, p = pin.src === 'llm' ? 'L' : 'B';
+      if (u.layer == null) return w;
+      return `${p}${u.layer + 1}${u.layerTo != null && u.layerTo !== u.layer ? `–${u.layerTo + 1}` : ''} · ${w}`;
+    }
+    const list = NODE_CODE[neurons[i].region];
+    return list ? list[i % list.length][0] : REGION_INFO[neurons[i].region as Exclude<RegionKey, 'stem'>]?.code ?? '';
+  }
+  function drawNodeLabels() {
+    if (zoomLevel() < 2.2) return;
+    const cand: number[] = [];
+    for (let i = 0; i < neurons.length; i++) {
+      if (i === sel || (sr[i] > 14 && Number.isFinite(sx[i]) && sx[i] > 0 && sx[i] < width && sy[i] > 96 && sy[i] < vp.eegTop - 24)) cand.push(i);
+    }
+    cand.sort((a, b) => (b === sel ? 1e9 : sr[b]) - (a === sel ? 1e9 : sr[a]));
+    const placed: [number, number, number, number][] = [];
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '600 10.5px "Share Tech Mono", ui-monospace, monospace';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    let shown = 0;
+    for (const i of cand) {
+      if (shown >= (width < 700 ? 10 : 24)) break;
+      const text = nodeLabel(i);
+      if (!text) continue;
+      const tw = ctx.measureText(text).width + 10, x = sx[i] + sr[i] * 0.9 + 4, y = sy[i] - 8;
+      if (!Number.isFinite(x) || x + tw > width - 4) continue;
+      if (x < 160 && y > vp.eegTop - 80) continue;                    // keep clear of the zoom buttons
+      if (placed.some(([px, py, pw]) => x < px + pw && x + tw > px && y < py + 16 && y + 16 > py)) continue;
+      placed.push([x, y, tw, 16]); shown++;
+      const n = neurons[i], c = n.region === 'core' ? st.coreColor : colorOf(n.region);
+      const a = i === sel ? 1 : clamp((sr[i] - 14) / 8, 0, 1) * 0.85;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(6,10,20,0.78)';
+      cutRect(x, y, tw, 16, 4); ctx.fill();
+      ctx.strokeStyle = `rgba(${c.join(',')},${i === sel ? 0.95 : 0.45})`; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = i === sel ? '#ffffff' : `rgba(${c.join(',')},0.95)`;
+      ctx.fillText(text, x + 5, y + 8.5);
+    }
+    ctx.globalAlpha = 1;
+  }
   function drawLabels() {
+    const fadeOut = clamp((zoomLevel() - 1.15) / 0.4, 0, 1);    // zoomed in, the region callouts get out of the way
+    if (fadeOut >= 1) return;
+    const keep = 1 - fadeOut;
     const compact = width < 760;
     const keys = Object.keys(ANCHORS) as Exclude<RegionKey, 'stem'>[];
     ctx.globalCompositeOperation = 'source-over';
@@ -909,7 +975,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       const [x, y, z] = ANCHORS[k];
       project(x, y, z);
       return { k, ax: P[0], ay: P[1], hot: phaseNowHot(k), c: k === 'core' ? st.coreColor : colorOf(k) };
-    });
+    }).filter(it => Number.isFinite(it.ax));
     if (compact) {
       ctx.font = '600 9.5px "Share Tech Mono", ui-monospace, monospace';
       ctx.textAlign = 'center';
@@ -917,7 +983,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         const [x, y, z] = ANCHORS[it.k];
         project(x, y + (LABEL_DY[it.k] ?? 0.13), z);
         const text = REGION_INFO[it.k].code, tw = ctx.measureText(text).width + 12;
-        ctx.globalAlpha = it.hot ? 1 : 0.75;
+        if (!Number.isFinite(P[0])) continue;
+        ctx.globalAlpha = (it.hot ? 1 : 0.75) * keep;
         ctx.fillStyle = it.hot ? 'rgba(6,10,20,0.88)' : 'rgba(6,10,20,0.55)';
         cutRect(P[0] - tw / 2, P[1] - 8, tw, 16, 4); ctx.fill();
         ctx.strokeStyle = `rgba(${it.c.join(',')},${it.hot ? 0.9 : 0.35})`; ctx.lineWidth = 1; ctx.stroke();
@@ -941,7 +1008,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       for (const it of all) {
         const isLeft = it.bx < vp.cx;
         const ex = isLeft ? it.bx + boxW : it.bx, ey = it.by + boxH / 2;
-        const a = it.hot ? 1 : 0.55;
+        const a = (it.hot ? 1 : 0.55) * keep;
         // leader line with an elbow, and a small diamond on the region
         ctx.globalAlpha = a * 0.7;
         ctx.strokeStyle = `rgba(${it.c.join(',')},${it.hot ? 0.9 : 0.4})`;
@@ -972,7 +1039,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         }
       }
     }
-    if (tooltip && now() < tooltip.until) {
+    if (tooltip && now() < tooltip.until && fadeOut === 0) {
       const [x, y, z] = ANCHORS[tooltip.key];
       project(x, y + 0.13, z);
       const text = REGION_INFO[tooltip.key].tip;
@@ -1186,6 +1253,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     drawSignals();
     drawSelection();
     drawLabels();
+    drawNodeLabels();
     drawWords();   // over the tags, so his words stay readable where they cross them
     drawEeg();
     drawTicker(dt);
