@@ -4,7 +4,7 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.7.0] — 2026-11-15 — Meeting notes
 
 ### Added
 - **Meeting notes**: tap the new notebook icon and record a meeting. Afterwards he transcribes it on your own computer and writes a summary, decisions, action items (as checkboxes) and the full transcript into `Delamain/Meetings/` in your vault, then tells you they are ready. Ask him about it afterwards ("what did we decide?"). The audio uploads as you go, so a patchy connection loses nothing; the wake word pauses while recording. See [docs/meetings.md](docs/meetings.md).
