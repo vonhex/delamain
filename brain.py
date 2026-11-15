@@ -33,6 +33,7 @@ TOOL_REGION = {
     "set_reminder": "plans", "list_reminders": "plans", "cancel_reminder": "plans",
     "get_calendar": "plans", "add_calendar_event": "plans", "update_calendar_event": "plans",
     "delete_calendar_event": "plans",
+    "get_email": "senses", "read_email": "senses", "draft_email": "memory", "draft_reply": "memory",
     "list_adventures": "imagination", "start_adventure": "imagination", "pause_adventure": "imagination",
     "end_adventure": "imagination", "note_fact": "imagination",
 }

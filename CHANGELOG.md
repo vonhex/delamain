@@ -8,6 +8,7 @@ All notable changes to Delamain are documented here.
 
 ### Added
 - **Google Calendar**: connect your own Google Calendar (Settings → Integrations → Google) and ask him what's on today or this week, when an appointment is, or to add, move or cancel an event. Uses your own Google Cloud client; the sign-in stays on your server. Setup guide: [docs/google.md](docs/google.md).
+- **Gmail**: ask about new email ("anything from Sam?"), have one read to you, or have him write a reply or a new email. He saves them as drafts in Gmail for you to check and send; he cannot send, delete or archive mail. Already connected? Enable the Gmail API and press **Add Gmail** in Settings.
 
 ---
 
