@@ -6,6 +6,7 @@ import { IntegrationsPanel, type IntegrationsHandle } from './components/Integra
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { BrainView } from './components/BrainView';
+import type { SpeechClock } from './components/brain/brainRenderer';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing, playListenTone, playListenEndTone } from './utils/sounds';
 import { PERSONAS, isPersona, type PersonaKey } from './personas';
@@ -115,6 +116,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTalking, setIsTalking] = useState(false);
+  // What he is saying right now, with the playback clock (for the Brain view's word timing)
+  const [speech, setSpeech] = useState<SpeechClock | null>(null);
+  const speechIdRef = useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
@@ -125,6 +129,17 @@ function MainApp({ token, onLogout }: MainAppProps) {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+  // In landscape his face moves into the Brain view, to the right of the brain
+  const landscapeQuery = '(orientation: landscape) and (min-width: 900px)';
+  const [isLandscape, setIsLandscape] = useState(() => window.matchMedia?.(landscapeQuery).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(landscapeQuery);
+    if (!mq) return;
+    const onChange = () => setIsLandscape(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const faceInBrain = isBrainOpen && isLandscape;
   const closeBrain = useCallback(() => {
     setIsBrainOpen(false);
     if (location.hash === '#brain') history.replaceState(null, '', location.pathname + location.search);
@@ -221,6 +236,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
       const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: clipCache.get(video) ?? video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
+      // The Brain view times his words to this playback: when the voice starts, how far along it is.
+      setSpeech({ id: ++speechIdRef.current, text: text ?? '', speechAt, time: () => audio.currentTime, duration: () => audio.duration });
       // A clip that stalls on a weak connection fires neither ended nor error, which
       // would leave him lit up with every later reply queued behind it. Give up on it
       // a few seconds past its length (or after 20 s if its length never arrives).
@@ -254,6 +271,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         if (text) {
           const t0 = performance.now();
           showClip(() => (performance.now() - t0) / 1000);
+          setSpeech({ id: ++speechIdRef.current, text, speechAt, time: () => (performance.now() - t0) / 1000,
+                      duration: () => Math.max(2, text.length * 0.06) });
           setTimeout(() => setIsTalking(true), speechAt * 1000);
           setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
         } else { playNext(); }
@@ -388,6 +407,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
         const audio = new Audio(url);
         const speechAt: number = response.data.speech_at || 0;
+        setSpeech({ id: ++speechIdRef.current, text: delamainResponse, speechAt, time: () => audio.currentTime, duration: () => audio.duration });
         const talkWhenHeard = () => {
           if (audio.currentTime >= speechAt || audio.ended) setIsTalking(true);
           else if (!audio.paused) requestAnimationFrame(talkWhenHeard);
@@ -423,6 +443,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const afterStopRef = useRef<(() => void) | null>(null);
   const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wakeBlockedRef = useRef(false);   // the browser refused the mic for background listening
+  const [wakeBlocked, setWakeBlocked] = useState(false);   // the same, for the Brain view
+  const [heardLive, setHeardLive] = useState('');          // what the mic has recognized so far
   const loadingRef = useRef(isLoading);
   const settingsRef = useRef(settings);
   const handleSendRef = useRef(handleSend);
@@ -493,6 +515,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             const t: string = e.results[i][0].transcript;
             if (e.results[i].isFinal) add(t); else interim += t;
           }
+          setHeardLive([...parts, interim].join(' ').replace(/\s+/g, ' ').trim());
           closeAfter(pauseMs);
         };
         rec.onerror = (e: any) => {
@@ -507,6 +530,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
           }
           clearTimeout(quiet);
           setIsListening(false);
+          setHeardLive('');
           const said = [...parts, interim].join(' ').replace(/\s+/g, ' ').trim();
           if (said && !rec.cancelled) handleSendRef.current(said);
           if (!heard && settingsRef.current.listenTone) playListenEndTone();
@@ -559,7 +583,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
       }
     };
     rec.onerror = (e: any) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') wakeBlockedRef.current = true;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wakeBlockedRef.current = true; setWakeBlocked(true); }
       else if (e.error === 'network' || e.error === 'audio-capture') retryMs = 5000;
     };
     rec.onend = () => {
@@ -889,8 +913,11 @@ function MainApp({ token, onLogout }: MainAppProps) {
           </div>
 
           <div className={`flex-1 min-h-0 w-full ${facePersona === 'delamain' ? '' : `core-${facePersona}`}`}>
-            <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
-              persona={facePersona} listening={isListening} thinking={isLoading} />
+            {/* While the Brain view shows him in landscape, the face lives there instead (one copy of the video at a time) */}
+            {!faceInBrain && (
+              <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
+                persona={facePersona} listening={isListening} thinking={isLoading} />
+            )}
           </div>
 
           {/* Talk bar — full-width, pinned to bottom of face panel */}
@@ -918,7 +945,31 @@ function MainApp({ token, onLogout }: MainAppProps) {
           </div>
         </div>
 
-        {isBrainOpen && <BrainView token={token} onClose={closeBrain} />}
+        {isBrainOpen && (
+          <BrainView
+            token={token}
+            onClose={closeBrain}
+            face={faceInBrain ? (
+              <div className={`w-full h-full ${facePersona === 'delamain' ? '' : `core-${facePersona}`}`}>
+                <DelamainFace isTalking={isTalking} mood={faceMode} size="large" lineClip={lineClip}
+                  persona={facePersona} listening={isListening} thinking={isLoading} />
+              </div>
+            ) : null}
+            talk={{
+              listening: isListening,
+              heardLive,
+              speech,
+              talking: isTalking,
+              thinking: isLoading,
+              micSupported: !!SpeechRec,
+              wakeWord: settings.wakeWord,
+              wakeBlocked: wakeBlocked && settings.wakeWord,
+              onMic: toggleListening,
+              onSend: (text: string) => handleSend(text),
+              onToggleWake: () => { setWakeBlocked(false); setSettings(s => ({ ...s, wakeWord: !s.wakeWord })); },
+            }}
+          />
+        )}
 
         {/* Data Explorer Panel */}
         {isDataOpen && (
