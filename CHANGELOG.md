@@ -4,11 +4,15 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased] — Delamain's brain
+## [2.5.0] — 2026-11-14 — See him think
 
 ### Added
-- **Delamain's brain**: a live view of what he is doing, from the new brain button in the sidebar or `/#brain`. A 3D point-cloud brain lights the region for each real step of a turn: **Hearing** as your message arrives (your words fly in), the frontal **Core** while the language model thinks (in the active personality core's colour), **Senses**, **Navigation**, **Plans**, **Memory** and **Imagination** for the tools that belong to them, **Voice** while F5-TTS speaks (his words fly out), the cerebellum for pre-recorded **reflex** replies that skip the model, and a **conscience** band when he catches himself promising something he has not done. Signals are comets hopping neuron to neuron. A thought stream narrates each step in plain words, with today's counts (messages, replies, reflexes, model calls, thinking time, tokens, tools, self-corrections) and an EEG strip. See [docs/brain.md](docs/brain.md).
-- **`brain.py`** and two endpoints, `GET /api/brain/snapshot` and `GET /api/brain/events` (Server-Sent Events, JWT in the query string like the WebSocket). Each LLM call now reports its time, token counts and chosen tools; when the LLM server publishes Prometheus `/metrics` (llama.cpp with `--metrics`), its generation speed is shown too. The feed lives in memory only.
+- **See him think**: tap the new brain icon for a live picture of Delamain's mind, styled as his supercomputer core. Each labelled part lights up as he does that job: hearing you, thinking, looking things up, finding a route, setting a reminder, remembering, running a game, or speaking. Instant pre-recorded replies light up as reflexes, and when he catches himself promising something he has not done, you see him go back and do it. A running commentary explains every step in plain English, with today's totals beside it. See [docs/brain.md](docs/brain.md).
+- **Talk to him from that screen**: a mic button (or the Space bar), a text box and the wake word all work there. Your words float into the brain as you say them, and his float out in time with his voice. With the screen turned sideways, his face sits beside the brain.
+- For developers: `brain.py` and two endpoints, `GET /api/brain/snapshot` and `GET /api/brain/events` (Server-Sent Events). Each language-model call now reports its time, token counts and the tools it chose, and the model server's speed is shown when it publishes Prometheus `/metrics`. Nothing is stored; the feed lives in memory.
+
+### Privacy
+- Place searches no longer send a personal email address to OpenStreetMap; Delamain now identifies itself with a link to the project.
 
 ---
 

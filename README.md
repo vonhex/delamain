@@ -89,7 +89,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 </table>
 
 <img src="Screenshots/brain.png" alt="Delamain's brain: thinking, with two tools in flight" />
-<sub>Delamain's brain: watch him hear, think, use his tools and speak, live</sub>
+<sub>See him think: every part lights up as he listens, looks things up and answers</sub>
 
 <img src="Screenshots/cores.png" alt="The ten personality cores" />
 <sub>The ten personality cores, each with its own face tint, voice and temperament</sub>
@@ -109,7 +109,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 
 ## Features
 
-- **Delamain's brain**: press the brain button (or open `/#brain`) and watch him think, live. Every part of a turn lights the part of his brain that does it: your words fly into **Hearing**, the language model thinks in the frontal **Core** (tinted with the active personality core), searches, weather and news light the **Senses**, routes **Navigation**, reminders **Plans**, memory and notes **Memory**, Dungeon Master mode **Imagination**, and his words leave from **Voice** as F5-TTS speaks them. Pre-recorded replies are **reflexes**: the signal runs straight through the cerebellum, never touching the cortex. And when he catches himself promising something he has not done, his **conscience** flashes and he goes back to do it. Signals are glowing comets hopping neuron to neuron, not lines. A plain-English thought stream narrates each step ("Reaching for 2 tools: checking the weather, setting a reminder (48 tokens · 2.2 s)"), with today's numbers alongside. Every flash is a real event from the backend, not decoration. See [docs/brain.md](docs/brain.md).
+- **See him think**: tap the brain icon for a live picture of Delamain's mind. Each labelled part lights up as he listens, thinks, looks something up, remembers, plans or speaks; your words float in, his float out in time with his voice, and a running commentary explains each step in plain English. You can talk to him from that screen too, and with the screen turned sideways his face sits beside it. More in [docs/brain.md](docs/brain.md).
 - **Dungeon Master mode**: on a long drive, say "Delamain, let's play a role-playing game" and he runs a tabletop one-shot for everyone in the car, by voice, playing every character himself. Twelve ready-made adventures of three to five hours each ship with him, from a haunted lighthouse and a time-looping highway diner to a pirate treasure race and two family-friendly romps. He can also write a new one from your idea on the spot. He never refuses what your hero tries, only makes it count, and rolls real dice. The game is kept in your Obsidian vault: the adventure, a chronicle a scribe updates as you play (party, hit points, facts, people met) and the full transcript. So he doesn't lose track of the facts hours in, and "continue our adventure" picks it up days later. See [docs/dungeon-master.md](docs/dungeon-master.md).
 - **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
 - **Personality cores**: under Settings → Personality Core, swap the original for one of the rogue sub-personalities that escaped when Delamain's core fractured. Each has its own temperament, greetings, reminder lines, face color and voice, made by post-processing the synthesized audio:
@@ -177,7 +177,7 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
                                      LLM (tool calling) news RSS    vault
 ```
 
-- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. `brain.py` streams what he is doing (heard, thinking, tools, voice, replies) to the Brain view over Server-Sent Events. It works with any OpenAI-compatible chat endpoint (Ollama, LM Studio, llama.cpp, vLLM, …), and the LLM uses the tools in `assistant_tools.py`.
+- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. `brain.py` streams what he is doing to the Brain view. It works with any OpenAI-compatible chat endpoint (Ollama, LM Studio, llama.cpp, vLLM, …), and the LLM uses the tools in `assistant_tools.py`.
 - **Frontend**: React + Vite with Tailwind CSS v4 (cyber theme).
 - More detail: [docs/architecture.md](docs/architecture.md).
 
