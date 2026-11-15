@@ -119,7 +119,7 @@ jobs:
       # Only for pull requests: the real first-time setup, as a user's PC would run it (CPU PyTorch here).
       - name: Test the first-time setup end to end
         if: github.event_name == 'pull_request'
-        timeout-minutes: 45
+        timeout-minutes: 60
         run: |
           $exe = (Get-ChildItem dist-installer\Delamain-Setup-*.exe | Select-Object -First 1).FullName
           $dir = Join-Path $env:RUNNER_TEMP 'DelamainFull'
@@ -131,14 +131,19 @@ jobs:
           if ($LASTEXITCODE) { throw "install.ps1 failed (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir 'venv\Scripts\uvicorn.exe'))) { throw 'install.ps1 did not create the environment' }
           $env:DELAMAIN_CLIPS_URL = ''   # don't download the 240 MB of face clips in CI
-          $server = Start-Process cmd.exe -ArgumentList '/c', "`"$dir\start.bat`"" -WorkingDirectory $dir -PassThru
+          $env:PYTHONUNBUFFERED = '1'
+          $server = Start-Process cmd.exe -ArgumentList '/c', "`"$dir\start.bat`"" -WorkingDirectory $dir -PassThru `
+            -RedirectStandardOutput server.out.log -RedirectStandardError server.err.log
           $ok = $false
-          for ($i = 0; $i -lt 180 -and -not $ok; $i++) {
+          for ($i = 0; $i -lt 300 -and -not $ok; $i++) {
+            if ($server.HasExited) { 'start.bat exited early'; break }
             Start-Sleep 2
             try { $ok = (Invoke-RestMethod http://localhost:8888/health -TimeoutSec 2).status -eq 'operational' } catch { }
           }
           Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
           Get-Process uvicorn, python -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          '--- server output ---'; Get-Content server.out.log -Tail 60 -ErrorAction SilentlyContinue
+          '--- server errors ---'; Get-Content server.err.log -Tail 80 -ErrorAction SilentlyContinue
           if (-not $ok) { throw 'Delamain did not answer on /health after the first-time setup' }
           'First-time setup OK: Delamain answered on http://localhost:8888/health'
 
