@@ -82,6 +82,18 @@ manifest for your model id). Otherwise set **Settings → Integrations → Langu
 keep their general description. Readers: GGUF, Halogen `.hgn`, PyTorch `.pt` (read without loading
 weights or running code from the file) and `.safetensors`; see `model_map.py`.
 
+### Ask him about it
+
+While the view is open, he knows what it shows: his subsystems, what his language model and voice
+model are made of (from the same file headers), and which node you have selected. So you can tap a
+dot and ask "what's this one?", or ask "how many layers do you have?" or "what are expert networks?",
+and he answers about his own brain in his own voice.
+
+Poke around long enough (about ten nodes) and he will say something about it, in the voice of
+whichever core is on; now and then a **Ping** gets a remark too. These are fixed lines, so they cost
+no model call, and he says at most one every 40 seconds (none during a Dungeon Master game). They
+are in `brain_lines.py`.
+
 ## Reading the brain
 
 The dots are a map of jobs, not real neurons. Each subsystem is labelled with its name

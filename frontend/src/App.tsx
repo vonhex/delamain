@@ -307,12 +307,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
         setDungeon(msg.dungeon ?? null);
       } else if (msg.type === 'response') {
         // "One moment" while tools run: speak it but keep the thinking indicator on.
-        if (msg.source !== 'working') setIsLoading(false);
+        // An aside (a remark while you poke around his brain) arrives between replies: it never ends one.
+        if (msg.source !== 'working' && msg.source !== 'aside') setIsLoading(false);
         if ('dungeon' in msg) setDungeon(msg.dungeon ?? null);
         // One chime per answer: the clips that carry it on (a game's narration) follow without one.
         if (!msg.continued) playResponsePing();
         if (msg.audio_url) playAudio(msg.audio_url, msg.text, msg.video_url || undefined, msg.speech_at || 0,
-          msg.source !== 'working' && !msg.song && endsWithQuestion(msg.text || ''));
+          msg.source !== 'working' && msg.source !== 'aside' && !msg.song && endsWithQuestion(msg.text || ''));
         if (msg.song) { setSong(msg.song); triggerAngry(); }
         if (msg.text) setMessages(prev => [...prev, { role: 'delamain', content: msg.text }]);
         if (msg.navigate_options?.length === 1) {
@@ -966,6 +967,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
               wakeBlocked: wakeBlocked && settings.wakeWord,
               onMic: toggleListening,
               onSend: (text: string) => handleSend(text),
+              onBrain: (m: object) => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(m)); },
               onToggleWake: () => { setWakeBlocked(false); setSettings(s => ({ ...s, wakeWord: !s.wakeWord })); },
             }}
           />

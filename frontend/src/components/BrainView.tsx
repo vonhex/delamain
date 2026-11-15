@@ -18,6 +18,8 @@ export type TalkControls = {
   listening: boolean; heardLive: string; speech: SpeechClock | null; talking: boolean; thinking: boolean;
   micSupported: boolean; wakeWord: boolean; wakeBlocked: boolean;
   onMic: () => void; onSend: (text: string) => void; onToggleWake: () => void;
+  /** Tells the server what the view shows (the selected node) and when you poke around in it. */
+  onBrain?: (msg: object) => void;
 };
 
 const coreOf = (key: unknown) => PERSONAS.find(p => p.key === key) ?? PERSONAS[0];
@@ -26,7 +28,7 @@ const quote = (s: unknown, n = 70) => {
   const str = String(s ?? '');
   return str.length > n ? `“${str.slice(0, n)}…”` : `“${str}”`;
 };
-const REFLEX_WORDS: Record<string, string> = { thanks: 'thanks', greeting: 'a greeting', rude: 'an insult', song: 'an insult, with a song', dm_pause: '“pause the game”' };
+const REFLEX_WORDS: Record<string, string> = { thanks: 'thanks', greeting: 'a greeting', rude: 'an insult', song: 'an insult, with a song', dm_pause: '“pause the game”', brain_browse: 'you poking around in his brain', brain_ping: 'your test pulse' };
 const tag = (r: keyof typeof REGION_INFO) => REGION_INFO[r].code;
 
 // One plain-English line per event for the thought stream, tagged with the subsystem.
@@ -65,7 +67,7 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
     case 'voice_end': return ev.ok === false ? { icon: '⚠️', text: 'Voice synthesis failed.', color: '#f87171' } : { icon: '🎙️', text: `${tag('voice')} · Voice ready (${(Number(ev.ms ?? 0) / 1000).toFixed(1)} s to synthesize).`, color: R.voice.color };
     case 'spoke': {
       const src = String(ev.source ?? '');
-      const lead = src === 'greeting' ? 'Greeted you' : src === 'reminder' ? 'Reminder' : src === 'working' ? 'Said, while working' : src === 'canned' ? 'Replied (pre-recorded)' : src === 'error' ? 'Apologised' : 'Said';
+      const lead = src === 'greeting' ? 'Greeted you' : src === 'reminder' ? 'Reminder' : src === 'working' ? 'Said, while working' : src === 'canned' ? 'Replied (pre-recorded)' : src === 'error' ? 'Apologised' : src === 'aside' ? 'Remarked' : 'Said';
       return { icon: '💬', text: `${lead}: ${quote(ev.text, 90)}`, color: coreOf(ev.persona).color };
     }
     case 'core': return { icon: '🔁', text: `Personality core switched to ${coreOf(ev.persona).name}.`, color: coreOf(ev.persona).color };
@@ -135,6 +137,24 @@ function pinExplain(pin: NodePin, m: ModelInfo | null): string {
   }
 }
 
+type NodeInfo = NonNullable<ReturnType<Brain['inspect']>>;
+const BROWSE_FIRST = 10, BROWSE_AGAIN = 15;   // nodes inspected before he remarks on it
+// The selected node in words, for his prompt: so "what's this one?" gets a real answer.
+function describeNode(n: NodeInfo, m: ModelInfo | null): string {
+  const info = n.region === 'stem' ? null : REGION_INFO[n.region as Exclude<RegionKey, 'stem'>];
+  let s = `node #${n.id} in ${info ? `${info.code} (${info.label}: ${info.sub})` : 'the BRAIN STEM (the link between the page and the server)'}`;
+  if (n.pin) {
+    const share = n.pin.share > 1 ? `; it is one of ${n.pin.share} dots standing for that part` : '';
+    s += `, pinned to the real ${n.pin.src === 'llm' ? 'language' : 'voice'} model: ${pinTitle(n.pin, m).toLowerCase().replace(' / ', ' of ').replace(' · ', ', ')}, ${fmtWeights(n.pin.unit.weights)} weights${share}. ${pinExplain(n.pin, m)}`;
+  } else {
+    const list = NODE_CODE[n.region as RegionKey];
+    if (list) { const [fn, what] = list[n.id % list.length]; s += `. It stands for program code, not learned weights: ${fn} (${what}).`; }
+    else s += '.';
+  }
+  s += ` It has fired ${n.fires} time${n.fires === 1 ? '' : 's'} since the view opened.`;
+  return s;
+}
+
 export function BrainView({ token, onClose, talk, face }: { token: string; onClose: () => void; talk: TalkControls; face?: ReactNode }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -154,8 +174,9 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const [draft, setDraft] = useState('');
   const [hud, setHud] = useState({ signals: 0, lit: 0, neurons: 0, session: 0, zoom: 1 });
   // The node picked in the brain (tap a dot), refreshed live for the inspector card
-  type NodeInfo = NonNullable<ReturnType<Brain['inspect']>>;
   const [node, setNode] = useState<NodeInfo | null>(null);
+  const nodeRef = useRef<NodeInfo | null>(null);
+  useEffect(() => { nodeRef.current = node; });   // before the effects below that read it
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
   useEffect(() => {
     let live = true;
@@ -167,10 +188,24 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
       }).catch(() => { /* the inspector falls back to plain descriptions */ });
     return () => { live = false; };
   }, [token]);
+  // He knows which node you have selected (so you can ask him about it), and after you have looked
+  // at a good few of them, he may say something about it. A pulse you send now and then gets a remark too.
+  const onBrainRef = useRef(talk.onBrain);
+  useEffect(() => { onBrainRef.current = talk.onBrain; });
+  const poke = useCallback((what: 'browse' | 'ping') => onBrainRef.current?.({ type: 'brain_poke', what, t: Date.now() }), []);
+  const seen = useRef<{ ids: Set<number>; next: number }>({ ids: new Set(), next: BROWSE_FIRST });
+  const nodeId = node?.id ?? null;
+  useEffect(() => {
+    const n = nodeRef.current;
+    onBrainRef.current?.({ type: 'brain_focus', open: true, node: n ? describeNode(n, modelInfo) : null });
+    if (nodeId == null) return;
+    const s = seen.current;
+    s.ids.add(nodeId);
+    if (s.ids.size >= s.next) { poke('browse'); s.ids.clear(); s.next = BROWSE_AGAIN; }
+  }, [nodeId, modelInfo, poke]);
+  useEffect(() => () => onBrainRef.current?.({ type: 'brain_focus', open: false }), []);
   const modelRef = useRef<ModelInfo | null>(null);
   useEffect(() => { modelRef.current = modelInfo; });
-  const nodeRef = useRef<NodeInfo | null>(null);
-  useEffect(() => { nodeRef.current = node; });
   const lineId = useRef(0);
   const toolsRunning = useRef(new Map<string, string>());
   const talkRef = useRef(talk);
@@ -440,7 +475,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
                     </div>
                   ) : null}
                   <div className="hidden sm:block text-gray-500 text-[11px] leading-snug">{node.surface ? 'On the surface of the brain.' : 'Deep inside the brain.'} One of {node.total.toLocaleString()} nodes.</div>
-                  <button onClick={() => brainRef.current?.ping()} className="mt-1 flex items-center gap-1.5 px-2.5 py-1 border font-mono text-[10px] tracking-[0.15em] hover:bg-white/5"
+                  <button onClick={() => { brainRef.current?.ping(); poke('ping'); }} className="mt-1 flex items-center gap-1.5 px-2.5 py-1 border font-mono text-[10px] tracking-[0.15em] hover:bg-white/5"
                     style={{ borderColor: `${r.color}88`, color: r.color }}>
                     <Zap size={12} /> PING · SEND A PULSE FROM HERE
                   </button>
