@@ -25,7 +25,7 @@ export interface IntegrationsHandle {
 }
 
 const ORDER: { title: string; keys: string[] }[] = [
-  { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort'] },
+  { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort', 'llm_model_file'] },
   { title: 'You', keys: ['home_address'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Insult comeback', keys: ['insult_song_url', 'insult_song_start', 'insult_song_seconds', 'insult_song_chance'] },
@@ -36,6 +36,7 @@ const HINT: Record<string, string> = {
   llm_model: 'As the server lists it at /v1/models; llama.cpp ignores it',
   llm_api_key: 'For hosted or key-protected servers (OpenAI, OpenRouter, llama.cpp --api-key, LiteLLM). Kept on the server, never shown again',
   llm_reasoning_effort: '"none" turns thinking off so the whole reply budget goes to speech',
+  llm_model_file: 'Optional. The model file on this computer (a .gguf, or a Halogen .hgn), so the brain view can pin its nodes to the real layers. Found by itself for llama.cpp and Ollama',
   home_address: '"Take me home", the drive time home and the weather there. Shared with your AI model, and with OpenStreetMap when he looks it up',
   searxng_url: 'Web search, and the fallback for news',
   obsidian_vault_path: 'A folder on the server with a .obsidian folder in it; Delamain writes under Delamain/',

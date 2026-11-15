@@ -40,6 +40,43 @@ doing (*TRANSMITTING* while he speaks, *RECEIVING* while the mic is open, *PROCE
 he thinks). Close the view and it goes back to the main screen. In portrait the brain keeps
 the whole screen.
 
+## Zoom in and inspect a node
+
+- **Zoom**: pinch with two fingers on a touchscreen, scroll the mouse wheel (or pinch a trackpad), or
+  double-tap a spot to zoom in there; double-tap again to come back out. The **+ / −** buttons and the
+  keys **+**, **−** and **0** (reset) do the same. Zoomed in, drag with one finger to look around; at
+  normal size, dragging tilts the brain.
+- **Inspect a node**: tap any dot. Its connections light up out to its neighbours, and a card shows which
+  subsystem it belongs to, whether it is firing right now, how many times it has fired since you
+  opened the view and when last, what the last signal through it was carrying ("your words, heading
+  in to be understood", "a request to OPTIC ARRAY: checking the weather", "a thought: memory feeding
+  the cognition core"…), and what its neighbours are. **Ping** sends a pulse out from it so you can
+  watch a signal travel. Esc or ✕ closes the card.
+
+### What each node really is
+
+- **COGNITION CORE nodes are pinned to the real language model.** When its file is on the same computer,
+  Delamain reads the file's header (never the weights) and lists its real parts: the word-lookup table,
+  every layer's attention (full or fast), its router, shared expert and expert networks (or its
+  feed-forward block), the next-word scorer and the drafter, each with its true weight count. The
+  core's nodes are laid out over them in order, from layer 1 at the back of the frontal lobe to the
+  last layer at the front; bigger parts get more nodes and every part gets at least one (on a small
+  screen, neighbouring layers share). Tap a node and the card says, for example, *Layer 6 / 48 · Expert
+  networks · 2.52 billion weights here; this dot is one of 6 standing in for them*, with what that kind
+  of weight does and the real tensor names and shapes.
+- **VOCODER nodes are pinned to his voice model** (F5-TTS), block by block, the same way.
+- **The other subsystems are program code, not learned weights**, so their nodes name the functions that
+  do the work: `web_search()`, `get_weather()`, `remember()`, `set_reminder()` and so on.
+
+What stays an illustration is *when* a node lights up: model servers don't report which weights fire
+for a given word, so the flashes show the flow of the work, not the exact weights.
+
+The language model file is found by itself for llama.cpp (from its `/props`) and Ollama (from its
+manifest for your model id). Otherwise set **Settings → Integrations → Language model file** (or
+`LLM_MODEL_FILE`) to a `.gguf` or Halogen `.hgn` on this computer. If none is found, the core's nodes
+keep their general description. Readers: GGUF, Halogen `.hgn`, PyTorch `.pt` (read without loading
+weights or running code from the file) and `.safetensors`; see `model_map.py`.
+
 ## Reading the brain
 
 The dots are a map of jobs, not real neurons. Each subsystem is labelled with its name
