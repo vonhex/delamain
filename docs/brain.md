@@ -40,6 +40,22 @@ doing (*TRANSMITTING* while he speaks, *RECEIVING* while the mic is open, *PROCE
 he thinks). Close the view and it goes back to the main screen. In portrait the brain keeps
 the whole screen.
 
+## Zoom in and inspect a node
+
+- **Zoom**: pinch with two fingers on a touchscreen, scroll the mouse wheel (or pinch a trackpad), or
+  double-tap a spot to zoom in there; double-tap again to come back out. The **+ / −** buttons and the
+  keys **+**, **−** and **0** (reset) do the same. Zoomed in, drag with one finger to look around; at
+  normal size, dragging tilts the brain.
+- **Inspect a node**: tap any dot. Its connections light up out to its neighbours, and a card shows which
+  subsystem it belongs to, whether it is firing right now, how many times it has fired since you
+  opened the view and when last, what the last signal through it was carrying ("your words, heading
+  in to be understood", "a request to OPTIC ARRAY: checking the weather", "a thought: memory feeding
+  the cognition core"…), and what its neighbours are. **Ping** sends a pulse out from it so you can
+  watch a signal travel. Esc or ✕ closes the card.
+
+Each dot is a stand-in for part of the work its subsystem does, not a literal neuron: the language
+model's own weights live on the model server, and Delamain only sees what goes in and comes out.
+
 ## Reading the brain
 
 The dots are a map of jobs, not real neurons. Each subsystem is labelled with its name
