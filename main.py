@@ -28,6 +28,7 @@ import auth as _auth
 import assistant_tools as _tools
 import dungeon as _dungeon
 import brain as _brain
+import model_map as _model_map
 import config
 from fastapi.responses import StreamingResponse
 
@@ -969,6 +970,13 @@ async def health():
 @app.get("/api/brain/snapshot")
 async def brain_snapshot(_=Depends(require_auth)):
     return _brain.snapshot()
+
+
+@app.get("/api/brain/model")
+async def brain_model(_=Depends(require_auth)):
+    """The real parts behind the Brain view's nodes: the language model's and voice model's layers
+    (read from their file headers when the files are on this computer), for the node inspector."""
+    return await asyncio.to_thread(_model_map.describe)
 
 
 @app.get("/api/brain/events")

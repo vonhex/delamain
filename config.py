@@ -22,6 +22,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "llm_model": ("LLM_MODEL", "gpt-4-vision-preview", "Model id"),
     "llm_api_key": ("LLM_API_KEY", "", "API key (sent as a Bearer token; leave empty for local servers)"),
     "llm_reasoning_effort": ("LLM_REASONING_EFFORT", "", "Reasoning effort (reasoning models only)"),
+    "llm_model_file": ("LLM_MODEL_FILE", "", "Language model file (optional: a GGUF or .hgn on this computer, so the brain view can show its real layers)"),
     "tools_enabled": ("TOOLS_ENABLED", "true", "Tools: web search, news, weather, routes, notes, memory"),
     "searxng_url": ("SEARXNG_URL", "http://localhost:8887/search", "SearXNG search URL"),
     "obsidian_vault_path": ("OBSIDIAN_VAULT_PATH", "~/Documents/obsidian vault", "Obsidian vault folder"),

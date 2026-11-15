@@ -8,6 +8,17 @@
 
 export type BrainEvent = { kind: string; t?: number; [k: string]: unknown };
 
+/** A real part of a model, from /api/brain/model (model_map.py). */
+export type ModelUnit = { kind: string; layer: number | null; layerTo?: number | null; weights: number;
+  tensors: { name: string; shape: number[] }[]; count?: number };
+export type ModelInfo = {
+  llm?: { file: string; format: string; layers: number; total: number; experts?: number | null; experts_used?: number | null;
+    hidden?: number | null; full_attention_layers?: number | null; linear_attention_layers?: number | null; units: ModelUnit[] };
+  voice?: { file: string; total: number; blocks: number; units: ModelUnit[] };
+  llm_error?: string; voice_error?: string;
+};
+export type NodePin = { src: 'llm' | 'voice'; unit: ModelUnit; share: number };
+
 /** What he is saying right now and the playback clock behind it (the page's audio element). */
 export type SpeechClock = { id: number; text: string; speechAt: number; time: () => number; duration: () => number };
 
@@ -282,6 +293,49 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     return 'a signal';
   }
   let sel: number | null = null;
+
+  // Pin the core's nodes to the language model's real parts, and the vocoder's to the voice model's,
+  // in order from back to front. Bigger parts get more nodes; every part gets at least one; when there
+  // are more parts than nodes, neighbouring layers share.
+  let model: ModelInfo | null = null;
+  const pins = new Map<number, NodePin>();
+  const PLUMBING = new Set(['norm', 'mixing', 'other', 'voice_other', 'voice_mel']);
+  function mergeLayers(units: ModelUnit[], chunk: number): ModelUnit[] {
+    if (chunk <= 1) return units;
+    const out: ModelUnit[] = [], at = new Map<string, ModelUnit>();
+    for (const u of units) {
+      if (u.layer == null) { out.push(u); continue; }
+      const key = `${u.kind}:${Math.floor(u.layer / chunk)}`;
+      const m = at.get(key);
+      if (m) { m.weights += u.weights; m.layerTo = Math.max(m.layerTo ?? m.layer!, u.layer); m.count = (m.count ?? 0) + (u.count ?? 0); }
+      else { const c = { ...u, layerTo: u.layer }; at.set(key, c); out.push(c); }
+    }
+    return out;
+  }
+  function pinRegion(region: RegionKey, all: ModelUnit[], src: 'llm' | 'voice') {
+    const ids = (byRegion[region] ?? []).slice().sort((a, b) => neurons[a].x - neurons[b].x || neurons[b].y - neurons[a].y);
+    const N = ids.length;
+    if (!N) return;
+    let units = all.filter(u => !PLUMBING.has(u.kind) && u.weights > 0);
+    for (let chunk = 1; chunk <= 512; chunk *= 2) {
+      const m = mergeLayers(units, chunk);
+      if (m.length <= N || chunk === 512) { units = m; break; }
+    }
+    units = units.slice(0, N);
+    const counts = units.map(() => 1), rest = N - units.length, tot = units.reduce((a, u) => a + u.weights, 0) || 1;
+    const quota = units.map(u => (u.weights / tot) * rest);
+    quota.forEach((q, i) => { counts[i] += Math.floor(q); });
+    let left = N - counts.reduce((a, b) => a + b, 0);
+    const order = quota.map((q, i) => [q - Math.floor(q), i] as const).sort((a, b) => b[0] - a[0]);
+    for (const [, i] of order) { if (left <= 0) break; counts[i]++; left--; }
+    let k = 0;
+    units.forEach((u, i) => { for (let c = 0; c < counts[i] && k < N; c++) pins.set(ids[k++], { src, unit: u, share: counts[i] }); });
+  }
+  function pinAll() {
+    pins.clear();
+    if (model?.llm?.units?.length) pinRegion('core', model.llm.units, 'llm');
+    if (model?.voice?.units?.length) pinRegion('voice', model.voice.units, 'voice');
+  }
   let sx = new Float32Array(0), sy = new Float32Array(0), sr = new Float32Array(0);   // where each node was drawn
 
   /* ── signals ───────────────────────────────────────────────────────── */
@@ -1100,7 +1154,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (rebuild) { signals = []; build(); if (sel != null) select(null); }
+    if (rebuild) { signals = []; build(); pinAll(); if (sel != null) select(null); }
     buildHexGrid();
   }
   function frame(ts: number) {
@@ -1173,6 +1227,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     zoomBy(f: number) { const fx = vp.baseCx, fy = vp.baseCy; zoomAt(fx, fy, cam.zoom * f, { zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fx, fy }); },
     resetView() { cam.zoom = 1; cam.panX = 0; cam.panY = 0; },
     select,
+    /** The real model parts to pin the nodes to (from /api/brain/model). */
+    setModel(m: ModelInfo | null) { model = m; pinAll(); },
     /** The selected node, for the inspector card. */
     inspect() {
       if (sel == null || !neurons[sel]) return null;
@@ -1181,7 +1237,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       for (const j of n.nb) { const r = neurons[j].region; nbs[r] = (nbs[r] ?? 0) + 1; }
       return { id: sel, region: n.region, energy: +n.energy.toFixed(2), fires: n.fires,
         lastAgo: n.lastFired < 0 ? null : +(now() - n.lastFired).toFixed(1), lastBy: n.lastBy, surface: n.shell,
-        neighbours: nbs, links: n.nb.length, total: neurons.length };
+        neighbours: nbs, links: n.nb.length, total: neurons.length, pin: pins.get(sel) ?? null };
     },
     /** Send a pulse out from the selected node along its connections. */
     ping() {
