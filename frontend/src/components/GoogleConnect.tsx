@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 // Connect Google Calendar: the client id and secret above are saved first, then Google's sign-in
 // opens in a new window and comes back to /api/google/callback on this same address.
 
-type GStatus = { configured: boolean; connected: boolean; email: string | null; callback_path: string };
+type GStatus = { configured: boolean; connected: boolean; email: string | null; callback_path: string; gmail?: boolean };
 
 export function GoogleConnect({ token, beforeConnect }: { token: string; beforeConnect: () => Promise<boolean> }) {
   const [st, setSt] = useState<GStatus | null>(null);
@@ -42,14 +42,18 @@ export function GoogleConnect({ token, beforeConnect }: { token: string; beforeC
       <div className="flex items-center gap-2">
         {st?.connected ? (
           <>
-            <span className="text-xs text-green-400 flex-1">Connected{st.email ? ` as ${st.email}` : ''}</span>
+            <span className="text-xs text-green-400 flex-1">Connected{st.email ? ` as ${st.email}` : ''} · Calendar{st.gmail ? ' + Gmail' : ''}</span>
+            {!st.gmail && (
+              <button type="button" onClick={() => void connect()} title="Sign in again and allow Gmail (read, and save drafts)"
+                className="text-[10px] uppercase tracking-wider px-3 py-1.5 border border-cyber-blue/40 rounded-sm text-cyber-blue hover:bg-cyber-blue/10">Add Gmail</button>
+            )}
             <button type="button" onClick={() => void disconnect()}
               className="text-[10px] uppercase tracking-wider px-3 py-1.5 border border-cyber-blue/20 rounded-sm text-gray-400 hover:text-red-400 hover:border-red-400/40">Disconnect</button>
           </>
         ) : (
           <button type="button" onClick={() => void connect()}
             className="text-[10px] uppercase tracking-wider px-3 py-1.5 border border-cyber-blue/40 rounded-sm text-cyber-blue hover:bg-cyber-blue/10">
-            Connect Google Calendar
+            Connect Google
           </button>
         )}
       </div>
