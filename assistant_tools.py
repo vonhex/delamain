@@ -23,6 +23,7 @@ from pathlib import Path
 
 import requests
 
+import google_api as _google
 import config
 
 # Search, news, routing, units and the vault come from config (Settings panel, .env or
@@ -610,6 +611,32 @@ TOOL_SCHEMAS = [
     _fn("forget", "Delete remembered facts that contain the given words, when the passenger asks you to forget something "
         "or a fact is wrong.",
         {"text": {"type": "string", "description": "Distinctive words from the fact to delete."}}, ["text"]),
+    # Google Calendar (google_api.py); they say so when it is not connected.
+    _fn("get_calendar", "The passenger's Google Calendar: events from a day, for a number of days. Today with no "
+        "arguments (what is left of it). Each event has an [E#] reference for moving or removing it.",
+        {"start_date": {"type": "string", "description": "YYYY-MM-DD, 'today' or 'tomorrow'. Default today."},
+         "days": {"type": "integer", "description": "How many days from start_date, 1 to 31. Default 1."},
+         "query": {"type": "string", "description": "Optional words to find, e.g. 'dentist'."}}, []),
+    _fn("add_calendar_event", "Add an event to the passenger's Google Calendar. Local times. Give an end or a "
+        "duration; default one hour.",
+        {"title": {"type": "string"},
+         "start": {"type": "string", "description": "YYYY-MM-DDTHH:MM local time, or YYYY-MM-DD with all_day."},
+         "end": {"type": "string", "description": "Optional, same format as start."},
+         "duration_minutes": {"type": "integer"},
+         "all_day": {"type": "boolean"},
+         "location": {"type": "string"},
+         "description": {"type": "string"},
+         "calendar": {"type": "string", "description": "Optional calendar name; default their main calendar."}},
+        ["title", "start"]),
+    _fn("update_calendar_event", "Change an event from the last get_calendar result: move it (it keeps its length "
+        "unless an end or duration is given), rename it, or change its place or notes.",
+        {"ref": {"type": "string", "description": "The [E#] reference, e.g. 'E2'."},
+         "title": {"type": "string"}, "start": {"type": "string", "description": "YYYY-MM-DDTHH:MM local time."},
+         "end": {"type": "string"}, "duration_minutes": {"type": "integer"},
+         "location": {"type": "string"}, "description": {"type": "string"}}, ["ref"]),
+    _fn("delete_calendar_event", "Remove an event from the last get_calendar result. Only when the passenger "
+        "clearly asks to cancel or delete that event.",
+        {"ref": {"type": "string", "description": "The [E#] reference, e.g. 'E2'."}}, ["ref"]),
 ]
 
 _HANDLERS = {
@@ -619,6 +646,7 @@ _HANDLERS = {
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
 }
+_HANDLERS.update(_google.HANDLERS)
 
 
 # Tools that need the passenger's browser position get it from the server, never from the model.

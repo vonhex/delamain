@@ -31,6 +31,8 @@ TOOL_REGION = {
     "remember": "memory", "forget": "memory", "write_note": "memory", "append_to_note": "memory",
     "read_note": "memory", "list_notes": "memory", "search_notes": "memory",
     "set_reminder": "plans", "list_reminders": "plans", "cancel_reminder": "plans",
+    "get_calendar": "plans", "add_calendar_event": "plans", "update_calendar_event": "plans",
+    "delete_calendar_event": "plans",
     "list_adventures": "imagination", "start_adventure": "imagination", "pause_adventure": "imagination",
     "end_adventure": "imagination", "note_fact": "imagination",
 }
