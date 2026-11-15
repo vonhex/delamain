@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/vonhex/delamain.git
 cd delamain
-./install.sh          # Windows: double-click install.bat
+./install.sh          # Windows: run Delamain-Setup-<version>.exe from the release (or double-click install.bat in the zip)
 ```
 
 The installer brings its own Python (uv), installs PyTorch for your GPU (NVIDIA, AMD or CPU; override with `TORCH_INDEX=<url>`), Delamain's packages and, if needed, a private Node.js, builds the web UI and starts Delamain. Everything stays in this folder; run it again after `git pull` to update. Options: `--no-start`, and `--service` (Linux) to run Delamain as a systemd user service that starts at login.
