@@ -8,6 +8,8 @@ All notable changes to Delamain are documented here.
 
 ### Fixed
 - **Clearer voice**: replies are rewritten for speech before he says them. Numbers, years, times, money, temperatures, units, `#numbers`, code names like `write_note`, abbreviations and markdown are spoken as words, and curly quotes and apostrophes no longer split words apart ("I’m" was heard as "I m"). The text on screen is unchanged.
+- **Cleaner voice reference**: the clip his voice is copied from (`delamain_ref_clean.wav`) is now whole sentences with silence at both ends, and its transcript matches it word for word. The old clip started mid-phrase and ended partway into a word its transcript left out, which slurred and ran words together. Fixed lines are re-recorded with it on the next start (delete `audio_output/static_cache` to force this on an existing install).
+- **Dungeon Master narration**: signs and labels in capitals (MESS HALL) are read as words, initials (Director A. Rhee) no longer cause a full stop, double-barrelled names are two words, and dice and stats (2d6+3, d20, DC 15, HP, AC) are spoken out.
 - The voice now uses F5-TTS's full 32 steps (was 16), which mispronounces fewer words; set `TTS_NFE_STEPS` in `.env` to trade clarity for speed.
 
 ### Security

@@ -53,11 +53,15 @@ _f5_infer.torchaudio.load = _load_audio
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CHECKPOINT = os.path.join(BASE_DIR, "checkpoints/F5TTS_Base/model_1200000.pt")
 VOCAB_FILE = os.path.join(BASE_DIR, "checkpoints/F5TTS_Base/vocab.txt")
-REF_AUDIO_PATH = os.environ.get("DELAMAIN_REF_AUDIO", os.path.join(BASE_DIR, "delamain_ref_10s.wav"))
-REF_TEXT = (
-    "in search of identity and meaning. When in Greece, do as Grecians do, "
-    "if you'll pardon my take on the expression. Of course I'm obliged to"
-)
+# The voice copies this clip, and every reply continues on from its last word, so it must be
+# whole sentences with a little silence at both ends, and REF_TEXT must match it word for word.
+# (The old delamain_ref_10s.wav began mid-phrase and ended partway into a word that REF_TEXT
+# left out, which slurred and ran words together.) Cut from delamain_ref.wav, 3.35-14.06 s.
+REF_AUDIO_PATH = os.environ.get("DELAMAIN_REF_AUDIO", os.path.join(BASE_DIR, "delamain_ref_clean.wav"))
+REF_TEXT = os.environ.get("DELAMAIN_REF_TEXT", (
+    "When in Greece, do as Grecians do, if you'll pardon my take on the expression. "
+    "Of course I'm obliged to inform you we are not in Greece. We remain on the desired course."
+))
 OUTPUT_DIR = os.environ.get("DELAMAIN_AUDIO_DIR", os.path.join(BASE_DIR, "audio_output"))
 CACHE_DIR = os.path.join(OUTPUT_DIR, "static_cache")
 os.makedirs(OUTPUT_DIR, exist_ok=True)

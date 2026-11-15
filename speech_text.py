@@ -113,6 +113,38 @@ _ABBREV = [
     (r"\betc\.", "et cetera"), (r"\bvs\.?(?=\s)", "versus"), (r"\bapprox\.", "approximately"),
     (r"\bAM\b", "A M"), (r"\bPM\b", "P M"), (r"\ba\.m\.", "A M"), (r"\bp\.m\.", "P M"),
 ]
+_GAME = [
+    (r"\bDC\s*(?=\d)", "difficulty "), (r"\bHP\b", "hit points"), (r"\bAC\b(?=\s*\d|\s+of\b)", "armour class"),
+    (r"\bXP\b", "experience"), (r"\bNPCs\b", "characters"), (r"\bNPC\b", "character"), (r"\bD&D\b", "D and D"),
+]
+_KEEP_CAPS = {"NASA", "FBI", "CIA", "USA", "NATO", "GPS", "DNA", "ETA", "ASAP", "OK", "TV", "UFO", "CEO", "PDF", "URL", "API"}
+
+
+def _uncap(t: str) -> str:
+    """Capital words of 3+ letters, and 2-letter ones next to another capital word (BE QUIET), become
+    Title case; a lone short acronym (AI, HP) or a known one (NASA) is kept."""
+    toks = list(re.finditer(r"[A-Za-z']+", t))
+    caps = [len(w) >= 2 and w.replace("'", "").isalpha() and w.replace("'", "").isupper()
+            for w in (m.group(0) for m in toks)]
+    out, last = [], 0
+    for i, m in enumerate(toks):
+        w = m.group(0)
+        near = (i > 0 and caps[i - 1]) or (i + 1 < len(toks) and caps[i + 1])
+        if caps[i] and w not in _KEEP_CAPS and (len(w) >= 3 or near):
+            out.append(t[last:m.start()]); out.append(w.capitalize()); last = m.end()
+    out.append(t[last:])
+    return "".join(out)
+
+
+def _dice(m: re.Match) -> str:
+    count, sides, sign, mod = m.groups()
+    n = int(count) if count else 1
+    s = (f"{number_words(n)} d " if count else "d ") + number_words(int(sides))
+    if sign:
+        s += f" {'plus' if sign == '+' else 'minus'} {number_words(int(mod))}"
+    return s
+
+
 _CHARS = str.maketrans({"’": "'", "‘": "'", "‛": "'", "ʼ": "'", "“": '"', "”": '"', "„": '"', "«": '"', "»": '"',
                         " ": " ", " ": " ", " ": " ", "​": "", "…": "...", "‑": "-", "−": "-"})
 
@@ -131,6 +163,18 @@ def speakable(text: str) -> str:
     t = re.sub(r"(?<=[a-z])(?=[A-Z][a-z])", " ", t)
     for pat, rep in _ABBREV:
         t = re.sub(pat, rep, t)
+    # Tabletop shorthand (Dungeon Master mode): 2d6+3, d20, DC 15, HP, AC, +2.
+    t = re.sub(r"\b(\d*)d(4|6|8|10|12|20|100)\b(?:\s*([+-])\s*(\d+))?", _dice, t)
+    for pat, rep in _GAME:
+        t = re.sub(pat, rep, t)
+    t = re.sub(r"(?<![\w)])\+(\d+)", lambda m: "plus " + number_words(int(m.group(1))), t)
+    # Signs and labels written in capitals (MESS HALL, BE QUIET) are read as words, not shouted
+    # or spelled; short acronyms (AI, HP, DC) stay as letters.
+    t = _uncap(t)
+    # An initial before a surname ("A. Rhee") is not the end of a sentence.
+    t = re.sub(r"\b([A-Z])\.\s+(?=[A-Z][a-z])", r"\1 ", t)
+    # Double-barrelled names (Teague-Oduya) are two words.
+    t = re.sub(r"(?<=[a-z])-(?=[A-Z])", " ", t)
     # Numbers with meaning attached, before plain numbers.
     t = re.sub(r"\$(\d[\d,]*)\.(\d\d)\b", lambda m: f"{number_words(int(m.group(1).replace(',', '')))} dollars and {number_words(int(m.group(2)))} cents", t)
     t = re.sub(r"\$(\d[\d,]*)\b", lambda m: f"{number_words(int(m.group(1).replace(',', '')))} dollars", t)
