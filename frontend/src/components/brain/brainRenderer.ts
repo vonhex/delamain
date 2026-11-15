@@ -1356,6 +1356,7 @@ export const TOOL_WORDS: Record<string, string> = {
   set_reminder: 'setting a reminder', list_reminders: 'checking reminders', cancel_reminder: 'cancelling a reminder',
   get_calendar: 'checking your calendar', add_calendar_event: 'adding to your calendar', update_calendar_event: 'moving an event',
   delete_calendar_event: 'removing an event',
+  get_email: 'checking your email', read_email: 'reading an email', draft_email: 'drafting an email', draft_reply: 'drafting a reply',
   list_adventures: 'opening the adventure book', start_adventure: 'starting an adventure', pause_adventure: 'pausing the adventure',
   end_adventure: 'ending the adventure', note_fact: 'noting a fact for the chronicle',
 };
