@@ -38,6 +38,7 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
     case 'heard': return { icon: '👂', text: `${tag('hearing')} · Heard you: ${quote(ev.text)}`, color: R.hearing.color };
     case 'reflex': return { icon: '⚡', text: `${tag('reflex')} · Instant pre-recorded reply to ${REFLEX_WORDS[String(ev.what)] ?? String(ev.what ?? 'that').replace(/_/g, ' ')}. No language model needed.`, color: R.reflex.color };
     case 'think_start':
+      if (ev.source === 'meeting') return { icon: '📝', text: `${tag('memory')} · Writing up your meeting notes in the background.`, color: R.memory.color };
       return ev.source === 'scribe'
         ? { icon: '📜', text: `${tag('imagination')} · Writing up the adventure chronicle in the background.`, color: R.imagination.color }
         : { icon: '🧠', text: `${tag('core')} · ${Number(ev.round) > 0 ? `Thinking again (round ${Number(ev.round) + 1}) with what the tools found.` : 'Thinking about your request.'}`, color: R.core.color };

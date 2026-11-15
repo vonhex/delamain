@@ -30,6 +30,7 @@ import assistant_tools as _tools
 import dungeon as _dungeon
 import brain as _brain
 import model_map as _model_map
+import meetings as _meetings
 import config
 from fastapi.responses import StreamingResponse
 
@@ -96,8 +97,10 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
+    meeting_task = asyncio.create_task(_meetings.worker(_meeting_think, _meeting_notify))
     yield
     reminder_task.cancel()
+    meeting_task.cancel()
     warmup_task.cancel() if not warmup_task.done() else None
 
 limiter = Limiter(key_func=get_remote_address)
@@ -281,6 +284,10 @@ CAPABILITIES = (
     "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
     "• Notes: the passenger's Obsidian vault. Lists, ideas, untimed reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
+    "• Meetings: the passenger can record a meeting with the Meeting button; it is transcribed and summarised into "
+    "'Delamain/Meetings/' in the vault (summary, decisions, action items, then the transcript). To answer questions about "
+    "a meeting, list_notes on 'Delamain/Meetings' (newest first) and read_note the right one. You cannot start a recording yourself; "
+    "if asked to, tell them to tap the Meeting button.\n"
     "• Memory: when the passenger tells you something lasting about themselves or the people in their life — preferences, friends, "
     "family, places, plans — call remember with one concise sentence per fact and the matching category. "
     "If they ask you to forget something, or a remembered fact is wrong, call forget. "
@@ -749,11 +756,11 @@ _SAVE_CLAIM = re.compile(
 )
 
 
-def _post_llm(payload: dict) -> requests.Response:
-    return requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=90)
+def _post_llm(payload: dict, timeout: int = 90) -> requests.Response:
+    return requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=timeout)
 
 
-async def _think(body: dict, round_no: int = 0, source: str = "reply") -> requests.Response:
+async def _think(body: dict, round_no: int = 0, source: str = "reply", timeout: int = 90) -> requests.Response:
     """One LLM call, reported to the Brain view: when it starts, how long it took, the tokens
     in and out, and which tools the model chose."""
     loop = asyncio.get_event_loop()
@@ -761,7 +768,7 @@ async def _think(body: dict, round_no: int = 0, source: str = "reply") -> reques
                 messages=len(body.get("messages", [])))
     started = time.monotonic()
     try:
-        response = await loop.run_in_executor(None, _post_llm, body)
+        response = await loop.run_in_executor(None, _post_llm, body, timeout)
         response.raise_for_status()
         data = response.json()
     except Exception:
@@ -1035,6 +1042,85 @@ async def health():
 @app.get("/api/brain/snapshot")
 async def brain_snapshot(_=Depends(require_auth)):
     return _brain.snapshot()
+
+
+# ── Meeting notes ─────────────────────────────────────────────────────────────
+async def _meeting_think(payload: dict) -> requests.Response:
+    """One summarising call for a meeting: a long prompt and answer, so a longer timeout."""
+    return await _think({**payload, **llm_payload_extras()}, source="meeting", timeout=900)
+
+
+async def _meeting_notify(mid: str) -> None:
+    """Every open page hears how a meeting's notes are coming along."""
+    try:
+        meta = _meetings.public(_meetings.load(mid))
+    except KeyError:
+        return
+    for ws in list(connected_clients.values()):
+        try:
+            await ws.send_json({"type": "meeting", "meeting": meta})
+        except Exception:
+            pass
+
+
+class MeetingStart(BaseModel):
+    title: str = ""
+    mime: str = ""
+
+
+class MeetingFinish(BaseModel):
+    title: str | None = None
+
+
+def _meeting_or_404(mid: str) -> dict:
+    try:
+        return _meetings.load(mid)
+    except (KeyError, ValueError):
+        raise HTTPException(status_code=404, detail="No such meeting.")
+
+
+@app.get("/api/meetings")
+async def meetings_list(_=Depends(require_auth)):
+    return await asyncio.to_thread(_meetings.list_recent)
+
+
+@app.post("/api/meetings")
+async def meetings_start(body: MeetingStart, _=Depends(require_auth)):
+    return _meetings.public(_meetings.start(body.title, body.mime))
+
+
+@app.put("/api/meetings/{mid}/chunk/{seq}")
+async def meetings_chunk(mid: str, seq: int, request: Request, _=Depends(require_auth)):
+    """One piece of the recording, in order (the recorder's pieces only play when joined)."""
+    _meeting_or_404(mid)
+    data = await request.body()
+    try:
+        meta = await asyncio.to_thread(_meetings.add_chunk, mid, seq, data)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"ok": True, "chunks": meta["chunks"]}
+
+
+@app.post("/api/meetings/{mid}/finish")
+async def meetings_finish(mid: str, body: MeetingFinish, _=Depends(require_auth)):
+    """Recording stopped (or a failed one retried): transcribe and summarise it."""
+    _meeting_or_404(mid)
+    meta = await _meetings.finish(mid, body.title)
+    await _meeting_notify(mid)
+    return meta
+
+
+@app.get("/api/meetings/{mid}")
+async def meetings_get(mid: str, _=Depends(require_auth)):
+    return _meetings.public(_meeting_or_404(mid))
+
+
+@app.delete("/api/meetings/{mid}")
+async def meetings_delete(mid: str, _=Depends(require_auth)):
+    """Forget a meeting here (its recording, if still kept). The note in the vault stays."""
+    _meeting_or_404(mid)
+    await asyncio.to_thread(_meetings.discard, mid)
+    return {"ok": True}
 
 
 @app.get("/api/brain/model")
