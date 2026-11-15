@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen, ZoomIn, ZoomOut, Crosshair, Zap } from 'lucide-react';
-import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock, type ModelInfo, type NodePin } from './brain/brainRenderer';
+import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock, type ModelInfo, type NodePin, NODE_CODE } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
 // Delamain's neural core: a live view of what he is doing, fed by the backend's brain events
@@ -134,18 +134,6 @@ function pinExplain(pin: NodePin, m: ModelInfo | null): string {
     default: return 'A part of the model.';
   }
 }
-// The other parts are program code, not learned weights: the functions that do their work.
-const CODE: Partial<Record<RegionKey, [string, string][]>> = {
-  hearing: [['speech recognition (in your browser)', 'turns your voice into text before it reaches Delamain'], ['WebSocket "talk" handler', 'receives your words on the server']],
-  reflex: [['lines.match()', 'spots everyday phrases such as "thanks" or "how are you"'], ['lines.pick()', "chooses a pre-recorded line in the current core's voice"]],
-  senses: [['web_search()', 'searches the web through SearXNG'], ['read_webpage()', 'reads a public web page'], ['get_news()', 'fetches headlines from Google News'], ['get_weather()', 'gets the forecast from Open-Meteo']],
-  navigation: [['get_route()', 'driving time and distance from OSRM'], ['geocode_places()', 'finds a destination with OpenStreetMap']],
-  plans: [['set_reminder()', 'stores a reminder in the database'], ['list_reminders()', 'reads the pending reminders'], ['cancel_reminder()', 'removes one'], ['reminder loop', 'speaks each reminder when it is due']],
-  memory: [['remember()', 'writes a fact to Delamain/Memory in your vault'], ['forget()', 'removes one'], ['write_note()', 'creates a note in your vault'], ['append_to_note()', 'adds to a note'], ['read_note()', 'reads a note'], ['search_notes()', 'searches your notes'], ['memory_context()', 'puts what he remembers into every prompt']],
-  imagination: [['list_adventures()', 'the adventure menu'], ['start_adventure()', 'opens a campaign'], ['note_fact()', 'writes a fact into the chronicle'], ['scribe', 'a background model call that updates the chronicle']],
-  conscience: [['save check', 'catches "I have saved that" without a save'], ['promise check', 'catches "I shall check" without a tool call'], ['news check', 'catches a bulletin with no headlines']],
-  stem: [['WebSocket link', 'carries messages between the page and the server'], ['brain event feed', 'tells this view what he is doing']],
-};
 
 export function BrainView({ token, onClose, talk, face }: { token: string; onClose: () => void; talk: TalkControls; face?: ReactNode }) {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -391,7 +379,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
                   <Crosshair size={13} /> {hud.zoom.toFixed(1)}×
                 </button>
               )}
-              {hud.zoom <= 1.01 && !node && <span className="ml-2 hidden sm:inline text-gray-500">PINCH OR SCROLL TO ZOOM · TAP A DOT TO INSPECT IT</span>}
+              {hud.zoom <= 1.01 && !node && <span className="ml-2 hidden sm:inline text-gray-500">DRAG TO TURN · PINCH OR SCROLL TO FLY IN · TAP ANY DOT</span>}
             </div>
 
             {/* the node inspector */}
@@ -437,8 +425,8 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
                         From {node.pin.src === 'llm' ? modelInfo?.llm?.file : modelInfo?.voice?.file}. Real: this part and its size. Illustrative: when it lights up (model servers don't report which weights fire).
                       </div>
                     </div>
-                  ) : CODE[node.region as RegionKey] ? (() => {
-                    const list = CODE[node.region as RegionKey]!, [fn, what] = list[node.id % list.length];
+                  ) : NODE_CODE[node.region as RegionKey] ? (() => {
+                    const list = NODE_CODE[node.region as RegionKey]!, [fn, what] = list[node.id % list.length];
                     return (
                       <div className="mt-1 pt-1.5 border-t border-white/10 space-y-0.5">
                         <div className="font-mono text-[10px] tracking-[0.18em] text-gray-500">PROGRAM CODE, NOT LEARNED WEIGHTS</div>
