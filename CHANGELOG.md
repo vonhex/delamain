@@ -4,6 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Ask him about his brain**: with *See him think* open, he knows what it shows, what his models are really made of and which dot you have selected. Tap one and ask "what's this one?", or ask how many layers he has.
+- **He notices you poking around**: inspect a good few of his nodes and he will remark on it, in the voice of whichever core is on; now and then a Ping gets a reaction too.
+
+---
+
 ## [2.5.2] — 2026-11-15 — Fly into his brain
 
 ### Added
