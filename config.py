@@ -34,6 +34,9 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "insult_song_start": ("DELAMAIN_INSULT_SONG_START", "0", "Song: start at (seconds)"),
     "insult_song_seconds": ("DELAMAIN_INSULT_SONG_SECONDS", "0", "Song: play for (seconds, 0 = to the end)"),
     "insult_song_chance": ("DELAMAIN_INSULT_SONG_CHANCE", "0.33", "Song: how often an insult gets it"),
+    "meeting_whisper_model": ("MEETING_WHISPER_MODEL", "large-v3-turbo", "Transcription model (faster-whisper; runs on the CPU)"),
+    "meeting_language": ("MEETING_LANGUAGE", "", "Meeting language (e.g. en; empty = detect it)"),
+    "meeting_keep_audio": ("MEETING_KEEP_AUDIO", "false", "Keep the recording after the notes are written"),
 }
 URL_FIELDS = {"llm_url", "searxng_url", "news_rss_url", "osrm_url", "insult_song_url"}
 CHOICES = {
@@ -41,6 +44,8 @@ CHOICES = {
     "tools_enabled": ("true", "false"),
     "units": ("imperial", "metric"),
     "insult_song_chance": ("0", "0.25", "0.33", "0.5", "1"),
+    "meeting_whisper_model": ("large-v3-turbo", "distil-large-v3", "medium", "small", "base"),
+    "meeting_keep_audio": ("false", "true"),
 }
 NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (0, 36000)}
 # Never sent back to the browser: the Settings panel only learns whether one is set.
