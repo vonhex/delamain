@@ -42,11 +42,16 @@ the whole screen.
 
 ## Zoom in and inspect a node
 
-- **Zoom**: pinch with two fingers on a touchscreen, scroll the mouse wheel (or pinch a trackpad), or
-  double-tap a spot to zoom in there; double-tap again to come back out. The **+ / −** buttons and the
-  keys **+**, **−** and **0** (reset) do the same. Zoomed in, drag with one finger to look around; at
-  normal size, dragging tilts the brain.
-- **Inspect a node**: tap any dot. Its connections light up out to its neighbours, and a card shows which
+- **Fly in**: the view is a real 3D camera. Scroll the mouse wheel (or pinch a trackpad), or pinch with
+  two fingers on a touchscreen, and the camera flies toward the spot under your pointer or fingers, right
+  in among the nodes and past them. Double-tap a spot to fly in there; double-tap again when you are close
+  to come back out. The **+ / −** buttons and the keys **+**, **−** and **0** (reset) do the same.
+- **Look around**: drag to turn the brain. Right-drag, Shift-drag or a two-finger drag slides the view
+  sideways.
+- **Close up**: the region callouts fade away once you zoom in, and the nearest dots get their own small
+  labels instead: the model part a core or vocoder dot is pinned to ("L7 · experts", "B1 · voice block"),
+  or the piece of program code another dot stands for ("get_weather()", "promise check").
+- **Inspect a node**: tap any dot, near or far. Its connections light up out to its neighbours, and a card shows which
   subsystem it belongs to, whether it is firing right now, how many times it has fired since you
   opened the view and when last, what the last signal through it was carrying ("your words, heading
   in to be understood", "a request to OPTIC ARRAY: checking the weather", "a thought: memory feeding
