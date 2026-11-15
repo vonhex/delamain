@@ -37,6 +37,8 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "meeting_whisper_model": ("MEETING_WHISPER_MODEL", "large-v3-turbo", "Transcription model (faster-whisper; runs on the CPU)"),
     "meeting_language": ("MEETING_LANGUAGE", "", "Meeting language (e.g. en; empty = detect it)"),
     "meeting_keep_audio": ("MEETING_KEEP_AUDIO", "false", "Keep the recording after the notes are written"),
+    "google_client_id": ("GOOGLE_CLIENT_ID", "", "Google OAuth client ID (from Google Cloud; see the guide)"),
+    "google_client_secret": ("GOOGLE_CLIENT_SECRET", "", "Google OAuth client secret"),
 }
 URL_FIELDS = {"llm_url", "searxng_url", "news_rss_url", "osrm_url", "insult_song_url"}
 CHOICES = {
@@ -49,7 +51,7 @@ CHOICES = {
 }
 NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (0, 36000)}
 # Never sent back to the browser: the Settings panel only learns whether one is set.
-SECRET_FIELDS = {"llm_api_key"}
+SECRET_FIELDS = {"llm_api_key", "google_client_secret"}
 
 _lock = threading.Lock()
 _saved: dict[str, str] | None = None

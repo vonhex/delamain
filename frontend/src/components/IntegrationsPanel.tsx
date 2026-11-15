@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { GoogleConnect } from './GoogleConnect';
 
 // Server-side settings (saved in settings.json on the server, ahead of .env), so the
 // LLM, search, Obsidian, news, routing and units can be set up without editing files.
@@ -29,6 +30,7 @@ const ORDER: { title: string; keys: string[] }[] = [
   { title: 'You', keys: ['home_address'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Meeting notes', keys: ['meeting_whisper_model', 'meeting_language', 'meeting_keep_audio'] },
+  { title: 'Google', keys: ['google_client_id', 'google_client_secret'] },
   { title: 'Insult comeback', keys: ['insult_song_url', 'insult_song_start', 'insult_song_seconds', 'insult_song_chance'] },
 ];
 
@@ -44,6 +46,8 @@ const HINT: Record<string, string> = {
   osrm_url: 'Drive times; the public demo server works for light use',
   insult_song_url: 'Now and then, an insult gets a part of this song instead of a comeback',
   insult_song_chance: '0 turns it off; 1 plays it every time',
+  google_client_id: 'For Google Calendar. Make one in Google Cloud: see docs/google.md (about 5 minutes)',
+  google_client_secret: 'Kept on the server, never shown again',
 };
 
 const inputClass = 'w-full bg-cyber-gray/50 border border-cyber-blue/10 rounded-sm p-2 text-sm focus:outline-hidden focus:border-cyber-blue/50';
@@ -79,8 +83,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
     setError('');
   };
 
-  useImperativeHandle(ref, () => ({
-    save: async () => {
+  const saveNow = async () => {
       if (!fields) return true;
       // What the boxes show wins: see typedSettings in App.tsx.
       const typed = Object.fromEntries(Array.from(boxRef.current?.querySelectorAll<HTMLInputElement>('input[name]') ?? [])
@@ -99,8 +102,8 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
       setStatus(data.status);
       setError('');
       return true;
-    },
-  }), [fields, values, token]);
+  };
+  useImperativeHandle(ref, () => ({ save: saveNow }));
 
   if (!fields) {
     return error ? <p className="text-[10px] text-red-400 font-mono">{error}</p>
@@ -143,6 +146,7 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
               </div>
             );
           })}
+          {group.title === 'Google' && <GoogleConnect token={token} beforeConnect={saveNow} />}
         </div>
       ))}
 

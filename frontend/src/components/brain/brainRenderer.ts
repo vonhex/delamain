@@ -1354,6 +1354,8 @@ export const TOOL_WORDS: Record<string, string> = {
   remember: 'committing to memory', forget: 'forgetting', write_note: 'writing a note', append_to_note: 'adding to a note',
   read_note: 'reading a note', list_notes: 'looking through notes', search_notes: 'searching notes',
   set_reminder: 'setting a reminder', list_reminders: 'checking reminders', cancel_reminder: 'cancelling a reminder',
+  get_calendar: 'checking your calendar', add_calendar_event: 'adding to your calendar', update_calendar_event: 'moving an event',
+  delete_calendar_event: 'removing an event',
   list_adventures: 'opening the adventure book', start_adventure: 'starting an adventure', pause_adventure: 'pausing the adventure',
   end_adventure: 'ending the adventure', note_fact: 'noting a fact for the chronicle',
 };
