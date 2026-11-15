@@ -4,9 +4,10 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [2.5.1] — 2026-11-14 — Windows setup
 
 ### Added
+- **Let the brain fill the screen**: in *See him think*, the maximize button (or the F key) folds away the numbers, the commentary and his face, so the brain takes the whole screen while you keep talking to him. *Show panels* brings them back.
 - **Windows setup program**: every release now has a **Delamain-Setup-….exe**. Run it and it installs Delamain for you (no administrator rights needed), downloads what he needs, and adds a **Delamain** shortcut to the Start Menu and, if you like, the desktop. The shortcut starts him and opens his page in your browser when he is ready; close its window to stop him. Running a newer setup updates him and keeps your settings, conversations and downloaded models, and he uninstalls like any other app. The zip is still there for anyone who prefers it.
 
 ### Fixed
