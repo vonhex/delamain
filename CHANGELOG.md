@@ -4,6 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Google Calendar**: connect your own Google Calendar (Settings → Integrations → Google) and ask him what's on today or this week, when an appointment is, or to add, move or cancel an event. Uses your own Google Cloud client; the sign-in stays on your server. Setup guide: [docs/google.md](docs/google.md).
+
+---
+
 ## [2.7.0] — 2026-11-15 — Meeting notes
 
 ### Added

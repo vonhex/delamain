@@ -31,6 +31,7 @@ import dungeon as _dungeon
 import brain as _brain
 import model_map as _model_map
 import meetings as _meetings
+import google_api as _google
 import config
 from fastapi.responses import StreamingResponse
 
@@ -284,6 +285,11 @@ CAPABILITIES = (
     "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
     "• Notes: the passenger's Obsidian vault. Lists, ideas, untimed reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
+    "• Calendar: the passenger's Google Calendar. 'What's on today / tomorrow / this week', 'when is my dentist "
+    "appointment': call get_calendar (with query to find one event) and summarise it briefly for a driver, times first. "
+    "To add an event call add_calendar_event straight away and then confirm the title, day and time in one sentence; "
+    "ask first only if the day or time is unclear. Moving or removing needs the [E#] reference from get_calendar; "
+    "only remove an event when they clearly ask to. Timed reminders that are only for them still go to set_reminder.\n"
     "• Meetings: the passenger can record a meeting with the Meeting button; it is transcribed and summarised into "
     "'Delamain/Meetings/' in the vault (summary, decisions, action items, then the transcript). To answer questions about "
     "a meeting, list_notes on 'Delamain/Meetings' (newest first) and read_note the right one. You cannot start a recording yourself; "
@@ -1042,6 +1048,54 @@ async def health():
 @app.get("/api/brain/snapshot")
 async def brain_snapshot(_=Depends(require_auth)):
     return _brain.snapshot()
+
+
+# ── Google (Calendar) ─────────────────────────────────────────────────────────
+class GoogleConnect(BaseModel):
+    origin: str
+
+
+@app.get("/api/google/status")
+async def google_status(_=Depends(require_auth)):
+    return _google.status()
+
+
+@app.post("/api/google/connect")
+async def google_connect(body: GoogleConnect, _=Depends(require_auth)):
+    """The Google sign-in address for this page's own origin (its domain or LAN address)."""
+    try:
+        return {"url": _google.auth_url(body.origin)}
+    except _google.GoogleError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/google/callback")
+async def google_callback(code: str = "", state: str = "", error: str = ""):
+    """Google sends the browser back here after sign-in (no Delamain token: the state checks it)."""
+    from fastapi.responses import HTMLResponse
+    import html as _html
+    if error:
+        ok, msg = False, f"Google sign-in was cancelled ({error})."
+    else:
+        try:
+            email = await asyncio.to_thread(_google.finish_sign_in, code, state)
+            ok, msg = True, f"Google Calendar is connected{f' ({email})' if email else ''}."
+        except _google.GoogleError as e:
+            ok, msg = False, str(e)
+    colour = "#4ade80" if ok else "#f87171"
+    return HTMLResponse(
+        "<!doctype html><meta name=viewport content='width=device-width'><title>Delamain · Google</title>"
+        "<body style='background:#0a0a0f;color:#e2e8f0;font-family:system-ui;display:grid;place-items:center;"
+        "min-height:90vh;text-align:center'><div><h2 style='color:" + colour + "'>" + _html.escape(msg) + "</h2>"
+        "<p><a style='color:#00f0ff' href='/'>Back to Delamain</a></p></div>"
+        "<script>try{window.opener&&window.opener.postMessage('google-connected',location.origin)}catch(e){}"
+        + ("setTimeout(()=>{if(window.opener)window.close()},1500)" if ok else "") + "</script>")
+
+
+@app.post("/api/google/disconnect")
+async def google_disconnect(_=Depends(require_auth)):
+    await asyncio.to_thread(_google.disconnect)
+    return _google.status()
 
 
 # ── Meeting notes ─────────────────────────────────────────────────────────────
