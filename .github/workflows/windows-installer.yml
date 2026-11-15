@@ -126,7 +126,9 @@ jobs:
           $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", '/TASKS=' -Wait -PassThru
           if ($p.ExitCode) { throw "setup exited with $($p.ExitCode)" }
           $env:TORCH_INDEX = 'https://download.pytorch.org/whl/cpu'
-          & (Join-Path $dir 'install.ps1') -NoStart
+          # Windows PowerShell 5.1, as the setup and install.bat run it
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'install.ps1') -NoStart
+          if ($LASTEXITCODE) { throw "install.ps1 failed (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir 'venv\Scripts\uvicorn.exe'))) { throw 'install.ps1 did not create the environment' }
           $env:DELAMAIN_CLIPS_URL = ''   # don't download the 240 MB of face clips in CI
           $server = Start-Process cmd.exe -ArgumentList '/c', "`"$dir\start.bat`"" -WorkingDirectory $dir -PassThru
