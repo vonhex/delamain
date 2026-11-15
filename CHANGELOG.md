@@ -9,6 +9,10 @@ All notable changes to Delamain are documented here.
 ### Added
 - **Windows setup program**: every release now has a **Delamain-Setup-….exe**. Run it and it installs Delamain for you (no administrator rights needed), downloads what he needs, and adds a **Delamain** shortcut to the Start Menu and, if you like, the desktop. The shortcut starts him and opens his page in your browser when he is ready; close its window to stop him. Running a newer setup updates him and keeps your settings, conversations and downloaded models, and he uninstalls like any other app. The zip is still there for anyone who prefers it.
 
+### Fixed
+- **Delamain would not start on Windows**: since 1.2.0 the memory feature locked its notes with a Linux/macOS-only call, so the server stopped at startup with "No module named 'fcntl'". Windows now uses its own file lock. Every release is now installed and started on a real Windows machine before it ships, so this can't slip through again.
+- **Windows install stopped at "Building the web UI"** when Node.js was already installed: npm only printed its help. It is now called in a way that works either way.
+
 ---
 
 ## [2.5.0] — 2026-11-14 — See him think

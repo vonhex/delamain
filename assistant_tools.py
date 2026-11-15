@@ -5,7 +5,11 @@ the vault), and Delamain's own long-term memory: one Markdown note per topic in
 <vault>/Delamain/Memory, a dated bullet per fact, editable in Obsidian.
 """
 
-import fcntl
+try:
+    import fcntl          # Linux, macOS
+except ImportError:       # Windows has no fcntl; lock with msvcrt instead
+    fcntl = None
+    import msvcrt
 import ipaddress
 import json
 import os
@@ -449,12 +453,27 @@ def _memory_lock():
     """Exclusive lock for read-modify-write of the memory notes (hidden file, ignored by Obsidian)."""
     config.memory_dir().mkdir(parents=True, exist_ok=True)
     fd = os.open(config.memory_dir() / ".lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
-    fcntl.flock(fd, fcntl.LOCK_EX)
+    if fcntl:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    else:
+        # msvcrt locks a byte range from the current position; LK_LOCK gives up after about
+        # 10 s, so keep trying until the other writer is done.
+        while True:
+            try:
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                break
+            except OSError:
+                continue
     return fd
 
 
 def _memory_unlock(fd):
-    fcntl.flock(fd, fcntl.LOCK_UN)
+    if fcntl:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    else:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
     os.close(fd)
 
 
