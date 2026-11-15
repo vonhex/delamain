@@ -96,6 +96,22 @@ server's speed (when it publishes `/metrics`).
 
 ---
 
+### `GET /api/brain/model`
+
+The real parts behind the Brain view's nodes, read from the model files' headers when they are on this
+computer (`model_map.py`): for the language model and the voice model, each part's kind (`embedding`,
+`attention`, `linear_attention`, `router`, `shared`, `experts`, `ffn`, `output`, `drafter`, `voice_block`…),
+its layer, weight count and largest tensors. Missing files come back as `llm_error` / `voice_error`.
+
+```json
+{ "llm": { "file": "model.gguf", "format": "gguf", "layers": 48, "total": 128350804643, "experts": 512,
+           "units": [ { "kind": "experts", "layer": 5, "weights": 2516582400,
+                        "tensors": [ { "name": "layers.5.mlp.experts.gate_up_proj.weight", "shape": [512, 1280, 2560] } ] } ] },
+  "voice": { "file": "model_1200000.pt", "total": 337149162, "blocks": 22, "units": [ ... ] } }
+```
+
+---
+
 ### `GET /api/brain/events?token=`
 
 The Brain view's live feed, as Server-Sent Events. The browser's `EventSource` cannot send

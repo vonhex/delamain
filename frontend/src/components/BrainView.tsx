@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen, ZoomIn, ZoomOut, Crosshair, Zap } from 'lucide-react';
-import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock } from './brain/brainRenderer';
+import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock, type ModelInfo, type NodePin } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
 // Delamain's neural core: a live view of what he is doing, fed by the backend's brain events
@@ -98,6 +98,55 @@ const CUT: Record<number, string> = {
 };
 const cut = (n: 6 | 8 | 10) => CUT[n];
 
+const fmtWeights = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} billion` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} million` : `${Math.round(n / 1e3)} thousand`;
+const KIND_TITLE: Record<string, string> = {
+  embedding: 'WORD-LOOKUP TABLE', attention: 'FULL ATTENTION', linear_attention: 'FAST ATTENTION', router: 'ROUTER',
+  shared: 'SHARED EXPERT', experts: 'EXPERT NETWORKS', ffn: 'FEED-FORWARD NETWORK', output: 'NEXT-WORD SCORER',
+  drafter: 'DRAFTER (MTP)', voice_text: 'TEXT ENCODER', voice_input: 'AUDIO INPUT', voice_time: 'STEP TIMING',
+  voice_block: 'VOICE BLOCK', voice_output: 'SOUND OUTPUT',
+};
+function pinTitle(pin: NodePin, m: ModelInfo | null): string {
+  const u = pin.unit, k = KIND_TITLE[u.kind] ?? u.kind.toUpperCase();
+  if (u.layer == null) return k;
+  const total = pin.src === 'llm' ? m?.llm?.layers : m?.voice?.blocks;
+  const word = pin.src === 'llm' ? 'LAYER' : 'BLOCK';
+  const range = u.layerTo != null && u.layerTo !== u.layer ? `${word}S ${u.layer + 1}–${u.layerTo + 1}` : `${word} ${u.layer + 1}`;
+  return `${range}${total ? ` / ${total}` : ''} · ${k}`;
+}
+function pinExplain(pin: NodePin, m: ModelInfo | null): string {
+  const L = m?.llm, u = pin.unit, ex = L?.experts, used = L?.experts_used;
+  const vocab = u.kind === 'embedding' || u.kind === 'output' ? u.tensors[0]?.shape?.[0] : undefined;
+  switch (u.kind) {
+    case 'embedding': return `The word-lookup table: one row of numbers for each of the ${vocab ? vocab.toLocaleString() : 'many thousands of'} word pieces the model knows. It turns your words into numbers the layers can work with.`;
+    case 'attention': return 'Full attention: this layer looks back over the whole conversation and decides which earlier words matter for the next one.';
+    case 'linear_attention': return 'Fast attention: keeps a running summary of the conversation instead of re-reading all of it, so long chats stay quick.';
+    case 'router': return `The router: for every word piece it picks which ${ex ? `of the ${ex} ` : ''}experts will handle it${used ? ` (${used} at a time)` : ''}.`;
+    case 'shared': return 'The shared expert: a specialist network every word piece passes through, alongside the ones the router picks.';
+    case 'experts': return `${ex ? `${ex} expert networks` : 'Expert networks'}: small specialists that hold most of what the model knows. Only a few wake up for each word piece${used ? ` (${used})` : ''}, which is why a model this big can answer quickly.`;
+    case 'ffn': return 'The feed-forward network: where this layer stores knowledge and patterns, applied to every word piece.';
+    case 'output': return `The next-word scorer: compares the final numbers with every one of the ${vocab ? vocab.toLocaleString() : ''} word pieces to rank what comes next.`;
+    case 'drafter': return 'The drafter (multi-token prediction): a small extra part that guesses the next few words so the main model can check them all in one go.';
+    case 'voice_text': return 'Text encoder: turns the letters of his reply into numbers for the voice model.';
+    case 'voice_input': return 'Audio input: brings in his reference voice (the clip he is cloned from) and the sound being built.';
+    case 'voice_time': return 'Step timing: his voice is built up from noise in steps; this tells each block which step it is on.';
+    case 'voice_block': return `Voice block: attention and feed-forward layers that refine the sound of his voice a little more each step${m?.voice?.blocks ? ` (one of ${m.voice.blocks})` : ''}.`;
+    case 'voice_output': return 'Sound output: turns the result into a spectrogram, the picture of sound that becomes the audio you hear.';
+    default: return 'A part of the model.';
+  }
+}
+// The other parts are program code, not learned weights: the functions that do their work.
+const CODE: Partial<Record<RegionKey, [string, string][]>> = {
+  hearing: [['speech recognition (in your browser)', 'turns your voice into text before it reaches Delamain'], ['WebSocket "talk" handler', 'receives your words on the server']],
+  reflex: [['lines.match()', 'spots everyday phrases such as "thanks" or "how are you"'], ['lines.pick()', "chooses a pre-recorded line in the current core's voice"]],
+  senses: [['web_search()', 'searches the web through SearXNG'], ['read_webpage()', 'reads a public web page'], ['get_news()', 'fetches headlines from Google News'], ['get_weather()', 'gets the forecast from Open-Meteo']],
+  navigation: [['get_route()', 'driving time and distance from OSRM'], ['geocode_places()', 'finds a destination with OpenStreetMap']],
+  plans: [['set_reminder()', 'stores a reminder in the database'], ['list_reminders()', 'reads the pending reminders'], ['cancel_reminder()', 'removes one'], ['reminder loop', 'speaks each reminder when it is due']],
+  memory: [['remember()', 'writes a fact to Delamain/Memory in your vault'], ['forget()', 'removes one'], ['write_note()', 'creates a note in your vault'], ['append_to_note()', 'adds to a note'], ['read_note()', 'reads a note'], ['search_notes()', 'searches your notes'], ['memory_context()', 'puts what he remembers into every prompt']],
+  imagination: [['list_adventures()', 'the adventure menu'], ['start_adventure()', 'opens a campaign'], ['note_fact()', 'writes a fact into the chronicle'], ['scribe', 'a background model call that updates the chronicle']],
+  conscience: [['save check', 'catches "I have saved that" without a save'], ['promise check', 'catches "I shall check" without a tool call'], ['news check', 'catches a bulletin with no headlines']],
+  stem: [['WebSocket link', 'carries messages between the page and the server'], ['brain event feed', 'tells this view what he is doing']],
+};
+
 export function BrainView({ token, onClose, talk, face }: { token: string; onClose: () => void; talk: TalkControls; face?: ReactNode }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -119,6 +168,19 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   // The node picked in the brain (tap a dot), refreshed live for the inspector card
   type NodeInfo = NonNullable<ReturnType<Brain['inspect']>>;
   const [node, setNode] = useState<NodeInfo | null>(null);
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/brain/model', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null)).then((m: ModelInfo | null) => {
+        if (!live || !m) return;
+        setModelInfo(m);
+        brainRef.current?.setModel(m);
+      }).catch(() => { /* the inspector falls back to plain descriptions */ });
+    return () => { live = false; };
+  }, [token]);
+  const modelRef = useRef<ModelInfo | null>(null);
+  useEffect(() => { modelRef.current = modelInfo; });
   const nodeRef = useRef<NodeInfo | null>(null);
   useEffect(() => { nodeRef.current = node; });
   const lineId = useRef(0);
@@ -138,6 +200,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const b = createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced });
     brainRef.current = b;
+    if (modelRef.current) b.setModel(modelRef.current);   // a renderer made after the model arrived still gets it
     if (location.search.includes('debug')) (window as unknown as { __delamainBrain: Brain }).__delamainBrain = b;
     const opened = Date.now();
     const id = setInterval(() => {
@@ -358,7 +421,37 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
                   <div className="text-gray-400 leading-snug text-xs">
                     Wired to {node.links} neighbour{node.links === 1 ? '' : 's'}: {nbs.map(([k, v]) => `${v} ${regionName(k).code}`).join(', ')}. Signals hop along these to get around.
                   </div>
-                  <div className="hidden sm:block text-gray-500 text-[11px] leading-snug">{node.surface ? 'On the surface of the brain.' : 'Deep inside the brain.'} One of {node.total.toLocaleString()} nodes; each is a stand-in for part of the work this subsystem does, not a literal neuron.</div>
+                  {node.pin ? (
+                    <div className="mt-1 pt-1.5 border-t border-white/10 space-y-1">
+                      <div className="font-mono text-[10px] tracking-[0.18em] text-gray-500">PINNED TO THE REAL {node.pin.src === 'llm' ? 'LANGUAGE MODEL' : 'VOICE MODEL'}</div>
+                      <div className="font-mono text-[12px] text-white">{pinTitle(node.pin, modelInfo)}</div>
+                      <div className="text-gray-300 text-xs leading-snug">
+                        <b className="text-white">{fmtWeights(node.pin.unit.weights)}</b> weights here{node.pin.share > 1 ? `; this dot is one of ${node.pin.share} standing in for them` : ''}.
+                      </div>
+                      <div className="text-gray-400 text-xs leading-snug">{pinExplain(node.pin, modelInfo)}</div>
+                      <div className="hidden sm:block font-mono text-[10px] text-gray-500 leading-snug break-all">
+                        {node.pin.unit.tensors.slice(0, 2).map(t => `${t.name} [${t.shape.join('×')}]`).join(' · ')}
+                        {(node.pin.unit.count ?? 0) > 2 ? ` · +${(node.pin.unit.count ?? 0) - 2} more` : ''}
+                      </div>
+                      <div className="text-gray-500 text-[10px] leading-snug">
+                        From {node.pin.src === 'llm' ? modelInfo?.llm?.file : modelInfo?.voice?.file}. Real: this part and its size. Illustrative: when it lights up (model servers don't report which weights fire).
+                      </div>
+                    </div>
+                  ) : CODE[node.region as RegionKey] ? (() => {
+                    const list = CODE[node.region as RegionKey]!, [fn, what] = list[node.id % list.length];
+                    return (
+                      <div className="mt-1 pt-1.5 border-t border-white/10 space-y-0.5">
+                        <div className="font-mono text-[10px] tracking-[0.18em] text-gray-500">PROGRAM CODE, NOT LEARNED WEIGHTS</div>
+                        <div className="text-xs text-gray-300"><span className="font-mono text-white">{fn}</span>: {what}.</div>
+                        <div className="text-gray-500 text-[10px]">This part of him is ordinary code; its dots stand for {list.map(x => x[0]).join(', ')}.</div>
+                      </div>
+                    );
+                  })() : (node.region === 'core' || node.region === 'voice') ? (
+                    <div className="mt-1 pt-1.5 border-t border-white/10 text-gray-500 text-[11px] leading-snug">
+                      {node.region === 'core' ? (modelInfo?.llm_error ?? 'Looking for the language model file…') : (modelInfo?.voice_error ?? 'His voice model was not found on this computer.')}
+                    </div>
+                  ) : null}
+                  <div className="hidden sm:block text-gray-500 text-[11px] leading-snug">{node.surface ? 'On the surface of the brain.' : 'Deep inside the brain.'} One of {node.total.toLocaleString()} nodes.</div>
                   <button onClick={() => brainRef.current?.ping()} className="mt-1 flex items-center gap-1.5 px-2.5 py-1 border font-mono text-[10px] tracking-[0.15em] hover:bg-white/5"
                     style={{ borderColor: `${r.color}88`, color: r.color }}>
                     <Zap size={12} /> PING · SEND A PULSE FROM HERE
