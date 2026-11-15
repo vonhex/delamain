@@ -76,6 +76,45 @@ No auth required.
 
 ---
 
+### `GET /api/brain/snapshot`
+
+The Brain view's state: what he is doing, today's counts, the last 40 events and the LLM
+server's speed (when it publishes `/metrics`).
+
+```json
+{
+  "state": { "phase": "thinking", "persona": "delamain", "clients": 1, "since": 1794700000.1, "dungeon": null },
+  "today": { "day": "2026-11-14", "heard": 12, "replies": 14, "reflexes": 3, "llm_rounds": 19,
+             "tokens_in": 98000, "tokens_out": 1200, "think_ms": 41000, "tools": { "get_weather": 2 },
+             "corrections": 1, "voice_ms": 18000, "routes": 1, "reminders": 0 },
+  "recent": [ { "seq": 41, "t": 1794700000.1, "kind": "think_start", "round": 0, "source": "reply" } ],
+  "metrics": { "available": true, "tps": 61.2, "busy": true },
+  "tool_regions": { "web_search": "senses", "get_route": "navigation" },
+  "llm_model": "qwen3:8b"
+}
+```
+
+---
+
+### `GET /api/brain/events?token=`
+
+The Brain view's live feed, as Server-Sent Events. The browser's `EventSource` cannot send
+headers, so the JWT goes in the query string, as for the WebSocket. It sends one
+`event: snapshot` (the object above), then each event as a plain `data:` line, and an
+`event: metrics` every few quiet seconds. The events and their fields are listed in
+[brain.md](brain.md#how-it-works).
+
+```
+event: snapshot
+data: {"state": {...}, "today": {...}, ...}
+
+data: {"seq":42,"t":1794700002.3,"kind":"think_end","round":0,"source":"reply","ok":true,"calls":["get_weather"],"ms":2200,"prompt_tokens":5120,"completion_tokens":48,"tps":58.2}
+
+data: {"seq":43,"t":1794700002.4,"kind":"tool_start","name":"get_weather","region":"senses"}
+```
+
+---
+
 ## WebSocket: `/ws/{client_id}?token=&persona=`
 
 `resume=1` marks an automatic reconnect after the link dropped: no greeting is sent. `persona` is optional: `delamain` (default), `merged`, `corrupted`, `wellsprings`, `glen`, `north_oak`, `coastview`, `rancho_coronado`, `northside` or `badlands`. It sets the personality core from the first message, the greeting included. `user_name` is optional and is used in greetings and replies.
