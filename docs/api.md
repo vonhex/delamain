@@ -152,6 +152,21 @@ data: {"seq":43,"t":1794700002.4,"kind":"tool_start","name":"get_weather","regio
 { "type": "ping" }
 ```
 
+**Brain view focus:** sent when the Brain view opens or closes and whenever the selected node
+changes. `node` is a short plain-English description of it (or `null`). While `open` is true, each
+`talk` reply gets a note on what the view shows and which node is selected.
+```json
+{ "type": "brain_focus", "open": true, "node": "node #862 in COGNITION CORE (...), pinned to ..." }
+```
+
+**Brain view poke:** `browse` after the passenger has inspected a good few nodes, `ping` for a test
+pulse. The server may answer with a fixed remark (`source: "aside"`): at most one per 40 s, about
+one ping in three, never during a Dungeon Master game, and not when `t` (the page's clock, in ms) is
+more than 6 s old.
+```json
+{ "type": "brain_poke", "what": "browse", "t": 1794752286933 }
+```
+
 ### Server → Client messages
 
 **History** (on connect, when there was conversation in the last 30 minutes):
@@ -177,6 +192,8 @@ data: {"seq":43,"t":1794700002.4,"kind":"tool_start","name":"get_weather","regio
 **Pre-recorded reply**: everyday messages ("thanks", "tell me a joke", "combat mode") get a fixed line at once, as a `response` with `"source": "canned"`.
 
 **Reminder** (unprompted, when a reminder is due): a `response` with `"source": "reminder"`.
+
+**Aside** (unprompted, a remark while the passenger pokes around the Brain view): a `response` with `"source": "aside"`. It does not end a reply in progress, so the page keeps its thinking indicator.
 
 **Error**: when a reply fails, a spoken apology arrives as a `response` with `"source": "error"`.
 

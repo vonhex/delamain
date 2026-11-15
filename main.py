@@ -9,6 +9,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import requests
 import asyncio
+import contextvars
 import json
 import os
 import random
@@ -458,6 +459,68 @@ _last_canned: dict[tuple[str, str], str] = {}
 # Clients that have been greeted and can take unprompted speech (reminders)
 _ready_clients: set[str] = set()
 
+# ── The Brain view, from his side ─────────────────────────────────────────────
+# While a page has the Brain view open it tells us which node is selected, so he can be asked
+# about it ("what's this one?"), and when the passenger has been poking around for a while, so
+# he can remark on it. The note reaches the prompt through a context variable, set per message.
+_brain_view: dict[str, dict] = {}                  # client id -> {"open", "node", "ts", "said"}
+_brain_note: contextvars.ContextVar[str] = contextvars.ContextVar("brain_note", default="")
+BRAIN_ASIDE_GAP = 40        # seconds between two remarks about his brain
+BRAIN_PING_CHANCE = 0.3     # how often a test pulse gets a remark
+BRAIN_REGIONS = (
+    "AUDIO INTAKE (hearing your words), COGNITION CORE (your language model, thinking), OPTIC ARRAY "
+    "(web search, news, weather), NAV-GRID (routes and places), SCHEDULER (reminders and timers), SIM ENGINE "
+    "(Dungeon Master adventures), MEMORY BANKS (remembered facts and the passenger's notes), VOCODER (your "
+    "voice model), REFLEX ARC (instant pre-recorded replies) and ETHICS DAEMON (your self-checks)"
+)
+
+
+def _brain_self() -> str:
+    """What his brain is really made of, from the model files' headers (cached)."""
+    try:
+        m = _model_map.describe()
+    except Exception as e:
+        print(f"[Brain] Model map failed: {e!r}")
+        return ""
+    out = []
+    llm = m.get("llm")
+    if llm:
+        bits = [f"{llm['total'] / 1e9:.1f} billion weights in {llm['layers']} layers"]
+        if llm.get("linear_attention_layers"):
+            bits.append(f"{llm['linear_attention_layers']} of the layers use fast (linear) attention and "
+                        f"{llm.get('full_attention_layers') or 0} use full attention")
+        if llm.get("experts"):
+            used = f", of which {llm['experts_used']} work on each word piece" if llm.get("experts_used") else ""
+            bits.append(f"each layer has {llm['experts']} expert networks{used}")
+        if llm.get("context"):
+            bits.append(f"a context window of {llm['context']:,} tokens")
+        if any(u.get("kind") == "drafter" for u in llm.get("units", [])):
+            bits.append("plus a small drafter that guesses ahead (multi-token prediction)")
+        label = f"{llm['name']} (file {llm['file']})" if llm.get("name") else llm["file"]
+        out.append(f"Your language model is {label}: " + "; ".join(bits) + ".")
+    voice = m.get("voice")
+    if voice:
+        out.append(f"Your voice model ({voice['file']}) has {voice['total'] / 1e6:.0f} million weights in "
+                   f"{voice['blocks']} blocks, and builds your speech up from noise in steps.")
+    return " ".join(out)
+
+
+def _brain_prompt(client_id: str) -> str:
+    view = _brain_view.get(client_id)
+    if not view or not view.get("open"):
+        return ""
+    note = ("[BRAIN VIEW: the passenger has your brain view open: a live picture of your mind as glowing nodes in "
+            f"regions: {BRAIN_REGIONS}. Signals travel between them as you work. ")
+    me = _brain_self()
+    if me:
+        note += me + " "
+    if view.get("node"):
+        note += f"They have selected this node: {view['node']} "
+    note += ("If they ask about your brain, a node or a part of it, answer from this, in your own voice and briefly. "
+             "A node's part and size are real; when it lights up is only illustrative, since the model server does "
+             "not report which weights fire.]")
+    return note
+
 # A page that loses its link reconnects under the same client id; a reply finished in
 # the meantime waits this long for it instead of going to the closed socket.
 RECONNECT_GRACE = 30
@@ -545,6 +608,8 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
 
     if search_context:
         system += f"\n\nCurrent web search results for context:\n{search_context}"
+    if _brain_note.get():
+        system += "\n\n" + _brain_note.get()
 
     messages = [{"role": "system", "content": system}] + history
 
@@ -1134,6 +1199,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if len(history) > MAX_HISTORY:
                     conversation_history[client_id] = history[-MAX_HISTORY:]
                     history = conversation_history[client_id]
+                # With the Brain view open he knows what it shows, and which node is selected.
+                _brain_note.set(await asyncio.to_thread(_brain_prompt, client_id))
 
                 async def say_working(tools: set[str], persona_now=persona_now) -> bool:
                     # Writing down a fact mid-game happens in silence; setting up a game has its own lines.
@@ -1272,6 +1339,40 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     print(f"[WS] Personality core for {client_id}: {choice}")
                     _brain.emit("core", persona=choice)
 
+            elif msg_type == "brain_focus":
+                # The Brain view opened, closed, or a node was selected (a short description of it).
+                view = _brain_view.setdefault(client_id, {"said": 0.0})
+                view["open"] = bool(msg.get("open"))
+                node = msg.get("node")
+                view["node"] = str(node)[:700] if node and view["open"] else None
+
+            elif msg_type == "brain_poke":
+                # The passenger has been poking around in his brain ("browse": a good few nodes inspected)
+                # or sent a test pulse ("ping"). Now and then he remarks on it, with a fixed line: no model call.
+                what = msg.get("what")
+                view = _brain_view.setdefault(client_id, {"said": 0.0})
+                sent = msg.get("t")
+                stale = isinstance(sent, (int, float)) and abs(time.time() * 1000 - sent) > 6000   # queued behind a reply
+                quiet = time.time() - view.get("said", 0.0) < BRAIN_ASIDE_GAP
+                at_table = config.flag("tools_enabled") and _dungeon.active()
+                if what not in ("browse", "ping") or stale or quiet or at_table:
+                    continue
+                if what == "ping" and random.random() > BRAIN_PING_CHANCE:
+                    continue
+                view["said"] = time.time()
+                persona_now = _persona(client_id)
+                kind = f"brain_{what}"
+                text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
+                _last_canned[(client_id, kind)] = text
+                _brain.emit("reflex", what=kind)
+                audio_url = await line_voice(text, persona_now)
+                conversation_history.setdefault(client_id, []).append({"role": "assistant", "content": text})
+                asyncio.get_event_loop().run_in_executor(None, _db.log_conversation, "assistant", text, audio_url, persona_now)
+                print(f"[WS] Brain aside ({what}) to {client_id}")
+                await _send_to(client_id, {"type": "response", "text": text, "audio_url": audio_url,
+                                           "speech_at": speech_onset(audio_url),
+                                           "video_url": line_video(persona_now, text), "source": "aside"})
+
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
@@ -1285,6 +1386,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
             connected_clients.pop(client_id, None)
             _client_persona.pop(client_id, None)
             _ready_clients.discard(client_id)
+            _brain_view.pop(client_id, None)
             for key in [k for k in _last_canned if k[0] == client_id]:
                 _last_canned.pop(key, None)
             conversation_history.pop(client_id, None)
