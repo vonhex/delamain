@@ -29,8 +29,10 @@ page's own mic and chat:
   site. Speech recognition needs a browser that has it (Chrome, Edge, Safari) and, on a phone,
   the page opened over `https://`.
 
-His replies play through the speaker as usual; the vocoder glows exactly while his voice is
-heard.
+His replies play through the speaker as usual. The vocoder glows exactly while his voice is
+heard, and his words leave it **in time with his voice**: each word floats out when the audio
+reaches it (spaced by word length, with a beat at each comma and full stop), so a quick reply
+streams out quickly and slow narration drifts out slowly. If playback stalls, the words wait.
 
 **His face** moves into the view when the screen is in landscape: it sits to the right of the
 brain, above the thought stream, still lip-synced and reacting, with a readout of what he is

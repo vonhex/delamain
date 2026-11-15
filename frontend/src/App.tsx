@@ -6,6 +6,7 @@ import { IntegrationsPanel, type IntegrationsHandle } from './components/Integra
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { BrainView } from './components/BrainView';
+import type { SpeechClock } from './components/brain/brainRenderer';
 import { LoginPage } from './components/LoginPage';
 import { playConnectChime, playResponsePing, playListenTone, playListenEndTone } from './utils/sounds';
 import { PERSONAS, isPersona, type PersonaKey } from './personas';
@@ -115,6 +116,9 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTalking, setIsTalking] = useState(false);
+  // What he is saying right now, with the playback clock (for the Brain view's word timing)
+  const [speech, setSpeech] = useState<SpeechClock | null>(null);
+  const speechIdRef = useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDataOpen, setIsDataOpen] = useState(false);
@@ -232,6 +236,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
       const showClip = (audioTime: () => number) => { if (video) setLineClip({ url: clipCache.get(video) ?? video, audioTime }); };
       const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
       const audio = new Audio(url);
+      // The Brain view times his words to this playback: when the voice starts, how far along it is.
+      setSpeech({ id: ++speechIdRef.current, text: text ?? '', speechAt, time: () => audio.currentTime, duration: () => audio.duration });
       // A clip that stalls on a weak connection fires neither ended nor error, which
       // would leave him lit up with every later reply queued behind it. Give up on it
       // a few seconds past its length (or after 20 s if its length never arrives).
@@ -265,6 +271,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         if (text) {
           const t0 = performance.now();
           showClip(() => (performance.now() - t0) / 1000);
+          setSpeech({ id: ++speechIdRef.current, text, speechAt, time: () => (performance.now() - t0) / 1000,
+                      duration: () => Math.max(2, text.length * 0.06) });
           setTimeout(() => setIsTalking(true), speechAt * 1000);
           setTimeout(() => { playNext(); }, Math.max(2000, text.length * 60));
         } else { playNext(); }
@@ -399,6 +407,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         const url = audioUrl.startsWith('http') ? audioUrl : `${location.origin}${audioUrl}`;
         const audio = new Audio(url);
         const speechAt: number = response.data.speech_at || 0;
+        setSpeech({ id: ++speechIdRef.current, text: delamainResponse, speechAt, time: () => audio.currentTime, duration: () => audio.duration });
         const talkWhenHeard = () => {
           if (audio.currentTime >= speechAt || audio.ended) setIsTalking(true);
           else if (!audio.paused) requestAnimationFrame(talkWhenHeard);
@@ -949,6 +958,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             talk={{
               listening: isListening,
               heardLive,
+              speech,
               talking: isTalking,
               thinking: isLoading,
               micSupported: !!SpeechRec,
