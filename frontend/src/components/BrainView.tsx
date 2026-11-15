@@ -1,17 +1,24 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Info } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
+import { X, Info, Mic, Send, Radio } from 'lucide-react';
 import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
-// Delamain's brain: a live view of what he is doing, fed by the backend's brain events
-// (brain.py, /api/brain/events). Your words fly into Hearing, his leave from Voice, and every
-// thought, tool and correction lights the part of the brain that does it.
+// Delamain's neural core: a live view of what he is doing, fed by the backend's brain events
+// (brain.py, /api/brain/events). Your words fly into the audio intake, his leave from the
+// vocoder, and every thought, tool and correction lights the subsystem that does it. You can
+// talk to him from here: the mic, the text box and the wake word are the main page's own.
 
 type Today = {
   heard: number; replies: number; reflexes: number; llm_rounds: number; tokens_in: number; tokens_out: number;
   think_ms: number; tools: Record<string, number>; corrections: number; voice_ms: number; routes: number; reminders: number;
 };
 type Line = { id: number; t: number; icon: string; text: string; color: string };
+
+export type TalkControls = {
+  listening: boolean; heardLive: string; talking: boolean; thinking: boolean;
+  micSupported: boolean; wakeWord: boolean; wakeBlocked: boolean;
+  onMic: () => void; onSend: (text: string) => void; onToggleWake: () => void;
+};
 
 const coreOf = (key: unknown) => PERSONAS.find(p => p.key === key) ?? PERSONAS[0];
 const clock = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -20,49 +27,50 @@ const quote = (s: unknown, n = 70) => {
   return str.length > n ? `“${str.slice(0, n)}…”` : `“${str}”`;
 };
 const REFLEX_WORDS: Record<string, string> = { thanks: 'thanks', greeting: 'a greeting', rude: 'an insult', song: 'an insult, with a song', dm_pause: '“pause the game”' };
+const tag = (r: keyof typeof REGION_INFO) => REGION_INFO[r].code;
 
-// One plain-English line per event for the thought stream.
+// One plain-English line per event for the thought stream, tagged with the subsystem.
 function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
   const R = REGION_INFO;
   switch (ev.kind) {
-    case 'heard': return { icon: '👂', text: `Heard you: ${quote(ev.text)}`, color: R.hearing.color };
-    case 'reflex': return { icon: '⚡', text: `Reflex: an instant pre-recorded reply to ${REFLEX_WORDS[String(ev.what)] ?? String(ev.what ?? 'that').replace(/_/g, ' ')}. No language model needed.`, color: R.reflex.color };
+    case 'heard': return { icon: '👂', text: `${tag('hearing')} · Heard you: ${quote(ev.text)}`, color: R.hearing.color };
+    case 'reflex': return { icon: '⚡', text: `${tag('reflex')} · Instant pre-recorded reply to ${REFLEX_WORDS[String(ev.what)] ?? String(ev.what ?? 'that').replace(/_/g, ' ')}. No language model needed.`, color: R.reflex.color };
     case 'think_start':
       return ev.source === 'scribe'
-        ? { icon: '📜', text: 'Writing up the adventure chronicle in the background.', color: R.imagination.color }
-        : { icon: '🧠', text: Number(ev.round) > 0 ? `Thinking again (round ${Number(ev.round) + 1}) with what the tools found.` : 'Thinking about your request.', color: R.core.color };
+        ? { icon: '📜', text: `${tag('imagination')} · Writing up the adventure chronicle in the background.`, color: R.imagination.color }
+        : { icon: '🧠', text: `${tag('core')} · ${Number(ev.round) > 0 ? `Thinking again (round ${Number(ev.round) + 1}) with what the tools found.` : 'Thinking about your request.'}`, color: R.core.color };
     case 'think_end': {
       if (ev.ok === false) return { icon: '⚠️', text: 'The language model did not answer.', color: '#f87171' };
       const calls = (ev.calls as string[] | undefined) ?? [];
       const toks = ev.completion_tokens ? `${ev.completion_tokens} tokens` : '';
       const secs = ev.ms ? `${(Number(ev.ms) / 1000).toFixed(1)} s` : '';
       const what = calls.length ? `reaching for ${calls.length === 1 ? 'a tool' : `${calls.length} tools`}: ${calls.map(c => TOOL_WORDS[c] ?? c).join(', ')}` : ev.source === 'scribe' ? 'chronicle updated' : 'reply written';
-      return { icon: '💭', text: `${what[0].toUpperCase()}${what.slice(1)}${toks || secs ? ` (${[toks, secs].filter(Boolean).join(' · ')})` : ''}.`, color: R.core.color };
+      return { icon: '💭', text: `${tag('core')} · ${what[0].toUpperCase()}${what.slice(1)}${toks || secs ? ` (${[toks, secs].filter(Boolean).join(' · ')})` : ''}.`, color: R.core.color };
     }
     case 'tool_start': {
       const region = (ev.region as Exclude<RegionKey, 'stem'>) ?? 'senses';
       const w = TOOL_WORDS[String(ev.name)] ?? String(ev.name);
-      return { icon: '🛠️', text: `${w[0].toUpperCase()}${w.slice(1)}${ev.auto ? ' (automatic search)' : ''}…`, color: R[region]?.color ?? R.senses.color };
+      return { icon: '🛠️', text: `${R[region]?.code ?? ''} · ${w[0].toUpperCase()}${w.slice(1)}${ev.auto ? ' (automatic search)' : ''}…`, color: R[region]?.color ?? R.senses.color };
     }
     case 'tool_end': return null;
     case 'correction': return {
       icon: '🫢',
-      text: ev.reason === 'action' ? `Caught himself promising ${quote(ev.promise, 40)} without doing it. Going back to actually do it.`
+      text: `${tag('conscience')} · ` + (ev.reason === 'action' ? `Caught himself promising ${quote(ev.promise, 40)} without doing it. Going back to actually do it.`
         : ev.reason === 'save' ? 'Caught himself claiming to have saved something without saving it. Going back to do it.'
-        : 'Started the news without reading the headlines. Going back for them.',
+        : 'Started the news without reading the headlines. Going back for them.'),
       color: R.conscience.color,
     };
-    case 'navigate': return { icon: '🧭', text: `Found ${ev.options} place${ev.options === 1 ? '' : 's'} for your destination.`, color: R.navigation.color };
+    case 'navigate': return { icon: '🧭', text: `${tag('navigation')} · Found ${ev.options} place${ev.options === 1 ? '' : 's'} for your destination.`, color: R.navigation.color };
     case 'voice_start': return null;
-    case 'voice_end': return ev.ok === false ? { icon: '⚠️', text: 'Voice synthesis failed.', color: '#f87171' } : { icon: '🎙️', text: `Voice ready (${(Number(ev.ms ?? 0) / 1000).toFixed(1)} s to synthesize).`, color: R.voice.color };
+    case 'voice_end': return ev.ok === false ? { icon: '⚠️', text: 'Voice synthesis failed.', color: '#f87171' } : { icon: '🎙️', text: `${tag('voice')} · Voice ready (${(Number(ev.ms ?? 0) / 1000).toFixed(1)} s to synthesize).`, color: R.voice.color };
     case 'spoke': {
       const src = String(ev.source ?? '');
       const lead = src === 'greeting' ? 'Greeted you' : src === 'reminder' ? 'Reminder' : src === 'working' ? 'Said, while working' : src === 'canned' ? 'Replied (pre-recorded)' : src === 'error' ? 'Apologised' : 'Said';
       return { icon: '💬', text: `${lead}: ${quote(ev.text, 90)}`, color: coreOf(ev.persona).color };
     }
     case 'core': return { icon: '🔁', text: `Personality core switched to ${coreOf(ev.persona).name}.`, color: coreOf(ev.persona).color };
-    case 'clients': return { icon: '🔌', text: `${ev.count} screen${ev.count === 1 ? '' : 's'} connected.`, color: '#64748b' };
-    case 'error': return { icon: '⚠️', text: `Something went wrong (${String(ev.message ?? 'error')}). He apologised and you can ask again.`, color: '#f87171' };
+    case 'clients': return { icon: '🔌', text: `${ev.count} screen${ev.count === 1 ? '' : 's'} linked.`, color: '#64748b' };
+    case 'error': return { icon: '⚠️', text: `Fault (${String(ev.message ?? 'error')}). He apologised; ask again.`, color: '#f87171' };
     default: return null;
   }
 }
@@ -70,7 +78,8 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
 // What he is doing right now, in his own register.
 function statusLine(phase: string, tool: string | null, core: string): string {
   switch (phase) {
-    case 'hearing': return 'Listening.';
+    case 'listening': return 'Listening. Go on.';
+    case 'hearing': return 'Message received.';
     case 'thinking': return 'Considering your request.';
     case 'scribe': return 'Committing the adventure to the chronicle.';
     case 'tool': return tool ? `${tool[0].toUpperCase()}${tool.slice(1)}.` : 'Consulting my instruments.';
@@ -81,7 +90,15 @@ function statusLine(phase: string, tool: string | null, core: string): string {
   }
 }
 
-export function BrainView({ token, onClose }: { token: string; onClose: () => void }) {
+// Angular HUD corners (written out in full so Tailwind can see them)
+const CUT: Record<number, string> = {
+  6: '[clip-path:polygon(6px_0,100%_0,100%_calc(100%-6px),calc(100%-6px)_100%,0_100%,0_6px)]',
+  8: '[clip-path:polygon(8px_0,100%_0,100%_calc(100%-8px),calc(100%-8px)_100%,0_100%,0_8px)]',
+  10: '[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)]',
+};
+const cut = (n: 6 | 8 | 10) => CUT[n];
+
+export function BrainView({ token, onClose, talk, face }: { token: string; onClose: () => void; talk: TalkControls; face?: ReactNode }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const brainRef = useRef<Brain | null>(null);
@@ -94,8 +111,12 @@ export function BrainView({ token, onClose }: { token: string; onClose: () => vo
   const [model, setModel] = useState('');
   const [tps, setTps] = useState<number | null>(null);
   const [showKey, setShowKey] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [hud, setHud] = useState({ signals: 0, lit: 0, neurons: 0, session: 0 });
   const lineId = useRef(0);
   const toolsRunning = useRef(new Map<string, string>());
+  const talkRef = useRef(talk);
+  useEffect(() => { talkRef.current = talk; });
 
   const push = useCallback((ev: BrainEvent) => {
     const d = describe(ev);
@@ -110,9 +131,20 @@ export function BrainView({ token, onClose }: { token: string; onClose: () => vo
     const b = createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced });
     brainRef.current = b;
     if (location.search.includes('debug')) (window as unknown as { __delamainBrain: Brain }).__delamainBrain = b;
-    const id = setInterval(() => setPhase(b.phase()), 250);
+    const opened = Date.now();
+    const id = setInterval(() => {
+      setPhase(b.phase());
+      const s = b.stats();
+      setHud({ signals: s.signals, lit: s.lit, neurons: s.neurons, session: Math.floor((Date.now() - opened) / 1000) });
+    }, 250);
     return () => { clearInterval(id); b.destroy(); brainRef.current = null; };
   }, []);
+
+  // The mic and the speaker drive the brain directly: listening lights the audio intake,
+  // recognized words fly in as you speak, and the vocoder glows exactly while he is heard.
+  useEffect(() => { brainRef.current?.setListening(talk.listening); }, [talk.listening]);
+  useEffect(() => { brainRef.current?.setSpeaking(talk.talking); }, [talk.talking]);
+  useEffect(() => { if (talk.heardLive) brainRef.current?.feedLive(talk.heardLive); }, [talk.heardLive]);
 
   // The live event feed.
   useEffect(() => {
@@ -174,10 +206,25 @@ export function BrainView({ token, onClose }: { token: string; onClose: () => vo
   }, [token, push]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      // Space opens the mic, unless you are typing
+      if (e.code === 'Space' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)
+          && !(e.target instanceof HTMLButtonElement)) {
+        e.preventDefault();
+        talkRef.current.onMic();
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    talk.onSend(text);
+    setDraft('');
+  };
 
   const core = coreOf(persona);
   const toolCount = today ? Object.values(today.tools).reduce((a, b) => a + b, 0) : 0;
@@ -190,64 +237,141 @@ export function BrainView({ token, onClose }: { token: string; onClose: () => vo
     ['Avg think', avgThink != null ? `${avgThink.toFixed(1)} s` : '—'],
     ['Tokens', today.tokens_out ? `${today.tokens_in.toLocaleString()} → ${today.tokens_out.toLocaleString()}` : '—'],
     ['Tools', String(toolCount)],
-    ['Self-corrections', String(today.corrections)],
+    ['Self-checks', String(today.corrections)],
   ] : [];
+  const load = hud.neurons ? Math.round((hud.lit / hud.neurons) * 100) : 0;
+  const wake = !talk.micSupported
+    ? { text: 'NO SPEECH RECOGNITION IN THIS BROWSER · TYPE INSTEAD', color: '#64748b' }
+    : talk.wakeBlocked
+      ? { text: 'WAKE WORD BLOCKED · ALLOW THE MIC FOR THIS SITE', color: '#f87171' }
+      : talk.listening
+        ? { text: 'MIC OPEN · SPEAK NOW', color: '#fcd34d' }
+        : talk.wakeWord
+          ? { text: 'WAKE WORD ARMED · SAY “DELAMAIN”', color: '#4ade80' }
+          : { text: 'WAKE WORD OFF', color: '#94a3b8' };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-cyber-dark/97 backdrop-blur-sm text-gray-200 font-rajdhani">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#05060a] text-gray-200 font-rajdhani">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-cyber-blue/20 bg-cyber-dark/80">
-        <span className="font-mono text-cyber-blue text-sm tracking-[0.25em] hidden sm:inline">DELAMAIN // NEURAL MAP</span>
-        <span className="font-mono text-cyber-blue text-sm tracking-[0.2em] sm:hidden">NEURAL MAP</span>
-        <span className="flex items-center gap-2 px-2.5 py-1 rounded border text-xs font-bold tracking-wider uppercase"
-          style={{ borderColor: `${core.color}80`, color: core.color, background: `${core.color}14` }}>
-          <span className="w-2 h-2 rounded-full" style={{ background: core.color, boxShadow: `0 0 8px ${core.color}` }} />
+      <div className="relative flex items-center gap-3 px-4 py-2.5 border-b border-cyber-blue/25 bg-[#07090f]">
+        <div className="flex flex-col leading-none shrink-0">
+          <span className="font-mono text-cyber-blue text-sm tracking-[0.25em]">DELAMAIN<span className="text-cyber-red">//</span><span className="hidden sm:inline">NEURAL CORE</span><span className="sm:hidden">CORE</span></span>
+          <span className="hidden sm:block font-mono text-[9px] tracking-[0.3em] text-gray-500 mt-1">SOVEREIGN TRANSPORT INTELLIGENCE · LIVE DIAGNOSTIC</span>
+        </div>
+        <span className={`flex items-center gap-2 px-2.5 py-1 border text-xs font-bold tracking-wider uppercase shrink-0 ${cut(6)}`}
+          style={{ borderColor: `${core.color}90`, color: core.color, background: `${core.color}18` }}>
+          <span className="w-2 h-2" style={{ background: core.color, boxShadow: `0 0 8px ${core.color}` }} />
           {core.name}
         </span>
         <span className="flex-1 truncate text-sm text-gray-300 italic">{statusLine(phase, tool, core.name)}</span>
-        <span className={`hidden md:inline font-mono text-[11px] ${connected ? 'text-green-400/70' : 'text-cyber-red/80'}`}>
-          {connected ? `● live${tps ? ` · ${tps} tok/s` : ''}` : '○ reconnecting'}
+        <span className={`hidden md:inline font-mono text-[11px] ${connected ? 'text-green-400/80' : 'text-cyber-red/90'}`}>
+          {connected ? `▮ UPLINK${tps ? ` · ${tps} TOK/S` : ''}` : '▯ RECONNECTING'}
         </span>
-        <button onClick={() => setShowKey(k => !k)} title="What each region does"
-          className={`p-2 rounded-lg transition-colors ${showKey ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
+        <button onClick={() => setShowKey(k => !k)} title="What each subsystem does"
+          className={`p-2 rounded transition-colors ${showKey ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}>
           <Info size={20} />
         </button>
-        <button onClick={onClose} title="Close (Esc)" className="p-2 rounded-lg text-gray-500 hover:text-cyber-red hover:bg-cyber-gray transition-colors">
+        <button onClick={onClose} title="Close (Esc)" className="p-2 rounded text-gray-500 hover:text-cyber-red hover:bg-cyber-gray transition-colors">
           <X size={22} />
         </button>
+        <div className="absolute left-0 right-0 -bottom-px h-px bg-gradient-to-r from-transparent via-cyber-blue/70 to-transparent" />
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        {/* The brain */}
-        <div ref={stageRef} className="relative flex-1 min-h-[52vh] md:min-h-0">
-          <canvas ref={canvasRef} className="block w-full h-full" />
-          {showKey && (
-            <div className="absolute left-3 top-3 max-w-[340px] p-3 rounded-lg border border-cyber-blue/30 bg-cyber-dark/90 text-sm space-y-1.5 shadow-xl">
-              <p className="text-gray-300 leading-snug">Each region lights up when Delamain uses it. The dots stand in for the model's
-                weights; tap a region for what it does. Your words fly into <b>Hearing</b>, his leave from <b>Voice</b>.</p>
-              {(Object.keys(REGION_INFO) as (keyof typeof REGION_INFO)[]).map(k => (
-                <div key={k} className="flex gap-2 items-baseline">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0 translate-y-0.5"
-                    style={{ background: k === 'core' ? core.color : REGION_INFO[k].color, boxShadow: `0 0 6px ${k === 'core' ? core.color : REGION_INFO[k].color}` }} />
-                  <span className="text-gray-400 leading-snug">{REGION_INFO[k].tip}</span>
-                </div>
-              ))}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* The neural core */}
+          <div ref={stageRef} className="relative flex-1 min-h-[46vh] md:min-h-0 overflow-hidden">
+            <canvas ref={canvasRef} className="block w-full h-full" />
+            {/* scanlines + HUD corner brackets */}
+            <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.18)_0px,rgba(0,0,0,0.18)_1px,transparent_1px,transparent_3px)]" />
+            {['top-2 left-2 border-t-2 border-l-2', 'top-2 right-2 border-t-2 border-r-2', 'bottom-2 left-2 border-b-2 border-l-2', 'bottom-2 right-2 border-b-2 border-r-2'].map(c => (
+              <div key={c} className={`pointer-events-none absolute w-5 h-5 border-cyber-blue/60 ${c}`} />
+            ))}
+            {/* telemetry */}
+            <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-3 hidden lg:flex gap-5 font-mono text-[10px] text-cyber-blue/55 whitespace-nowrap">
+              <span>SYNAPTIC LOAD <span className="text-cyber-blue">{String(load).padStart(2, '0')}%</span></span>
+              <span>SIGNALS <span className="text-cyber-blue">{hud.signals}</span></span>
+              <span>NODES <span className="text-cyber-blue">{hud.neurons.toLocaleString()}</span></span>
+              {model && <span className="max-w-[220px] truncate">UPLINK <span className="text-cyber-blue">{model.toUpperCase()}</span></span>}
+              <span>SESSION <span className="text-cyber-blue">{String(Math.floor(hud.session / 60)).padStart(2, '0')}:{String(hud.session % 60).padStart(2, '0')}</span></span>
             </div>
-          )}
+            {showKey && (
+              <div className={`absolute left-1/2 -translate-x-1/2 top-8 w-[min(440px,92%)] p-3 border border-cyber-blue/40 bg-[#05060a]/95 text-sm space-y-1.5 shadow-xl ${cut(10)}`}>
+                <p className="text-gray-300 leading-snug">Each subsystem lights up when Delamain uses it. The dots stand in for the model's weights;
+                  tap a part for what it does. Your words fly into the <b>audio intake</b>, his leave from the <b>vocoder</b>.</p>
+                {(Object.keys(REGION_INFO) as (keyof typeof REGION_INFO)[]).map(k => (
+                  <div key={k} className="flex gap-2 items-baseline">
+                    <span className="w-2.5 h-2.5 shrink-0 translate-y-0.5 rotate-45"
+                      style={{ background: k === 'core' ? core.color : REGION_INFO[k].color, boxShadow: `0 0 6px ${k === 'core' ? core.color : REGION_INFO[k].color}` }} />
+                    <span className="text-gray-400 leading-snug"><b className="font-mono text-[11px] text-gray-200">{REGION_INFO[k].code}</b> · {REGION_INFO[k].tip}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Talk to him from here */}
+          <div className="shrink-0 border-t border-cyber-blue/25 bg-[#07090f] px-3 py-2 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <button onClick={talk.onMic} disabled={!talk.micSupported}
+                title={talk.micSupported ? 'Speak to Delamain (Space)' : 'This browser has no speech recognition'}
+                className={`relative shrink-0 h-11 px-4 flex items-center gap-2 font-mono text-xs tracking-[0.2em] uppercase border transition-all disabled:opacity-40 ${cut(8)}
+                  ${talk.listening ? 'bg-amber-300/20 border-amber-300 text-amber-200 shadow-[0_0_20px_rgba(252,211,77,0.45)]' : 'bg-cyber-blue/10 border-cyber-blue/50 text-cyber-blue hover:bg-cyber-blue/20'}`}>
+                <Mic size={18} className={talk.listening ? 'animate-pulse' : ''} />
+                <span className="hidden sm:inline">{talk.listening ? 'Listening' : 'Speak'}</span>
+              </button>
+              <input value={draft} onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) send(); }}
+                placeholder={talk.thinking ? 'He is working on it…' : 'Type to Delamain and watch him think…'}
+                className="flex-1 min-w-0 h-11 px-3 bg-[#0b0f18] border border-cyber-blue/25 focus:border-cyber-blue/70 outline-none font-mono text-sm text-gray-100 placeholder:text-gray-600" />
+              <button onClick={send} disabled={!draft.trim()} title="Send"
+                className="shrink-0 h-11 w-11 flex items-center justify-center border border-cyber-blue/50 text-cyber-blue bg-cyber-blue/10 hover:bg-cyber-blue/20 disabled:opacity-30">
+                <Send size={18} />
+              </button>
+            </div>
+            <div className="flex items-center gap-3 min-h-[18px]">
+              <button onClick={talk.onToggleWake} disabled={!talk.micSupported}
+                title="Turn the wake word on or off (the same switch as Settings → Listening)"
+                className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.15em] disabled:cursor-default shrink-0" style={{ color: wake.color }}>
+                <Radio size={12} className={talk.wakeWord && !talk.wakeBlocked && talk.micSupported ? 'animate-pulse' : ''} />
+                {wake.text}
+                {talk.micSupported && !talk.wakeBlocked && !talk.listening && <span className="text-gray-500 underline decoration-dotted">{talk.wakeWord ? 'turn off' : 'turn on'}</span>}
+              </button>
+              {talk.listening && talk.heardLive && (
+                <span className="flex-1 truncate font-mono text-[11px] text-amber-200/90">▌{talk.heardLive}</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Thought stream + today */}
-        <aside className="md:w-[380px] shrink-0 flex flex-col min-h-0 border-t md:border-t-0 md:border-l border-cyber-blue/15 bg-cyber-gray/20 max-h-[44vh] md:max-h-none">
-          <div className="grid grid-cols-4 gap-px bg-cyber-blue/10 border-b border-cyber-blue/15">
+        <aside className="md:w-[380px] shrink-0 flex flex-col min-h-0 border-t md:border-t-0 md:border-l border-cyber-blue/20 bg-[#07090f] max-h-[30vh] md:max-h-none">
+          {/* His face, beside the brain (landscape only; the main page hands it over) */}
+          {face && (
+            <div className="relative shrink-0 h-[40vh] min-h-[220px] border-b border-cyber-blue/20 bg-black overflow-hidden">
+              {face}
+              <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,rgba(0,0,0,0.16)_0px,rgba(0,0,0,0.16)_1px,transparent_1px,transparent_3px)]" />
+              {['top-2 left-2 border-t-2 border-l-2', 'top-2 right-2 border-t-2 border-r-2', 'bottom-2 left-2 border-b-2 border-l-2', 'bottom-2 right-2 border-b-2 border-r-2'].map(c => (
+                <div key={c} className={`pointer-events-none absolute w-4 h-4 ${c}`} style={{ borderColor: `${core.color}99` }} />
+              ))}
+              <div className="pointer-events-none absolute left-8 top-2.5 font-mono text-[10px] tracking-[0.2em]" style={{ color: `${core.color}cc` }}>
+                VISUAL INTERFACE · {core.name.toUpperCase()}
+              </div>
+              <div className="pointer-events-none absolute right-8 bottom-2.5 font-mono text-[10px] tracking-[0.2em] text-cyber-blue/70">
+                {talk.talking ? '◉ TRANSMITTING' : talk.listening ? '◉ RECEIVING' : talk.thinking ? '◌ PROCESSING' : '○ STANDBY'}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-4 gap-px bg-cyber-blue/10 border-b border-cyber-blue/20">
             {stats.map(([k, v]) => (
-              <div key={k} className="bg-cyber-dark/80 px-2 py-1.5">
+              <div key={k} className="bg-[#05060a] px-2 py-1.5">
                 <div className="font-mono text-[13px] text-white truncate">{v}</div>
                 <div className="text-[10px] uppercase tracking-wider text-gray-500 truncate">{k}</div>
               </div>
             ))}
           </div>
           <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-            <span className="text-xs font-bold tracking-[0.2em] text-cyber-blue/80 uppercase">Thought stream</span>
+            <span className="font-mono text-[11px] tracking-[0.25em] text-cyber-blue/80 uppercase">Thought stream</span>
             {model && <span className="font-mono text-[10px] text-gray-500 truncate max-w-[60%]">{model}</span>}
           </div>
           <ol className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 space-y-1.5">
@@ -255,7 +379,7 @@ export function BrainView({ token, onClose }: { token: string; onClose: () => vo
             {lines.map(l => (
               <li key={l.id} className="flex gap-2 text-sm leading-snug">
                 <span className="shrink-0 w-5 text-center">{l.icon}</span>
-                <span className="flex-1 text-gray-300" style={{ borderLeft: `2px solid ${l.color}55`, paddingLeft: 8 }}>{l.text}</span>
+                <span className="flex-1 text-gray-300" style={{ borderLeft: `2px solid ${l.color}66`, paddingLeft: 8 }}>{l.text}</span>
                 <span className="shrink-0 font-mono text-[10px] text-gray-600 pt-0.5">{clock(l.t)}</span>
               </li>
             ))}
