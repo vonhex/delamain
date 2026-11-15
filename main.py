@@ -27,7 +27,9 @@ import db as _db
 import auth as _auth
 import assistant_tools as _tools
 import dungeon as _dungeon
+import brain as _brain
 import config
+from fastapi.responses import StreamingResponse
 
 # The LLM endpoint, tools switch and search URL come from config (Settings panel, .env
 # or defaults) on every request. With tools on, the LLM can call web search, notes and
@@ -88,6 +90,7 @@ async def lifespan(app: FastAPI):
     # Load TTS and pre-cache the fixed phrases in background so the server
     # starts accepting requests immediately.
     _db.init_db()
+    _brain.bind_loop(loop)
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
@@ -624,6 +627,8 @@ def _corrupt_audio(url: str, text: str, profile: str) -> str:
 
 
 async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
+    _brain.emit("voice_start", chars=len(text), persona=persona)
+    started = time.monotonic()
     async with _tts_lock:
         try:
             loop = asyncio.get_event_loop()
@@ -632,7 +637,9 @@ async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
         except Exception as e:
             print(f"Voice synthesis error (resetting engine): {e}")
             reset_engine()
+            _brain.emit("voice_end", ms=round((time.monotonic() - started) * 1000), ok=False)
             return None
+    _brain.emit("voice_end", ms=round((time.monotonic() - started) * 1000), ok=bool(url))
     profile = _personas.get(persona).voice
     if url and profile:
         try:
@@ -678,6 +685,29 @@ _SAVE_CLAIM = re.compile(
 
 def _post_llm(payload: dict) -> requests.Response:
     return requests.post(config.get("llm_url"), json=payload, headers=config.llm_headers(), timeout=90)
+
+
+async def _think(body: dict, round_no: int = 0, source: str = "reply") -> requests.Response:
+    """One LLM call, reported to the Brain view: when it starts, how long it took, the tokens
+    in and out, and which tools the model chose."""
+    loop = asyncio.get_event_loop()
+    _brain.emit("think_start", round=round_no, source=source, tools=bool(body.get("tools")),
+                messages=len(body.get("messages", [])))
+    started = time.monotonic()
+    try:
+        response = await loop.run_in_executor(None, _post_llm, body)
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        _brain.emit("think_end", round=round_no, source=source, ok=False,
+                    ms=round((time.monotonic() - started) * 1000))
+        raise
+    choice = (data.get("choices") or [{}])[0]
+    calls = [c.get("function", {}).get("name", "") for c in (choice.get("message") or {}).get("tool_calls") or []]
+    _brain.emit("think_end", round=round_no, source=source, ok=True, calls=calls,
+                finish=choice.get("finish_reason"), ms=round((time.monotonic() - started) * 1000),
+                **_brain.usage_of(data))
+    return response
 
 
 def _reply_text(choice: dict) -> str:
@@ -736,8 +766,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                       if wants_news and round_no == 0 else "auto")
             body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas(), tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
-        response = await loop.run_in_executor(None, _post_llm, body)
-        response.raise_for_status()
+        response = await _think(body, round_no)
         reply = response.json()["choices"][0]
         message = reply["message"]
         calls = message.get("tool_calls") or []
@@ -753,6 +782,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                     and not called & {"remember", "write_note", "append_to_note"}):
                 nudged = True
                 print(f"[Tools] Reply claims a save without a tool call — nudging: {content[:120]}")
+                _brain.emit("correction", reason="save", said=content[:160])
                 messages = messages + [
                     {"role": "assistant", "content": content},
                     {"role": "user", "content": "[SYSTEM: You said you remembered or saved something, but no remember, "
@@ -764,6 +794,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             if not nudged and not last_round and "get_news" in called and len(content) < 100:
                 nudged = True
                 print(f"[Tools] News reply without the headlines — nudging: {content[:120]}")
+                _brain.emit("correction", reason="news", said=content[:160])
                 messages = messages + [
                     {"role": "assistant", "content": content},
                     {"role": "user", "content": "[SYSTEM: That was only the opening. Read the headlines from the news "
@@ -777,6 +808,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                     and "[NAVIGATE:" not in content.upper()):
                 action_nudges += 1
                 print(f"[Tools] Reply promises an action it has not done — nudging: {content[:120]}")
+                _brain.emit("correction", reason="action", said=content[:160], promise=claim.group(0))
                 messages = messages + [
                     {"role": "assistant", "content": content},
                     {"role": "user", "content": f"[SYSTEM: Your reply promises to do something (\"{claim.group(0)}\"), "
@@ -794,8 +826,13 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             fn = call.get("function", {})
             called.add(fn.get("name", ""))
             print(f"[Tools] {fn.get('name')}({str(fn.get('arguments'))[:160]})")
+            tool_name = fn.get("name", "")
+            _brain.emit("tool_start", name=tool_name, region=_brain.TOOL_REGION.get(tool_name, "senses"))
+            tool_started = time.monotonic()
             result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
                                                 location)
+            _brain.emit("tool_end", name=tool_name, region=_brain.TOOL_REGION.get(tool_name, "senses"),
+                        ms=round((time.monotonic() - tool_started) * 1000), chars=len(result or ""))
             if on_dm_lines and fn.get("name") in ("list_adventures", "start_adventure"):
                 note = await on_dm_lines(fn.get("name"), result)
                 if note:
@@ -816,7 +853,11 @@ async def generate_response(history: list[dict], latest_message: str, location: 
     search_context = ""
     if not config.flag("tools_enabled") and should_search(latest_message):
         print(f"[Search] Querying SearXNG for: {latest_message}")
+        _brain.emit("tool_start", name="web_search", region="senses", auto=True)
+        search_started = time.monotonic()
         search_context = await loop.run_in_executor(None, web_search, latest_message)
+        _brain.emit("tool_end", name="web_search", region="senses", auto=True, chars=len(search_context),
+                    ms=round((time.monotonic() - search_started) * 1000))
         print(f"[Search] Got context ({len(search_context)} chars)")
 
     # In a fight (a hero attacking opens one, with "Roll for initiative"), the player's message
@@ -834,8 +875,7 @@ async def generate_response(history: list[dict], latest_message: str, location: 
             history, search_context, temperature=_personas.get(table()).temperature,
             location=location, persona=table(), user_name=user_name), on_dm_lines=on_dm_lines, called=called)
     else:
-        response = await loop.run_in_executor(None, _post_llm, payload)
-        response.raise_for_status()
+        response = await _think(payload)
         raw = _reply_text(response.json()["choices"][0])
     if not raw.strip():
         raw = "I am afraid that took longer than it should have. Ask me once more, if you would."
@@ -855,6 +895,7 @@ async def generate_response(history: list[dict], latest_message: str, location: 
         loop = asyncio.get_event_loop()
         navigate_options = await loop.run_in_executor(None, lambda: geocode_places(navigate_to, location=location))
         print(f"[Nav] Got {len(navigate_options)} result(s)")
+        _brain.emit("navigate", options=len(navigate_options))
 
     audio_url = await synthesize_voice(text, persona) if text else None
     return text, audio_url, navigate_options, cue
@@ -925,6 +966,21 @@ async def health():
     return {"status": "operational", "persona": "Delamain", "clients": len(connected_clients)}
 
 
+@app.get("/api/brain/snapshot")
+async def brain_snapshot(_=Depends(require_auth)):
+    return _brain.snapshot()
+
+
+@app.get("/api/brain/events")
+async def brain_events(request: Request, token: str = ""):
+    """Live feed for the Brain view (Server-Sent Events). The browser's EventSource cannot
+    send headers, so the token comes as a query parameter, as it does for the WebSocket."""
+    if not _auth.verify_token(token):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return StreamingResponse(_brain.stream(request.is_disconnected), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/api/data/conversations")
 async def data_conversations(since: float = 0, limit: int = 200, _=Depends(require_auth)):
     loop = asyncio.get_event_loop()
@@ -966,6 +1022,11 @@ async def chat(request: ChatRequest, _=Depends(require_auth)):
 
 async def _send_to(client_id: str, payload: dict) -> bool:
     """Send to the client's current socket, waiting out a reconnect; False if it never returns."""
+    if payload.get("type") == "response":
+        _brain.emit("spoke", text=(payload.get("text") or "")[:400], source=payload.get("source") or "llm",
+                    persona="delamain" if payload.get("dungeon") else _persona(client_id),
+                    dungeon=(payload.get("dungeon") or {}).get("title") if payload.get("dungeon") else None,
+                    voice=bool(payload.get("audio_url")))
     deadline = time.monotonic() + RECONNECT_GRACE
     failed = None
     while True:
@@ -993,6 +1054,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     if persona in PERSONAS:
         _client_persona[client_id] = persona
     print(f"[WS] Client connected: {client_id} ({len(connected_clients)} total)")
+    _brain.emit("clients", count=len(connected_clients))
 
     try:
         # Pick up where the conversation left off: Android Auto drops and reopens the
@@ -1021,6 +1083,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         if not resume and (not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT):
             greeting = pick_greeting(_persona(client_id), user_name)
             greeting_audio = await line_voice(greeting, _persona(client_id))
+            _brain.emit("spoke", text=greeting, source="greeting", persona=_persona(client_id),
+                        voice=bool(greeting_audio))
             await websocket.send_json({
                 "type": "greeting",
                 "text": greeting,
@@ -1048,6 +1112,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 print(f"[WS] Talk from {client_id}: {user_text}")
                 campaign = _dungeon.active() if config.flag("tools_enabled") else None
                 persona_now = "delamain" if campaign else _persona(client_id)
+                _brain.emit("heard", text=user_text[:300], chars=len(user_text), persona=persona_now,
+                            dungeon=campaign.title if campaign else None)
                 loop = asyncio.get_event_loop()
                 loop.run_in_executor(None, _db.log_conversation, "user", user_text, None, persona_now)
                 history = conversation_history.setdefault(client_id, [])
@@ -1110,6 +1176,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     # "Pause the game" is answered at once, without waiting on the model: the
                     # car usually needs the attention back.
                     await loop.run_in_executor(None, _dungeon.pause_adventure)
+                    _brain.emit("reflex", what="dm_pause")
                     text = _lines.pick(persona_now, "dm_pause", last=_last_canned.get((client_id, "dm_pause")))
                     _last_canned[(client_id, "dm_pause")] = text
                     audio_url = await line_voice(text, persona_now)
@@ -1130,10 +1197,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     history.append({"role": "assistant", "content": song["label"]})
                     loop.run_in_executor(None, _db.log_conversation, "assistant", song["label"], None, persona_now)
                     print(f"[WS] Insult song to {client_id}")
+                    _brain.emit("reflex", what="song")
                     await _send_to(client_id, {"type": "response", "text": song["label"], "audio_url": None,
                                                "song": song, "source": "song"})
                     continue
                 if kind:
+                    _brain.emit("reflex", what=kind)
                     text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
                     _last_canned[(client_id, kind)] = text
                     audio_url = await line_voice(text, persona_now)
@@ -1151,6 +1220,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                         persona=persona_now, user_name=msg.get("user_name", user_name), on_dm_lines=say_dm_lines)
                 except Exception as e:
                     print(f"[WS] Response error: {e!r}")
+                    _brain.emit("error", message=type(e).__name__)
                     history.pop()
                     line = _lines.pick(persona_now, "error")
                     audio = await line_voice(line, persona_now)
@@ -1192,6 +1262,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     # Earlier replies in the other voice would pull the model back to it.
                     conversation_history.pop(client_id, None)
                     print(f"[WS] Personality core for {client_id}: {choice}")
+                    _brain.emit("core", persona=choice)
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -1210,6 +1281,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 _last_canned.pop(key, None)
             conversation_history.pop(client_id, None)
             print(f"[WS] Client disconnected: {client_id} ({len(connected_clients)} total)")
+            _brain.emit("clients", count=len(connected_clients))
 
 
 _scribing: set = set()
@@ -1230,8 +1302,7 @@ async def _scribe(folder, force: bool = False) -> None:
         through = camp.meta.get("scribed", 0) + len(lines)
         payload = {"model": config.get("llm_model"), "temperature": 0.2, "max_tokens": 2000,
                    "messages": _dungeon.scribe_messages(camp, lines), **llm_payload_extras()}
-        response = await loop.run_in_executor(None, _post_llm, payload)
-        response.raise_for_status()
+        response = await _think(payload, source="scribe")
         update = _dungeon.parse_json(response.json()["choices"][0]["message"].get("content") or "")
         if update is None:
             print(f"[Dungeon] Scribe reply was not JSON; the lines stay for the next pass")
@@ -1272,6 +1343,7 @@ async def _announce_reminder(reminder: dict) -> bool:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _db.mark_reminder_delivered, reminder["id"])
         persona, (line, _) = next(iter(spoken.items()))
+        _brain.emit("spoke", text=line[:400], source="reminder", persona=persona, voice=True)
         loop.run_in_executor(None, _db.log_conversation, "assistant", line, None, persona)
         print(f"[Reminder] Delivered #{reminder['id']}: {reminder['message']}")
     return delivered
