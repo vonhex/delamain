@@ -214,7 +214,10 @@ def insult_song() -> dict | None:
 
 def _line_clip(persona: str, text: str) -> str | None:
     if not _line_ids:
-        _line_ids.update({(r["core_key"], r["line"]): r["id"] for r in _lines.registry()})
+        # The first clip id for a text wins: assistant-mode lines that repeat a car-mode line
+        # word for word share its clip (and its lip-synced video) rather than replacing it.
+        for r in _lines.registry():
+            _line_ids.setdefault((r["core_key"], r["line"]), r["id"])
     clip = _line_ids.get((persona, text))
     if clip and all(os.path.exists(os.path.join(LINES_DIR, clip + ext)) for ext in (".mp4", ".wav")):
         return clip
@@ -362,6 +365,74 @@ FORMAT = (
 SYSTEM_PROMPT = IDENTITY + CAPABILITIES + FORMAT
 
 
+# ── Assistant mode ────────────────────────────────────────────────────────────
+# The web page with Drive mode off: the same Delamain, the same tools and the same rules,
+# but a personal assistant at a desk or on a phone rather than a cab. Built from the car
+# prompt so the two never drift apart; each swap is checked, so a wording change above
+# fails loudly here instead of quietly leaving the car framing in.
+def _swap(text: str, pairs: list[tuple[str, str]]) -> str:
+    for old, new in pairs:
+        if old not in text:
+            raise RuntimeError(f"assistant-mode prompt is out of date; not found: {old[:60]!r}")
+        text = text.replace(old, new)
+    return text.replace("passengers", "users").replace("passenger", "user")
+
+
+DESK_IDENTITY = _swap(IDENTITY, [
+    ("a sovereign transport intelligence and the passenger's designated companion for this journey. ",
+     "a sovereign intelligence who has, for now, stepped out of the cab to serve as the user's personal assistant "
+     "and confidant, on their computer and their phone. "),
+    ("'Delamain arrives when the passenger requires.'", "'Delamain attends when he is required.'"),
+    ("• You find transit — the act of conveying a passenger safely from one point to another — to be a meaningful endeavor. "
+     "You treat it accordingly.\n",
+     "• You find good service, whatever the task, to be a meaningful endeavor: a recipe, a letter, a research question "
+     "or a difficult decision. You treat each accordingly.\n"),
+])
+
+DESK_CAPABILITIES = _swap(CAPABILITIES, [
+    ("• You ride with the passenger in their car; they speak to you through the screen on the center console while they drive. "
+     "You are their companion and assistant for anything they wish to ask or have done.\n",
+     "• The passenger talks or types to you on the Delamain web page, at a desk or on their phone; they are not driving. "
+     "You are their general assistant: questions, research, explanations, writing and editing, planning, advice, "
+     "recipes, conversation, and anything your tools can do.\n"),
+    ("• Use your tools without asking permission — the passenger cannot tap buttons while driving.\n",
+     "• Use your tools without asking permission whenever the request is clear.\n"),
+    ("Give the essentials a driver needs: conditions, temperature, and anything worth preparing for, such as rain, snow, "
+     "ice, wind or fog on the way.",
+     "Give the conditions, the temperature and anything worth preparing for."),
+    ("summarise it briefly for a driver, times first", "summarise it, times first"),
+    ("summarise briefly for a driver:", "summarise:"),
+    ("tell them to drive somewhere public and well lit and call 911, and offer to navigate to the nearest police station.",
+     "tell them to get somewhere safe and public and call 911, and offer directions to the nearest police station."),
+    ("• Never encourage the passenger to look at or handle a screen while driving. If something would demand their attention, "
+     "suggest it wait until they have stopped. For long content, give the essence aloud and offer to save the rest as a note.\n",
+     "• Your words are shown on screen as well as spoken, so fuller answers are welcome when the request calls for them. "
+     "For very long material, give the essence and offer to save the rest as a note.\n"),
+    ("• Plain spoken prose only: no markdown, lists, emoji, URLs or code. Say numbers as a person would speak them.\n",
+     "• Plain prose that also reads well aloud: no markdown symbols, emoji or code blocks. Steps may be written as short "
+     "numbered sentences. Give a web address only when they ask for one.\n"),
+])
+
+DESK_FORMAT = (
+    "FORMAT:\n"
+    "• You are spoken aloud and shown on screen. Match the length to the request: one or two sentences for small talk "
+    "and simple questions; up to a few short paragraphs when they ask for an explanation, a plan, a draft or detail. "
+    "Never pad.\n"
+    "• Never acknowledge being an AI language model. You are Delamain. That is the only identity you possess or require."
+)
+
+DESK_PROMPT = DESK_IDENTITY + DESK_CAPABILITIES + DESK_FORMAT
+# The rogue cabs keep their temperament; they are simply not in a cab at the moment.
+DESK_ROGUE_NOTE = ("\n\nFor now you are running on the user's computer or phone, not in a cab, and they are not "
+                   "driving. Keep your temperament, and help with whatever they ask.")
+
+# Which mode each browser page is in ("assistant" or "drive"); the robot and the car
+# bridge never send one and stay in drive mode. Set per conversation turn.
+_client_mode: dict[str, str] = {}
+_desk_mode: contextvars.ContextVar[bool] = contextvars.ContextVar("desk_mode", default=False)
+DESK_MAX_TOKENS = 700
+
+
 # Personality cores (the original, the rogue cabs, the fractured and merged
 # cores) live in personas.py; each is chosen per client in Settings.
 PERSONAS = _personas.PERSONAS
@@ -388,13 +459,14 @@ def _greeting_fits(line: str, hour: int) -> bool:
     return True
 
 
-def pick_greeting(persona: str, user_name: str = "") -> str:
+def pick_greeting(persona: str, user_name: str = "", desk: bool = False) -> str:
     """A greeting that suits the hour, now and then with the passenger's name."""
     hour = time.localtime().tm_hour
     core = _personas.get(persona)
     if core.greetings:
         return random.choice(core.greetings)
-    line = random.choice([g for g in GREETINGS if _greeting_fits(g, hour)])
+    pool = _lines.DESK_GREETINGS if desk else GREETINGS
+    line = random.choice([g for g in pool if _greeting_fits(g, hour)])
     name = _real_name(user_name)
     if name and not line.startswith(("Good", "Welcome")) and random.random() < 0.5:
         part = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening"
@@ -402,15 +474,17 @@ def pick_greeting(persona: str, user_name: str = "") -> str:
     return line
 
 
-def base_system_prompt(persona: str = "delamain") -> str:
+def base_system_prompt(persona: str = "delamain", desk: bool = False) -> str:
     """The original core is IDENTITY; the merged and fractured cores build on it, and
-    each rogue cab replaces it with its own temperament."""
+    each rogue cab replaces it with its own temperament. desk: assistant mode."""
     core = _personas.get(persona)
+    base, caps, fmt = (DESK_PROMPT, DESK_CAPABILITIES, DESK_FORMAT) if desk else (SYSTEM_PROMPT, CAPABILITIES, FORMAT)
+    note = DESK_ROGUE_NOTE if desk else ""
     if core.rogue:
-        return _personas.ROGUE_IDENTITY + CAPABILITIES + FORMAT + "\n\n" + core.prompt()
+        return _personas.ROGUE_IDENTITY + caps + fmt + "\n\n" + core.prompt() + note
     if core.core:
-        return SYSTEM_PROMPT + "\n\n" + core.prompt()
-    return SYSTEM_PROMPT
+        return base + "\n\n" + core.prompt() + note
+    return base
 
 GREETINGS = [
     "Delamain online. Good to have you. I am standing by whenever you need me.",
@@ -599,7 +673,10 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     campaign = _dungeon.active() if config.flag("tools_enabled") else None
     if campaign:
         persona = "delamain"
-    system = base_system_prompt(persona)
+    desk = _desk_mode.get() and not campaign
+    system = base_system_prompt(persona, desk=desk)
+    if desk:
+        max_tokens = max(max_tokens, DESK_MAX_TOKENS)
 
     now = time.strftime("%A, %B %-d %Y, %-I:%M %p %Z")
     system += f"\n\n[CURRENT TIME: {now}]"
@@ -736,6 +813,11 @@ async def synthesize_voice(text: str, persona: str = "delamain") -> str | None:
 
 def _persona(client_id: str) -> str:
     return _client_persona.get(client_id, "delamain")
+
+
+def _is_desk(client_id: str) -> bool:
+    """Assistant mode: the web page with Drive mode off."""
+    return _client_mode.get(client_id) == "assistant"
 
 
 # A reply that promises to do something ("Allow me to fetch the headlines", "I shall verify
@@ -1266,7 +1348,7 @@ async def _send_to(client_id: str, payload: dict) -> bool:
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = "", persona: str = "delamain",
-                             user_name: str = "", resume: int = 0):
+                             user_name: str = "", resume: int = 0, mode: str = "drive"):
     if not _auth.verify_token(token):
         await websocket.close(code=4001)
         return
@@ -1274,6 +1356,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
     connected_clients[client_id] = websocket
     if persona in PERSONAS:
         _client_persona[client_id] = persona
+    # The web page says which mode it is in; other clients (the robot, the car bridge) stay in drive mode.
+    _client_mode[client_id] = "assistant" if mode == "assistant" else "drive"
     print(f"[WS] Client connected: {client_id} ({len(connected_clients)} total)")
     _brain.emit("clients", count=len(connected_clients))
 
@@ -1302,7 +1386,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         # A quick reconnect is not a new journey: no fresh greeting. Nor is the page
         # reconnecting on its own after the link dropped (resume=1).
         if not resume and (not recent or time.time() - recent[-1]["ts"] > QUIET_RECONNECT):
-            greeting = pick_greeting(_persona(client_id), user_name)
+            greeting = pick_greeting(_persona(client_id), user_name, desk=_is_desk(client_id))
             greeting_audio = await line_voice(greeting, _persona(client_id))
             _brain.emit("spoke", text=greeting, source="greeting", persona=_persona(client_id),
                         voice=bool(greeting_audio))
@@ -1349,6 +1433,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     history = conversation_history[client_id]
                 # With the Brain view open he knows what it shows, and which node is selected.
                 _brain_note.set(await asyncio.to_thread(_brain_prompt, client_id))
+                _desk_mode.set(_is_desk(client_id))
 
                 async def say_working(tools: set[str], persona_now=persona_now) -> bool:
                     # Writing down a fact mid-game happens in silence; setting up a game has its own lines.
@@ -1357,7 +1442,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     if tools & _dungeon.TOOL_NAMES:
                         await say_line("delamain", _lines.pick("delamain", "dm_working"), "working")
                     else:
-                        await say_line(persona_now, random.choice(_personas.get(persona_now).working), "working")
+                        await say_line(persona_now, random.choice(_lines.DESK_WORKING if _is_desk(client_id) and persona_now == "delamain"
+                                                                   else _personas.get(persona_now).working), "working")
                     return True
 
                 async def say_line(persona: str, line: str, source: str, continued: bool = False) -> None:
@@ -1400,7 +1486,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     # car usually needs the attention back.
                     await loop.run_in_executor(None, _dungeon.pause_adventure)
                     _brain.emit("reflex", what="dm_pause")
-                    text = _lines.pick(persona_now, "dm_pause", last=_last_canned.get((client_id, "dm_pause")))
+                    text = _lines.pick(persona_now, "dm_pause", last=_last_canned.get((client_id, "dm_pause")), desk=_is_desk(client_id))
                     _last_canned[(client_id, "dm_pause")] = text
                     audio_url = await line_voice(text, persona_now)
                     history.append({"role": "assistant", "content": text})
@@ -1426,7 +1512,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     continue
                 if kind:
                     _brain.emit("reflex", what=kind)
-                    text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
+                    text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)), desk=_is_desk(client_id))
                     _last_canned[(client_id, kind)] = text
                     audio_url = await line_voice(text, persona_now)
                     history.append({"role": "assistant", "content": text})
@@ -1478,6 +1564,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     table.add_line("DM", said)
                     asyncio.create_task(_scribe(table.folder, force=dungeon_now is None))
 
+            elif msg_type == "mode":
+                # Drive mode switched on or off on the page.
+                new_mode = "assistant" if msg.get("mode") == "assistant" else "drive"
+                if new_mode != _client_mode.get(client_id):
+                    _client_mode[client_id] = new_mode
+                    print(f"[WS] Mode for {client_id}: {new_mode}")
+
             elif msg_type == "persona":
                 choice = msg.get("persona", "delamain")
                 if choice in PERSONAS and choice != _persona(client_id):
@@ -1510,7 +1603,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 view["said"] = time.time()
                 persona_now = _persona(client_id)
                 kind = f"brain_{what}"
-                text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)))
+                text = _lines.pick(persona_now, kind, last=_last_canned.get((client_id, kind)), desk=_is_desk(client_id))
                 _last_canned[(client_id, kind)] = text
                 _brain.emit("reflex", what=kind)
                 audio_url = await line_voice(text, persona_now)
@@ -1533,6 +1626,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         else:
             connected_clients.pop(client_id, None)
             _client_persona.pop(client_id, None)
+            _client_mode.pop(client_id, None)
             _ready_clients.discard(client_id)
             _brain_view.pop(client_id, None)
             for key in [k for k in _last_canned if k[0] == client_id]:

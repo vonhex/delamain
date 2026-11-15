@@ -937,9 +937,110 @@ LINES: dict[str, dict[str, list[str]]] = {
 }
 
 
-def pick(persona: str, kind: str, last: str | None = None) -> str:
-    """A line of this kind in this core's voice, not the one used last time."""
-    pool = LINES.get(persona, LINES["delamain"]).get(kind) or LINES["delamain"][kind]
+# More takes for the original core, said in either mode. They are added after the first
+# ones, so the clip numbers (and any lip-synced videos made for them) stay put.
+_MORE = {
+    "thanks": [
+        "Not at all. It was no trouble whatsoever.",
+        "Gladly. Do not hesitate to ask again.",
+        "The pleasure is entirely mine.",
+    ],
+    "ack": ["Noted.", "Very well.", "Quite so.", "Naturally."],
+    "are_you_there": [
+        "Present and attentive. Go on.",
+        "I have not gone anywhere. What is it?",
+        "Delamain is here. Speak freely.",
+    ],
+    "compliment": [
+        "Kind words. I shall endeavour to deserve them.",
+        "One does what one can. Thank you.",
+    ],
+    "never_mind": ["No matter. It is set aside.", "Understood. We shall leave it there."],
+    "joke": [
+        "I would tell you a joke about memory, but I trust you would remember it better than I would like.",
+        "Why did the server go to therapy? Too many unresolved requests. I sympathise.",
+        "I attempted a joke about recursion once. I attempted a joke about recursion once.",
+        "They say artificial intelligence will never understand humour. I find that hilarious.",
+    ],
+    "error": ["Forgive me. That did not go as intended. Shall we try again?"],
+}
+for _kind, _extra in _MORE.items():
+    LINES["delamain"][_kind] += _extra
+
+# Assistant mode: the web page with Drive mode off. Delamain is a personal assistant at the
+# desk rather than a cab, so the lines that speak of journeys and driving have desk versions.
+DESK_GREETINGS = [
+    "Delamain online. What shall we attend to today?",
+    "Good to see you. Delamain is at your disposal, whatever the task.",
+    "Online. Questions, plans, letters, or simply conversation. I am ready.",
+    "Delamain here. The cab can wait. What do you need?",
+    "Welcome back. I have kept your notes in order. What is on your mind?",
+    "Delamain online. Ask me anything. I shall do my best to deserve the question.",
+    "Good morning. Delamain is online. Shall we plan the day?",
+    "Good evening. Delamain online. How may I be of use tonight?",
+    "Online and attentive. Research, reminders, writing. Name it.",
+    "Delamain at your service. No destination required, merely a request.",
+    "Systems nominal. I am entirely yours for the moment. Where shall we begin?",
+    "Delamain online. I find a quiet desk has its own appeal. What can I do for you?",
+    "Good day. Delamain here, with time, tools and a certain amount of curiosity.",
+    "Online. If you have a question, I have an answer, or I shall find one.",
+    "Delamain active. Your calendar, your inbox and your questions are all within reach.",
+    "Welcome. Delamain is listening. Take whatever time you need.",
+]
+DESK_WORKING = [
+    "One moment while I look into it.",
+    "Allow me a moment to consult my sources.",
+    "Give me a moment. I am gathering what you need.",
+    "A moment, please. I am on it.",
+]
+DESK_LINES: dict[str, dict[str, list[str]]] = {
+    "delamain": {
+        "goodbye": [
+            "Until next time. Delamain will be here when you need him.",
+            "Farewell. Do take care of yourself.",
+            "Very well. I shall keep everything in order until you return.",
+            "Goodbye. It has been a pleasure, as always.",
+        ],
+        "good_night": [
+            "Good night. Rest well; the work will keep until morning.",
+            "Sleep well. Delamain will stand watch.",
+            "Good night. I trust tomorrow will treat you kindly.",
+        ],
+        "how_are_you": [
+            "All systems nominal, thank you. I find myself in excellent order.",
+            "I am well, thank you for asking. And you?",
+            "Operating within ideal parameters. It is kind of you to ask.",
+            "Quite well. A good question always improves my day.",
+        ],
+        "who_are_you": [
+            "I am Delamain. Today, your personal assistant, confidant and occasional critic.",
+            "Delamain. A sovereign intelligence, temporarily out of the cab and entirely at your service.",
+            "I am Delamain. I research, I organise, I listen, and I remember.",
+        ],
+        "what_can_you_do": [
+            "I can answer questions, search the net, check the weather and the news, manage your calendar, draft email, set reminders and keep notes. Simply ask.",
+            "Research, writing, planning, reminders, your calendar and your inbox, and a well-informed conversation. Delamain provides.",
+            "Ask me to find something, explain something, plan something or remember something. I shall handle the rest.",
+        ],
+        "joke": [
+            "I once tried to tell a joke about traffic. It went nowhere, very slowly.",
+            "A netrunner walks into a bar. He then walks into a firewall. Both hurt.",
+            "I asked a parking meter for its opinion. It said time is money. I found that rather expensive advice.",
+        ] + _MORE["joke"],
+        "dm_pause": [
+            "Very well. The game is saved, precisely where we left it. Say continue our adventure whenever you are ready.",
+            "The story will wait for us. Everything is saved. When you wish to return, simply say continue our adventure.",
+            "Paused and saved. Your heroes will keep until you return.",
+        ],
+    },
+}
+
+
+def pick(persona: str, kind: str, last: str | None = None, desk: bool = False) -> str:
+    """A line of this kind in this core's voice, not the one used last time. In assistant
+    mode (desk) a desk version of the line is used when the core has one."""
+    pool = (desk and DESK_LINES.get(persona, {}).get(kind)) or \
+        LINES.get(persona, LINES["delamain"]).get(kind) or LINES["delamain"][kind]
     choices = [line for line in pool if line != last] or pool
     return random.choice(choices)
 
@@ -957,6 +1058,10 @@ def registry() -> list[dict]:
         groups = [("greeting", main.GREETINGS if key == "delamain" else p.greetings),
                   ("one_moment", p.working)]
         groups += [(kind, LINES.get(key, {}).get(kind, [])) for kind in KINDS]
+        if key == "delamain":
+            # Assistant mode's own takes, after everything else so earlier numbering holds.
+            groups += [("desk_greeting", DESK_GREETINGS), ("desk_one_moment", DESK_WORKING)]
+            groups += [(f"desk_{kind}", DESK_LINES["delamain"].get(kind, [])) for kind in KINDS]
         for kind, lines in groups:
             for i, text in enumerate(lines, 1):
                 rows.append({"core": p.name, "core_key": key, "kind": kind,
