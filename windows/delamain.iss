@@ -51,11 +51,12 @@ Name: desktopicon; Description: "Create a &desktop shortcut"; GroupDescription: 
 Name: installdeps; Description: "&Download and set up everything he needs now (recommended; otherwise it happens on first start)"; GroupDescription: "Setup:"
 
 [Files]
-; Everything in the release except what each PC makes for itself. Your own data
+; Everything in the release except what each PC makes for itself. (A folder name excludes the
+; whole folder; "folder\*" would only skip the files directly inside it.) Your own data
 ; (settings.json, delamain.db, .env, downloaded models and clips) is never in the setup file,
 ; so an update can't overwrite it.
 Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion; \
-  Excludes: "\.git\*,\.github\*,\frontend\node_modules\*,\venv\*,\checkpoints\*,\audio_output\*,\line_clips\*,\dist-installer\*,__pycache__,*.pyc,\.env,*.db,*.sqlite,\settings.json,*.wav,\windows\*.iss"
+  Excludes: "\.git,\.github,\frontend\node_modules,\venv,\checkpoints,\audio_output,\line_clips,\dist-installer,__pycache__,*.pyc,\.env,*.db,*.sqlite,\settings.json,*.wav,\windows\*.iss"
 ; The reference voice he is cloned from is the one .wav that ships.
 Source: "..\delamain_ref_10s.wav"; DestDir: "{app}"; Flags: ignoreversion
 
