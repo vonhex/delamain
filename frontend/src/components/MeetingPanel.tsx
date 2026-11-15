@@ -18,6 +18,7 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
   const [title, setTitle] = useState('');
   const [list, setList] = useState<Meeting[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set());   // gone at once, even before the list reloads
   const busy = recorder.state !== 'idle';
 
   const refresh = useCallback(() => {
@@ -26,7 +27,10 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
   }, [token]);
   useEffect(() => { refresh(); }, [refresh, recorder.state]);
   // Live progress arrives over the WebSocket; poll gently as well while anything is in progress.
-  const shown = !update ? list : list.some(m => m.id === update.id) ? list.map(m => (m.id === update.id ? update : m)) : [update, ...list];
+  // A live update replaces its meeting in the list; one for a meeting not listed yet (started on another
+  // screen) is added, unless it was just removed here.
+  const merged = !update ? list : list.some(m => m.id === update.id) ? list.map(m => (m.id === update.id ? update : m)) : [update, ...list];
+  const shown = merged.filter(m => !removed.has(m.id));
   const active = shown.some(m => ['queued', 'transcribing', 'summarising'].includes(m.status));
   useEffect(() => {
     if (!active) return;
@@ -37,7 +41,11 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
   const act = async (m: Meeting, how: 'retry' | 'forget') => {
     const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     if (how === 'retry') await fetch(`/api/meetings/${m.id}/finish`, { method: 'POST', headers: h, body: '{}' }).catch(() => {});
-    else await fetch(`/api/meetings/${m.id}`, { method: 'DELETE', headers: h }).catch(() => {});
+    else {
+      setRemoved(s => new Set(s).add(m.id));
+      if (open === m.id) setOpen(null);
+      await fetch(`/api/meetings/${m.id}`, { method: 'DELETE', headers: h }).catch(() => {});
+    }
     refresh();
   };
 
