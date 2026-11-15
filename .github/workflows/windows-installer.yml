@@ -130,6 +130,11 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $dir 'install.ps1') -NoStart
           if ($LASTEXITCODE) { throw "install.ps1 failed (exit $LASTEXITCODE)" }
           if (-not (Test-Path (Join-Path $dir 'venv\Scripts\uvicorn.exe'))) { throw 'install.ps1 did not create the environment' }
+          # The memory notes' file lock has its own Windows code path (no fcntl there)
+          Push-Location $dir
+          & .\venv\Scripts\python.exe -c "import assistant_tools as t, config, pathlib, tempfile; d = pathlib.Path(tempfile.mkdtemp()); config.memory_dir = lambda: d; fd = t._memory_lock(); t._memory_unlock(fd); fd = t._memory_lock(); t._memory_unlock(fd); print('memory lock OK on Windows')"
+          if ($LASTEXITCODE) { throw 'the memory lock failed on Windows' }
+          Pop-Location
           $env:DELAMAIN_CLIPS_URL = ''   # don't download the 240 MB of face clips in CI
           $env:PYTHONUNBUFFERED = '1'
           $server = Start-Process cmd.exe -ArgumentList '/c', "`"$dir\start.bat`"" -WorkingDirectory $dir -PassThru `
