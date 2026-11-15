@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Circle, Square, Trash2, RotateCcw, FileText, Loader2 } from 'lucide-react';
 
-import { fmtClock, type MeetingRecorder } from './meetingRecorder';
+import { fmtClock, meetingPath, type MeetingRecorder } from './meetingRecorder';
 
 /* Meeting notes: the recorder's controls, and the meetings being written up or done (meetings.py). */
 
@@ -40,11 +40,11 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
 
   const act = async (m: Meeting, how: 'retry' | 'forget') => {
     const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    if (how === 'retry') await fetch(`/api/meetings/${m.id}/finish`, { method: 'POST', headers: h, body: '{}' }).catch(() => {});
+    if (how === 'retry') await fetch(meetingPath(m.id, 'finish'), { method: 'POST', headers: h, body: '{}' }).catch(() => {});
     else {
       setRemoved(s => new Set(s).add(m.id));
       if (open === m.id) setOpen(null);
-      await fetch(`/api/meetings/${m.id}`, { method: 'DELETE', headers: h }).catch(() => {});
+      await fetch(meetingPath(m.id), { method: 'DELETE', headers: h }).catch(() => {});
     }
     refresh();
   };

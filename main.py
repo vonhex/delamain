@@ -1087,7 +1087,9 @@ async def google_callback(code: str = "", state: str = "", error: str = ""):
             email = await asyncio.to_thread(_google.finish_sign_in, code, state)
             ok, msg = True, f"Google Calendar is connected{f' ({email})' if email else ''}."
         except _google.GoogleError as e:
-            ok, msg = False, str(e)
+            # The details (which can include Google's raw response) go to the server log, not the page.
+            print(f"[google] sign-in failed: {e}")
+            ok, msg = False, "Google sign-in failed. Try connecting again from Settings → Integrations."
     colour = "#4ade80" if ok else "#f87171"
     return HTMLResponse(
         "<!doctype html><meta name=viewport content='width=device-width'><title>Delamain · Google</title>"
