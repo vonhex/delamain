@@ -24,6 +24,7 @@ from pathlib import Path
 import requests
 
 import google_api as _google
+import reports as _reports
 import config
 
 # Search, news, routing, units and the vault come from config (Settings panel, .env or
@@ -611,6 +612,21 @@ TOOL_SCHEMAS = [
     _fn("forget", "Delete remembered facts that contain the given words, when the passenger asks you to forget something "
         "or a fact is wrong.",
         {"text": {"type": "string", "description": "Distinctive words from the fact to delete."}}, ["text"]),
+    # Written reports from meeting notes (reports.py): written in the background, saved as PDFs in the vault.
+    _fn("write_report", "Write a full, professional report as a PDF from recorded meeting notes: a site assessment, "
+        "inspection or service report, proposal, or any write-up the passenger asks for. It is written in the background "
+        "(a few minutes) and announced when ready; tell them briefly that you are on it.",
+        {"kind": {"type": "string", "description": "What kind of document, e.g. 'site assessment' (default), 'service report', "
+                                                   "'inspection report', 'proposal', 'meeting minutes'."},
+         "notes": {"type": "array", "items": {"type": "string"},
+                   "description": "Which meeting notes: titles or a few distinctive words from each, vault paths, 'today' for "
+                                  "today's meetings, or leave out for the latest meeting."},
+         "instructions": {"type": "string", "description": "Anything they asked for: emphasis, audience, sections to add or skip."},
+         "prepared_for": {"type": "string", "description": "Client or recipient, if they said."},
+         "prepared_by": {"type": "string", "description": "Author name for the cover, if they said."}}, []),
+    _fn("remake_report_pdf", "Print a report's PDF again from its Markdown, after the passenger edited it in Obsidian. "
+        "Does not rewrite anything.",
+        {"report": {"type": "string", "description": "Report title or words from it; 'latest' for the newest."}}, []),
     # Google Calendar (google_api.py); they say so when it is not connected.
     _fn("get_calendar", "The passenger's Google Calendar: events from a day, for a number of days. Today with no "
         "arguments (what is left of it). Each event has an [E#] reference for moving or removing it.",
@@ -662,6 +678,7 @@ _HANDLERS = {
     "read_webpage": read_webpage, "list_notes": list_notes,
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
+    "write_report": _reports.write_report, "remake_report_pdf": _reports.remake_report_pdf,
 }
 _HANDLERS.update(_google.HANDLERS)
 
