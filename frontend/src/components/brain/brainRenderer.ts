@@ -569,7 +569,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const phase = phaseNow();
     st.phase = phase;
     const c = st.carry;
-    if (phase === 'idle') {
+    if (phase === 'idle' || phase === 'listening' || phase === 'speaking') {   // the resting trickle keeps going while a mic is open or he talks
       c.idle += dt * (width < 560 ? 1.2 : 2.2);
       while (c.idle >= 1) {
         c.idle--;
@@ -751,7 +751,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       const fade = clamp((cam.dist - P[2] - NEAR) / 0.35, 0, 1);       // ease out as it passes the camera
       ctx.globalAlpha = clamp(a + e * 0.6, 0, 1) * fade;
       const base = n.region === 'core' ? st.coreColor : colorOf(n.region);
-      if (s > 3.5) {                                   // close up: a sharp circle, not a stretched image
+      if (s > 3.5 * u) {                               // close up: a sharp circle, not a stretched image (u: big screens draw bigger at rest)
         ctx.fillStyle = `rgb(${base.join(',')})`;
         ctx.beginPath(); ctx.arc(P[0], P[1], s * 0.5, 0, TAU); ctx.fill();
         ctx.globalAlpha *= 0.35;
@@ -796,7 +796,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
   function drawSignals() {
-    const u = unit(), DOTS = width < 560 ? 9 : 14;
+    const u = unit() * (width >= 760 ? 1.35 : 1), DOTS = width < 560 ? 9 : 14;   // a big screen has a busier field: bigger comets
     ctx.globalCompositeOperation = 'lighter';
     for (const sg of signals) {
       if (sg.s <= 0) continue;
@@ -1238,7 +1238,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   }
   function frame(ts: number) {
     if (document.hidden) { raf = 0; return; }
-    const dt = last ? clamp((ts - last) / 1000, 0.001, 0.06) : 0.016;
+    const dt = last ? clamp((ts - last) / 1000, 0.001, 0.25) : 0.016;   // a slow or throttled browser still runs at real speed
     last = ts;
     simulate(dt);
     stepEeg(dt);
