@@ -15,8 +15,6 @@ interface DelamainFaceProps {
 
 const COLOR = {
   cyan:   '#00F3FF',
-  amber:  '#FFB700',
-  orange: '#FF7700',
   red:    '#FF2020',
 };
 
@@ -45,12 +43,7 @@ const ANIMATIONS = {
     '/delamain_random_7.mp4', '/delamain_random_8.mp4', '/delamain_random_9.mp4',
     '/delamain_random_10.mp4',
   ],
-  bored: [
-    '/delamain_bored_1.mp4', '/delamain_bored_2.mp4', '/delamain_bored_3.mp4',
-    '/delamain_bored_4.mp4', '/delamain_bored_5.mp4',
-  ],
   rare: {
-    reading: '/delamain_rare_reading.mp4',
     flip:    '/delamain_rare_flip.mp4',
     secret:  '/delamain_rare_secret.mp4',
   },
@@ -68,7 +61,7 @@ function installed(prefix: string): string[] {
   return INSTALLED.filter(f => re.test(f)).map(f => '/' + f);
 }
 
-function poolOf(kind: 'blinking' | 'turning' | 'random' | 'bored', prefix: string): string[] {
+function poolOf(kind: 'blinking' | 'turning' | 'random', prefix: string): string[] {
   return [...new Set([...ANIMATIONS[kind], ...installed(prefix)])];
 }
 
@@ -88,45 +81,25 @@ function pickFrom(pool: string[], last: string | null): string {
   return next;
 }
 
-// idleMs = time since last user interaction (resets on each message)
-// sessionMs = total session time (never resets, for secret rare only)
-function pickIdleVideo(last: string | null, idleMs: number, sessionMs: number, persona: string): string {
+// sessionMs = total session time (for the secret rare only)
+function pickIdleVideo(last: string | null, sessionMs: number, persona: string): string {
   const core = persona === 'delamain' ? [] : installed(`${persona}_idle`);
   if (core.length && Math.random() < 0.7) return pickFrom(core, last);
   const night = installed('delamain_night');
   if (night.length && isLateNight() && Math.random() < 0.3) return pickFrom(night, last);
   const rares = extraRares();
   if (rares.length && Math.random() < 0.03) return pickFrom(rares, last);
-  return pickOriginalIdle(last, idleMs, sessionMs);
+  return pickOriginalIdle(last, sessionMs);
 }
 
-function pickOriginalIdle(last: string | null, idleMs: number, sessionMs: number): string {
+function pickOriginalIdle(last: string | null, sessionMs: number): string {
   const r = Math.random();
   const blinking = poolOf('blinking', 'delamain_blink');
   const turning = poolOf('turning', 'delamain_turn');
   const random = poolOf('random', 'delamain_random');
-  const bored = poolOf('bored', 'delamain_bored');
 
   // Secret rare — only after 45 min session regardless of interaction
   if (sessionMs > 45 * 60_000 && r < 0.008) return ANIMATIONS.rare.secret;
-
-  const isBored     = idleMs > 30 * 60_000;
-  const isDeepBored = idleMs > 60 * 60_000;
-
-  if (isDeepBored) {
-    if (r < 0.05) return ANIMATIONS.rare.reading;
-    if (r < 0.55) return pickFrom(bored, last);
-    if (r < 0.90) return pickFrom(blinking, last);
-    if (r < 0.95) return pickFrom(turning, last);
-    return pickFrom(random, last);
-  }
-
-  if (isBored) {
-    if (r < 0.40) return pickFrom(bored, last);
-    if (r < 0.80) return pickFrom(blinking, last);
-    if (r < 0.90) return pickFrom(turning, last);
-    return pickFrom(random, last);
-  }
 
   if (r < 0.70) return pickFrom(blinking, last);
   if (r < 0.85) return pickFrom(turning, last);
@@ -211,12 +184,6 @@ function drawCover(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
   ctx.drawImage(video, (video.videoWidth - sw) / 2, (video.videoHeight - sh) / 2, sw, sh, 0, 0, w, h);
 }
 
-function computeColor(idleMs: number): string {
-  if (idleMs > 60 * 60_000) return COLOR.orange;
-  if (idleMs > 30 * 60_000) return COLOR.amber;
-  return COLOR.cyan;
-}
-
 const DelamainFace: React.FC<DelamainFaceProps> = ({
   isTalking, mood = 'idle', size = 'normal', lineClip = null, persona = 'delamain', listening = false, thinking = false,
 }) => {
@@ -240,7 +207,6 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
   const loadGen = useRef(0);            // bumped on every load; a stale load's canplay is ignored
   const angryUntilMs = useRef(0);       // wall-clock ms; hold red until this time
   const sessionStartMs = useRef(Date.now());
-  const lastInteractionMs = useRef(Date.now()); // resets on each user message
 
   // Edge-tracking refs to detect transitions without triggering extra re-renders
   const prevTalking = useRef(isTalking);
@@ -262,9 +228,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
 
   // ── color helper ───────────────────────────────────────────────────────────
   const refreshColor = useCallback(() => {
-    if (Date.now() < angryUntilMs.current) { setAccentColor(COLOR.red); return; }
-    const idleMs = Date.now() - lastInteractionMs.current;
-    setAccentColor(computeColor(idleMs));
+    setAccentColor(Date.now() < angryUntilMs.current ? COLOR.red : COLOR.cyan);
   }, []);
 
   // ── pick next video ────────────────────────────────────────────────────────
@@ -306,9 +270,8 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
     const think = installed('delamain_think');
     if (thinkingRef.current && think.length) return pickFrom(think, lastVideo.current);
 
-    const idleMs    = Date.now() - lastInteractionMs.current;
     const sessionMs = Date.now() - sessionStartMs.current;
-    return pickIdleVideo(lastVideo.current, idleMs, sessionMs, personaRef.current);
+    return pickIdleVideo(lastVideo.current, sessionMs, personaRef.current);
   }, []);
 
   // ── advance: load next video into the inactive slot ────────────────────────
@@ -426,7 +389,6 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
     const justStarted = isTalking && !prevTalking.current;
     prevTalking.current = isTalking;
     if (justStarted) {
-      lastInteractionMs.current = Date.now(); // user sent a message — reset bored clock
       if (!isFlipPlaying.current && !lineActive.current) advance();
     }
   }, [isTalking, advance]);
@@ -459,7 +421,7 @@ const DelamainFace: React.FC<DelamainFaceProps> = ({
     if (!isTalkingRef.current && !lineActive.current) advance();
   }, [mood, advance]);
 
-  // ── periodic color refresh for bored→orange and angry cooldown ────────────
+  // ── periodic color refresh: back to cyan when the angry spell is over ─────
   useEffect(() => {
     const id = setInterval(refreshColor, 30_000);
     return () => clearInterval(id);
