@@ -569,7 +569,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const phase = phaseNow();
     st.phase = phase;
     const c = st.carry;
-    if (phase === 'idle') {
+    if (phase === 'idle' || phase === 'listening' || phase === 'speaking') {   // the resting trickle keeps going while a mic is open or he talks
       c.idle += dt * (width < 560 ? 1.2 : 2.2);
       while (c.idle >= 1) {
         c.idle--;
