@@ -172,7 +172,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
 
   function build() {
     const rand = rng(8888);
-    const target = clamp(Math.round((width * height) / 260), 650, 2100);
+    const target = clamp(Math.round((width * height) / 240), 650, 3400);   // big screens get more stars in the brain
     neurons = [];
     const add = (x: number, y: number, z: number, region: RegionKey, shell: boolean, size?: number) =>
       neurons.push({ x, y, z, region, shell, size: size ?? 0.4 + rand() * 0.8, ph: rand() * TAU, energy: 0, lit: null, nb: [],
@@ -1059,6 +1059,89 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   const phaseNowHot = (k: RegionKey) => regionHot(k) >= 0.8;
 
   /* ── cyberpunk dressing: hex grid, hex ticker, glitch ─────────────────── */
+  /* ── the galaxy behind him: a tilted spiral turning slowly, and a field of distant stars ── */
+  let galaxy: HTMLCanvasElement | null = null, galaxySize = 0;
+  let farStars: { x: number; y: number; r: number; a: number; ph: number; tw: number; c: string }[] = [];
+  function buildGalaxy() {
+    const rand = rng(4242);
+    const S = Math.min(3200, Math.ceil(Math.max(width, height) * 1.9 * dpr));
+    if (galaxy && Math.abs(galaxySize - S) / galaxySize < 0.25) return;   // building it takes a moment; small resizes keep it
+    galaxySize = S;
+    galaxy = document.createElement('canvas');
+    galaxy.width = galaxy.height = S;
+    const g = galaxy.getContext('2d')!;
+    const c = S / 2, R = S * 0.48;
+    g.globalCompositeOperation = 'lighter';
+    // the halo and the bright core
+    const halo = g.createRadialGradient(c, c, 0, c, c, R);
+    halo.addColorStop(0, 'rgba(255,236,200,0.55)');
+    halo.addColorStop(0.06, 'rgba(255,200,140,0.32)');
+    halo.addColorStop(0.2, 'rgba(150,120,255,0.10)');
+    halo.addColorStop(0.55, 'rgba(40,80,200,0.05)');
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, S, S);
+    const arms = 4, twist = 3.1;
+    const armPoint = (t: number, arm: number, spread: number) => {
+      const r = Math.pow(t, 0.85) * R;
+      const ang = arm * (Math.PI * 2 / arms) + t * twist * Math.PI + (rand() - 0.5) * spread;
+      const jitter = (rand() - 0.5) * R * 0.06 * (0.4 + t);
+      return [c + Math.cos(ang) * r + jitter, c + Math.sin(ang) * r + jitter, r / R] as const;
+    };
+    // dust and gas along the arms
+    for (let i = 0; i < 140; i++) {
+      const [x, y, f] = armPoint(0.08 + rand() * 0.9, i % arms, 0.5);
+      const rad = S * (0.025 + rand() * 0.05) * (1.2 - f * 0.5);
+      const hue = [[120, 80, 255], [60, 140, 255], [255, 90, 190], [80, 220, 255]][(rand() * 4) | 0];
+      const cloud = g.createRadialGradient(x, y, 0, x, y, rad);
+      cloud.addColorStop(0, `rgba(${hue.join(',')},${(0.07 + rand() * 0.06).toFixed(3)})`);
+      cloud.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = cloud; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    // the stars: warm near the core, blue-white out along the arms
+    const N = 9000;
+    for (let i = 0; i < N; i++) {
+      const inArm = rand() < 0.78;
+      const t = inArm ? Math.pow(rand(), 0.7) : Math.pow(rand(), 2.2) * 0.6;
+      const [x, y, f] = armPoint(t, (rand() * arms) | 0, inArm ? 0.35 : 6.3);
+      const warm = Math.max(0, 1 - f * 2.2);
+      const col = `rgba(${Math.round(200 + 55 * warm)},${Math.round(215 + 10 * warm - 20 * warm)},${Math.round(255 - 110 * warm)},`;
+      const big = rand() < 0.012;
+      const sz = (big ? 1.6 + rand() * 1.6 : 0.5 + rand() * 0.9) * dpr;
+      g.fillStyle = col + (big ? 0.95 : 0.25 + rand() * 0.5).toFixed(2) + ')';
+      g.beginPath(); g.arc(x, y, sz, 0, Math.PI * 2); g.fill();
+      if (big) {
+        const gl = g.createRadialGradient(x, y, 0, x, y, sz * 5);
+        gl.addColorStop(0, col + '0.35)'); gl.addColorStop(1, col + '0)');
+        g.fillStyle = gl; g.fillRect(x - sz * 5, y - sz * 5, sz * 10, sz * 10);
+      }
+    }
+    const fr = rng(77);
+    farStars = Array.from({ length: Math.round(width * height / 2600) }, () => ({
+      x: fr() * width, y: fr() * height, r: fr() < 0.06 ? 1.3 : 0.6 + fr() * 0.5, a: 0.15 + fr() * 0.55,
+      ph: fr() * TAU, tw: 0.4 + fr() * 1.8, c: fr() < 0.2 ? '200,210,255' : fr() < 0.3 ? '255,225,200' : '235,240,255',
+    }));
+  }
+  function drawGalaxy() {
+    for (const st0 of farStars) {               // distant stars, twinkling
+      if (st0.y > vp.eegTop) continue;
+      const a = reduced() ? st0.a : st0.a * (0.65 + 0.35 * Math.sin(clock * st0.tw + st0.ph));
+      ctx.fillStyle = `rgba(${st0.c},${a.toFixed(3)})`;
+      ctx.fillRect(st0.x + cam.yaw * 6, st0.y, st0.r, st0.r);
+    }
+    if (!galaxy) return;
+    const size = galaxySize / dpr;
+    const busy = st.thinking || st.activeTools.size ? 1 : 0;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.8 + busy * 0.15;
+    ctx.translate(vp.cx + cam.yaw * 30, vp.cy - vp.scale * 0.05);
+    ctx.rotate(-0.42);                          // the disc's tilt on screen
+    ctx.scale(1, 0.5 + cam.pitch * 0.12);       // seen at an angle; turning the brain tips it a little
+    ctx.rotate(reduced() ? 0.6 : clock * 0.012);
+    ctx.drawImage(galaxy, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+
   let hexGrid: HTMLCanvasElement | null = null;
   function buildHexGrid() {
     hexGrid = document.createElement('canvas');
@@ -1235,9 +1318,14 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (rebuild) { signals = []; build(); pinAll(); if (sel != null) select(null); }
     buildHexGrid();
+    buildGalaxy();
   }
   function frame(ts: number) {
     if (document.hidden) { raf = 0; return; }
+    // A 144 or 240 Hz screen would draw him that often, all on the CPU: 60 frames a second is plenty
+    // while he is busy, and 30 while he rests.
+    const busy = st.thinking || st.activeTools.size || st.voicing || st.speaking || st.listening || signals.length > 24;
+    if (last && ts - last < (busy ? 1000 / 60 : 1000 / 30) - 2) { raf = requestAnimationFrame(frame); return; }
     const dt = last ? clamp((ts - last) / 1000, 0.001, 0.25) : 0.016;   // a slow or throttled browser still runs at real speed
     last = ts;
     simulate(dt);
@@ -1247,6 +1335,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, width, height);
+    drawGalaxy();
     if (hexGrid) ctx.drawImage(hexGrid, 0, 0, width, height);
     drawBackdrop();
     drawNeurons();
