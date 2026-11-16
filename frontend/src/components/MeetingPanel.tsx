@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Circle, Square, Trash2, RotateCcw, FileText, Loader2 } from 'lucide-react';
+import { X, Circle, Square, Trash2, RotateCcw, FileText, Loader2, FileDown } from 'lucide-react';
 
 import { fmtClock, meetingPath, type MeetingRecorder } from './meetingRecorder';
 
@@ -10,11 +10,15 @@ export type Meeting = {
   progress: number; duration?: number; note?: string; summary?: string; error?: string | null; words?: number; chunks?: number;
 };
 
+/** A written report (reports.py): a PDF in the vault's Delamain/Reports folder. */
+export type Report = { name: string; title: string; modified: number; size: number };
+type Writing = { kind: string; from: string; started: number } | null;
+
 const STATUS: Record<Meeting['status'], string> = {
   recording: 'Recording', queued: 'Waiting its turn', transcribing: 'Transcribing', summarising: 'Writing the notes', done: 'Notes ready', error: 'Failed',
 };
 
-export function MeetingPanel({ token, recorder, update, onClose }: { token: string; recorder: MeetingRecorder; update: Meeting | null; onClose: () => void }) {
+export function MeetingPanel({ token, recorder, update, reportTick = 0, onClose }: { token: string; recorder: MeetingRecorder; update: Meeting | null; reportTick?: number; onClose: () => void }) {
   const [title, setTitle] = useState('');
   const [list, setList] = useState<Meeting[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -26,6 +30,31 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
       .then(res => (res.ok ? res.json() : [])).then(setList).catch(() => {});
   }, [token]);
   useEffect(() => { refresh(); }, [refresh, recorder.state]);
+
+  // Reports he has written from the notes; reloaded when one is announced (reportTick), and every
+  // few seconds while one is being written.
+  const [reports, setReports] = useState<Report[]>([]);
+  const [writing, setWriting] = useState<Writing>(null);
+  const loadReports = useCallback(() => {
+    fetch('/api/reports', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(d => { if (d) { setReports(d.reports ?? []); setWriting(d.writing ?? null); } }).catch(() => {});
+  }, [token]);
+  useEffect(() => { loadReports(); }, [loadReports, reportTick]);
+  useEffect(() => {
+    if (!writing) return;
+    const id = setInterval(loadReports, 5000);
+    return () => clearInterval(id);
+  }, [writing, loadReports]);
+  const openReport = async (r: Report) => {
+    const win = window.open('', '_blank');   // opened now, while the click still counts, then pointed at the PDF
+    const res = await fetch(`/api/reports/file?name=${encodeURIComponent(r.name)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+    if (!res?.ok) { win?.close(); return; }
+    const url = URL.createObjectURL(await res.blob());
+    if (win) win.location.href = url;
+    else { const a = document.createElement('a'); a.href = url; a.download = r.name; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  };
   // Live progress arrives over the WebSocket; poll gently as well while anything is in progress.
   // A live update replaces its meeting in the list; one for a meeting not listed yet (started on another
   // screen) is added, unless it was just removed here.
@@ -102,6 +131,25 @@ export function MeetingPanel({ token, recorder, update, onClose }: { token: stri
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {(writing || reports.length > 0) && (
+          <div className="border border-cyber-blue/30 rounded-sm p-2.5 bg-cyber-blue/5 space-y-1.5">
+            <div className="font-mono text-[10px] tracking-widest text-cyber-blue">REPORTS</div>
+            {writing && (
+              <div className="flex items-center gap-2 text-xs text-cyber-blue">
+                <Loader2 size={12} className="animate-spin shrink-0" />
+                <span className="truncate">Writing the {writing.kind} from {writing.from}…</span>
+              </div>
+            )}
+            {reports.slice(0, 8).map(r => (
+              <button key={r.name} onClick={() => void openReport(r)} className="w-full flex items-center gap-2 text-left hover:text-cyber-blue">
+                <FileDown size={13} className="text-cyber-blue shrink-0" />
+                <span className="truncate flex-1">{r.title}</span>
+                <span className="text-gray-500 text-xs shrink-0">{new Date(r.modified * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+              </button>
+            ))}
+            <p className="text-gray-500 text-[11px] leading-snug">Ask him for a write-up of any meeting. PDFs and editable copies are in <span className="font-mono">Delamain/Reports/</span>.</p>
+          </div>
+        )}
         {shown.filter(m => m.status !== 'recording').length === 0 && <p className="text-gray-500 text-xs p-2">No meetings yet.</p>}
         {shown.filter(m => m.status !== 'recording').map(m => (
           <div key={m.id} className="border border-cyber-gray rounded-sm p-2.5 bg-cyber-gray/20">

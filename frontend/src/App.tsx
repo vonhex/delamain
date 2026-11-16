@@ -129,6 +129,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   // Meeting notes: the recorder lives here, so closing the panel does not stop a meeting.
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [meetingUpdate, setMeetingUpdate] = useState<Meeting | null>(null);
+  const [reportTick, setReportTick] = useState(0);   // bumped when a report is done, so the Meetings panel reloads its list
   const meetingRecRef = useRef(false);
   const meeting = useMeetingRecorder(token, rec => {
     meetingRecRef.current = rec;   // the wake word would fight the recorder for the mic, and hear "Delamain" in the meeting
@@ -328,6 +329,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         const m = msg.meeting as Meeting;
         setMeetingUpdate(m);
         if (m.status === 'done') setMessages(prev => [...prev, { role: 'delamain', content: `📝 The notes from “${m.title}” are in your vault: ${m.note}` }]);
+      } else if (msg.type === 'report') {
+        setReportTick(n => n + 1);
       } else if (msg.type === 'dungeon') {
         setDungeon(msg.dungeon ?? null);
       } else if (msg.type === 'response') {
@@ -1017,7 +1020,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {/* Data Explorer Panel */}
         {isMeetingOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[440px]">
-            <MeetingPanel token={token} recorder={meeting} update={meetingUpdate} onClose={() => setIsMeetingOpen(false)} />
+            <MeetingPanel token={token} recorder={meeting} update={meetingUpdate} reportTick={reportTick} onClose={() => setIsMeetingOpen(false)} />
           </div>
         )}
 

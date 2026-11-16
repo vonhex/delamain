@@ -31,9 +31,10 @@ import dungeon as _dungeon
 import brain as _brain
 import model_map as _model_map
 import meetings as _meetings
+import reports as _reports
 import google_api as _google
 import config
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 
 # The LLM endpoint, tools switch and search URL come from config (Settings panel, .env
 # or defaults) on every request. With tools on, the LLM can call web search, notes and
@@ -95,6 +96,8 @@ async def lifespan(app: FastAPI):
     # starts accepting requests immediately.
     _db.init_db()
     _brain.bind_loop(loop)
+    _reports.generate = _generate_report
+    _reports.notify = lambda info: asyncio.run_coroutine_threadsafe(_announce_report(info), loop)
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
@@ -288,6 +291,10 @@ CAPABILITIES = (
     "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
     "• Notes: the passenger's Obsidian vault. Lists, ideas, untimed reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
+    "• Reports: when the passenger asks for a write-up, report or assessment from a meeting ('write up the site assessment from "
+    "this morning', 'make a PDF report of the Riverside walkthrough'), call write_report with the kind of document and which "
+    "meeting; it is written in the background and announced when ready, so just say you are on it. If they edited a report in "
+    "Obsidian and want the PDF again, call remake_report_pdf.\n"
     "• Calendar: the passenger's Google Calendar. 'What's on today / tomorrow / this week', 'when is my dentist "
     "appointment': call get_calendar (with query to find one event) and summarise it briefly for a driver, times first. "
     "To add an event call add_calendar_event straight away and then confirm the title, day and time in one sentence; "
@@ -899,6 +906,57 @@ def _generate_text(system: str, user: str) -> str:
     return resp.json()["choices"][0]["message"].get("content") or ""
 
 
+def _generate_report(system: str, user: str, max_tokens: int) -> str:
+    """One long, tool-free completion for reports.py (runs in its own thread), shown in the Brain view."""
+    payload = {"model": config.get("llm_model"), "temperature": 0.3, "max_tokens": max_tokens,
+               "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+               **llm_payload_extras()}
+    _brain.emit("think_start", round=0, source="report", tools=False, messages=2)
+    started = time.monotonic()
+    try:
+        resp = _post_llm(payload, timeout=3600)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        _brain.emit("think_end", round=0, source="report", ok=False, ms=round((time.monotonic() - started) * 1000))
+        raise
+    choice = (data.get("choices") or [{}])[0]
+    _brain.emit("think_end", round=0, source="report", ok=True, calls=[], finish=choice.get("finish_reason"),
+                ms=round((time.monotonic() - started) * 1000), **_brain.usage_of(data))
+    if choice.get("finish_reason") == "length":
+        print("[Report] hit max_tokens; the report may end early")
+    return (choice.get("message") or {}).get("content") or ""
+
+
+async def _announce_report(info: dict) -> None:
+    """Tell every open page that a report is done (or failed), and say so aloud where he can speak."""
+    for ws in list(connected_clients.values()):
+        try:
+            await ws.send_json({"type": "report", "report": info})
+        except Exception:
+            pass
+    if info.get("quiet"):
+        return
+    if info.get("ok"):
+        line = f"Your {info.get('kind', 'report')} is ready: {info.get('title')}. The PDF is in the Meetings panel and in your vault."
+    else:
+        line = f"I could not finish the {info.get('kind', 'report')}. {info.get('error', '')}".strip()
+    targets = [(cid, ws) for cid, ws in list(connected_clients.items()) if cid in _ready_clients]
+    voices: dict[str, str | None] = {}
+    for cid, ws in targets:
+        persona = _persona(cid)
+        if persona not in voices:
+            voices[persona] = await synthesize_voice(line, persona)
+        try:
+            await ws.send_json({"type": "response", "text": line, "audio_url": voices[persona],
+                                "speech_at": speech_onset(voices[persona]), "source": "report"})
+            conversation_history.setdefault(cid, []).append({"role": "assistant", "content": line})
+        except Exception as e:
+            print(f"[Report] Send to {cid} failed: {e}")
+    if targets:
+        _brain.emit("spoke", text=line[:400], source="report", persona=_persona(targets[0][0]), voice=True)
+
+
 def _run_any_tool(name: str, arguments: str, location: dict | None) -> str:
     if name in _dungeon.TOOL_NAMES:
         try:
@@ -1265,6 +1323,21 @@ async def meetings_delete(mid: str, _=Depends(require_auth)):
     _meeting_or_404(mid)
     await asyncio.to_thread(_meetings.discard, mid)
     return {"ok": True}
+
+
+@app.get("/api/reports")
+async def reports_list(_=Depends(require_auth)):
+    """PDF reports in the vault, newest first, and the one being written now (if any)."""
+    return {"reports": await asyncio.to_thread(_reports.list_reports), "writing": _reports.status()}
+
+
+@app.get("/api/reports/file")
+async def reports_file(name: str, _=Depends(require_auth)):
+    path = _reports.report_file(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="No such report")
+    return FileResponse(path, media_type="application/pdf", filename=path.name,
+                        content_disposition_type="inline")
 
 
 @app.get("/api/brain/model")
