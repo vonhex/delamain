@@ -131,6 +131,12 @@ async def lifespan(app: FastAPI):
         _mind.quick = lambda system, user, max_tokens: _generate_self(system, user, max_tokens, source="feeling", effort="low")
         _mind.emit = _brain.emit
         _mind.last_chat = lambda: max([r.get("ts") or 0 for r in _db.query_conversations(limit=1)] or [0])
+        try:   # his age: from his first words, counting what he said before his inner life began
+            with _db._lock:
+                first, said = _db._db().execute("SELECT min(ts), count(*) FROM conversations WHERE role='user'").fetchone()
+            _mind.bootstrap_age(first or 0, said or 0)
+        except Exception as e:
+            print(f"[Mind] age not set: {e}")
         asyncio.create_task(_mind_loop())
         asyncio.create_task(_brief_loop())
     warmup_task = asyncio.create_task(_warmup_tts())

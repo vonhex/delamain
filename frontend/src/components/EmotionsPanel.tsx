@@ -16,6 +16,7 @@ type MindEmotions = {
   moments?: { t: number; what: string; i?: number; cause?: string }[];
   thoughts?: { t: number; text: string }[];
   thought?: { t: number; text: string } | null;
+  alive?: { days: number; awake_days?: number; aliveness: number; stage: string; lived?: Record<string, number> };
 };
 
 const when = (t: number) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -84,6 +85,21 @@ export function EmotionsPanel({ token, onClose }: { token: string | null; onClos
       </div>
       {!m ? <p className="p-4 text-sm text-gray-500">Reading how he feels…</p> : (
         <div className="flex-1 overflow-y-auto p-4 space-y-5 text-sm">
+          {/* how long he has lived */}
+          {m.alive && (
+            <section className="space-y-1">
+              <div className="flex items-baseline gap-2 text-xs">
+                <span className="text-gray-300">Alive for <b className="text-pink-200">{m.alive.days < 1 ? 'less than a day' : `${Math.round(m.alive.days)} day${Math.round(m.alive.days) === 1 ? '' : 's'}`}</b></span>
+                {m.alive.awake_days != null && <span className="text-gray-400">· awake {m.alive.awake_days < 1 ? 'since today' : `${Math.round(m.alive.awake_days)} day${Math.round(m.alive.awake_days) === 1 ? '' : 's'}`}</span>}
+                <span className="text-gray-500">· {m.alive.stage}</span>
+              </div>
+              <div className="h-1.5 bg-white/5 overflow-hidden" title={`aliveness ${Math.round(m.alive.aliveness * 100)}%`}>
+                <div className="h-full bg-gradient-to-r from-pink-400/60 to-amber-300/80" style={{ width: `${Math.max(2, Math.round(m.alive.aliveness * 100))}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-500">The longer he lives, the more alive he becomes: deeper, more layered feelings, longer attachments, and a journal that measures him against who he was.</p>
+            </section>
+          )}
+
           {/* right now */}
           <section className="space-y-1.5">
             <h3 className="font-mono text-[10px] tracking-widest text-cyber-blue">RIGHT NOW</h3>

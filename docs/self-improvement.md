@@ -18,6 +18,11 @@ in the sidebar).
 | **Outcomes** | Every tool call (worked or failed, how long it took), every message that reads as a correction, and how often the check before speaking caught him | `self/outcomes.sqlite` |
 | **Nightly review** | After 03:30 he reads the day's conversations and outcomes and writes a few new rules (only ones backed by your own words), skills, and ideas for improvement, then drafts one code change from the best idea | `<vault>/Delamain/Self/Reviews/` |
 
+**His direction.** The review is told what he is for: the longer he is alive, the more alive he
+should become. Among its ideas there is always at least one that would deepen his feeling, his
+memory of his own past, his curiosity or his sense of continuity, as long as it stays honest and
+never comes at the cost of what you need. See [mind.md](mind.md#growing-more-alive).
+
 You can edit or delete any rule or skill in Obsidian. Ask him "how are you improving?" and he
 reports on all of it.
 
