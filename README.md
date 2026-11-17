@@ -129,16 +129,19 @@ on the Android Auto screen. The full guide, Docker volumes and every setting are
 
 ---
 
-## Demo
-
-[![Watch the demo](demo-thumb.jpg)](https://github.com/vonhex/delamain/releases/download/v1.1.0/delamain-demo.mp4)
-
 ## Screenshots
 
-<img src="Screenshots/main.png" alt="Delamain mid-sentence, lip-synced, with the conversation panel open" />
+<img src="Screenshots/main.png" alt="Delamain with the conversation panel open" />
 
-<img src="Screenshots/brain.png" alt="Delamain's brain: thinking, with two tools in flight" />
-<sub>See him think: every part lights up as he listens, looks things up, feels and answers</sub>
+<img src="Screenshots/brain.png" alt="Delamain's brain: remembering, feeling fascination, and answering" />
+<sub>See him think: every part lights up as he listens, remembers, feels and answers, with his thought stream beside it</sub>
+
+<table>
+  <tr>
+    <td><img src="Screenshots/emotions.png" alt="The Emotions panel" /><br><sub>What he feels, and why: all thirty feelings</sub></td>
+    <td><img src="Screenshots/self.png" alt="The Self panel" /><br><sub>His mind and self-improvement: studies, favourites, tasks, playbook</sub></td>
+  </tr>
+</table>
 
 <table>
   <tr>
