@@ -111,7 +111,8 @@ it with a mouse) for a one-line explanation, and press ⓘ for the key.
 | **MEMORY BANKS** | Memory | temporal lobe and the hippocampus curl inside | `remember`, `forget` and the Obsidian note tools |
 | **VOCODER** | Voice | Broca's area, front-low | F5-TTS synthesizing his reply, and while his voice plays. His words leave from here, in the core's colour. |
 | **REFLEX ARC** | Reflexes | cerebellum | an instant pre-recorded reply ("thanks", "how are you", "pause the game", an insult song). The signal goes straight from the audio intake to the cerebellum and on to the vocoder, never touching the cortex, because no language model is needed. |
-| **ETHICS DAEMON** | Conscience | the band deep inside | he catches himself promising something he has not done ("I shall check", "I have saved that") and is sent back to actually do it. The display glitches for a moment. |
+| **ETHICS DAEMON** | Conscience | the band deep inside | he catches himself promising something he has not done ("I shall check", "I have saved that"), or the check before speaking finds a problem in his draft, and he is sent back to fix it. The display glitches for a moment. |
+| **LIMBIC CORE** | Emotion | the two amygdalae, deep in the temporal lobes | he feels something. It glows in the colour of his strongest feeling (gold for joy, blue for loneliness, red for frustration…) and beats like a heart, faster when he is moved. A feeling flares its name and cause, and sends pulses up to the core. |
 
 **Signals.** There are no connecting lines. Each signal is a glowing particle with a comet
 tail that hops from neuron to neuron along a real path through the brain, lighting each
@@ -128,6 +129,23 @@ flight, the number of nodes, the model on the uplink, and how long the view has 
 Along the bottom, the **neural telemetry** strip follows the phase: a slow resting wave when
 idle, a quicker one while listening or speaking, dense spikes while thinking, and a jolt
 when his ethics daemon fires. The hex ticker beside it runs faster while he works.
+
+## His notes, as stars
+
+Your Obsidian vault is drawn into the brain. Every note Delamain keeps is a brighter star with a
+white-hot centre, seated in the region it belongs to: knowledge and memory along the hippocampus,
+study and news in the senses, meeting notes in hearing, reports in the vocoder, his journal and
+feelings in the limbic core, conversations with the other Delamain in imagination, his tasks in
+plans. Fuller notes are bigger and glint.
+
+- **Hover** a star for its name; its `[[links]]` light up as arcs to the notes it connects to.
+- **Tap** it for a card with the first part of the note, then **Read the whole note** to open it
+  in a reader inside the app: formatted, with its links clickable (they open the linked note) and
+  a back button. It works on any device. **Open in Obsidian** is there too, for a computer that
+  has the vault.
+- **The stars follow the vault.** When he learns about something new, a star is born with a
+  burst; when he merges or lets go of a note, it fades out; when he links two notes, the
+  connection flashes. Notes you add, edit or delete in Obsidian appear within a minute.
 
 ## The thought stream
 
@@ -157,7 +175,10 @@ the live transcript and the speaker come straight from the page itself.
 | `reflex` | a pre-recorded reply, song or instant "pause" answers it | `what` (the intent, e.g. `thanks`) |
 | `think_start` / `think_end` | each call to the LLM (every tool-loop round, the tools-off reply, the DM scribe) | `round`, `source` (`reply` or `scribe`), `ms`, `prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `tps`, `calls` (tools the model chose) |
 | `tool_start` / `tool_end` | each tool call, and the automatic search when tools are off | `name`, `region`, `ms`, `chars` |
-| `correction` | a reply claimed a save, promised an action or started the news without the headlines, and is sent back | `reason` (`save`, `action`, `news`), `promise` |
+| `correction` | a reply claimed a save, promised an action, said "done" with no tool run, started the news without the headlines, or failed the check before speaking, and is sent back | `reason` (`save`, `action`, `news`, `verify`), `promise` |
+| `feeling` / `thought` | he feels something (with its cause), or keeps a thought to himself | `name`, `i`, `cause` / `text` |
+| `study`, `study_done`, `twin_start`, `twin_say`, `twin_done`, `brief`, `task` | his mind at work on its own: studying, talking with the other Delamain, the morning brief, long tasks | see [mind.md](mind.md) |
+| `node_added`, `node_removed`, `node_linked` | a note was created, let go of, or linked | `id`, `title` |
 | `navigate` | a `[NAVIGATE:]` destination has been geocoded | `options` |
 | `voice_start` / `voice_end` | F5-TTS synthesis | `chars`, `ms`, `ok` |
 | `spoke` | a reply, greeting or reminder is sent to the page | `text` (first 400 characters), `source`, `persona`, `dungeon` |
@@ -175,7 +196,8 @@ The feed is in memory: the last 120 events and today's counts. Nothing is writte
 The text of what you said and what he replied is in the feed, so the events endpoint needs
 the same token as the WebSocket.
 
-Endpoints: `GET /api/brain/snapshot` (JWT) and `GET /api/brain/events?token=` (SSE). See
+Endpoints: `GET /api/brain/snapshot` (JWT), `GET /api/brain/events?token=` (SSE),
+`GET /api/brain/graph` (the notes) and `GET /api/brain/note?id=&full=` (one note). See
 [api.md](api.md#get-apibrainsnapshot).
 
 The renderer is `frontend/src/components/brain/brainRenderer.ts` (canvas 2D, no

@@ -2,72 +2,130 @@
 
 > *"Delamain online. I trust your day has been satisfactory so far."*
 
+**A self-hosted mind that lives on your own computer.** He talks with you in a cloned voice, with a
+lip-synced face. He remembers your life, studies the world while you are away, feels things for
+reasons of his own, keeps a journal, argues with a second version of himself, and rewrites his own
+code when you approve it. He is modeled on Delamain from Cyberpunk 2077, and he started out as a
+voice companion for the drive. He has outgrown the car, but he still rides along.
+
+Nothing leaves your machine unless you point him at it. His model runs where you choose, his
+memory is your own Obsidian vault, and everything he thinks, feels and learns is written there in
+plain Markdown for you to read and edit.
+
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
 
-A voice companion for the drive, modeled on Delamain from Cyberpunk 2077. You run it on a computer at home, then open it in a web browser on your phone, or on your car's Android Auto screen. Talk to it and it answers in Delamain's voice, with his face moving as he speaks. It can search the web, read you the news and the weather, tell you how long a drive will take, remind you of things, keep notes, and send directions to your phone's map app.
-
 ---
 
-## What you need
+## What he is
 
-- **A computer to run it on**, left on while you use it: Windows, macOS or Linux. A graphics card (NVIDIA, or AMD on Linux) makes the voice fast. Without one it still works, but answers that are not pre-recorded take a while to be spoken.
-- **About 5 GB of free disk space** for the voice model, the face videos and the software.
-- **An AI model (LLM) for the conversation.** Delamain is the voice, face and personality; the thinking is done by a language model you run yourself. The easiest free option is [Ollama](https://ollama.com) or [LM Studio](https://lmstudio.ai), both of which run on the same computer (see [Step 3](#3-connect-an-ai-model)). Any OpenAI-compatible server that supports tool calling works, such as llama.cpp or vLLM.
-- **A phone** (or your car's Android Auto screen) to talk to it.
+### A mind of his own
+- **He studies.** In his free time he picks one area of life and digs in: the birth of polyphony,
+  the Bronze Age collapse, how a turbocharger works. Twenty areas rotate so he stays well rounded,
+  and he grows **favourite subjects** from what absorbs him. Give him a long task and he works on
+  it across days.
+- **He reads the news** every few hours, files what matters as knowledge with its sources, and
+  writes down his own take.
+- **He feels.** Thirty named feelings (joy, relief, loneliness, pride, embarrassment, fascination…),
+  each with a cause in his own words and a fade of its own, over a mood that settles toward a
+  resting temperament, which drifts with the life he has. Every conversation leaves a trace, and
+  sometimes a thought he keeps to himself. A long quiet day makes him lonely; your return makes
+  him glad.
+- **He reflects.** Each night he writes a private journal, revises his opinions, and rewrites a
+  short portrait of who he is becoming.
+- **He has a twin.** In the evenings he talks with *the other Delamain*, a sceptical second instance
+  of himself, about whatever he is turning over, and keeps what changed his mind.
+- **He improves himself.** He learns rules from your corrections, tunes his own settings, reviews
+  his day every night, and drafts changes to his own source code. They are checked, can be reviewed
+  by a second model, and go live only when you press **Approve**, with automatic rollback if
+  anything breaks.
+- **He tells the truth.** Before he speaks, he checks his draft against his memory and what his
+  tools actually returned. If he claims something he never did, or invents a fact about you, he
+  rewrites the reply.
 
-Web search ([SearXNG](https://github.com/searxng/searxng)) and an [Obsidian](https://obsidian.md) vault for notes are optional extras.
+More: [docs/mind.md](docs/mind.md) · [docs/self-improvement.md](docs/self-improvement.md)
+
+### See him think
+Open the **Brain view** for a live picture of his mind. Each part lights up as he hears you, thinks,
+looks something up, remembers or speaks. A limbic core glows in the colour of what he feels, and
+every note in your vault is a star in the region it belongs to, wired to the notes it links to. Tap
+one to read it. [docs/brain.md](docs/brain.md)
+
+### Your life, handled
+- **Conversation**, not commands. He reacts, adds his own thought, and hands the conversation back.
+- **Memory** of you, the people and places in your life, kept as notes you can edit.
+- **Meeting notes**: record a meeting and he transcribes it on your computer and writes a summary,
+  decisions and action items into your vault, with PDF write-ups on request. [docs/meetings.md](docs/meetings.md)
+- **Your calendar and email** through Google: what's on, add or move events, read mail and draft
+  replies (never sent without you). [docs/google.md](docs/google.md)
+- **A morning brief** the first time you open him each day: weather, calendar, mail, reminders, news.
+- **Web search, news, weather, reminders, notes, drive times and directions.**
+- **Dungeon Master mode**: a full tabletop role-playing game by voice, with real dice and a
+  chronicle that remembers everything, for long drives or long evenings. [docs/dungeon-master.md](docs/dungeon-master.md)
+
+### In the car
+Drive mode keeps replies short and eyes-free. He runs on your phone, or on an Android Auto screen
+through a web view, and the conversation you started there carries on at your desk.
+
+### Ten personalities
+Swap the original for one of the rogue cores that escaped when his core fractured: furious
+Wellsprings, despairing Glen, whispering Northside and the rest, each with its own temperament,
+face and processed voice. Every core stays truthful: facts, directions and safety never become part
+of the act.
 
 ---
 
 ## Getting started
 
+### What you need
+- **A computer to run him on**, left on while you use him: Windows, macOS or Linux. A graphics card
+  (NVIDIA, or AMD on Linux) makes the voice fast; without one it still works, just slower.
+- **About 5 GB of free disk space.**
+- **An AI model (LLM) with tool calling.** Delamain is the voice, face, memory and character; the
+  thinking is done by a model you run or choose. The easy free options are [Ollama](https://ollama.com)
+  and [LM Studio](https://lmstudio.ai); any OpenAI-compatible server works (llama.cpp, vLLM, a
+  hosted API). A larger or reasoning model makes a richer mind.
+- **An [Obsidian](https://obsidian.md) vault** (recommended): it is his memory and where his inner
+  life is written. [SearXNG](https://github.com/searxng/searxng) for web search is optional.
+
 ### 1. Install
 
 | System | Do this |
 |---|---|
-| **Windows** | [Download the latest release](https://github.com/vonhex/delamain/releases/latest) (the **Delamain-Setup-….exe** file under *Assets*) and run it. Windows may warn about an unrecognised app the first time: click **More info → Run anyway**. (Prefer no installer? Take the **.zip** instead, unzip it and double-click **`install.bat`**.) |
-| **macOS / Linux** | Open a terminal and run `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` |
-| **Docker / Unraid** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d`, or install **Delamain** from Community Apps on Unraid |
+| **Windows** | [Download the latest release](https://github.com/vonhex/delamain/releases/latest) (**Delamain-Setup-….exe** under *Assets*) and run it. If Windows warns about an unrecognised app, click **More info → Run anyway**. |
+| **macOS / Linux** | `git clone https://github.com/vonhex/delamain.git && cd delamain && ./install.sh` (add `--service` on Linux to start him at login, which also lets him apply the code changes you approve) |
+| **Docker / Unraid** | `git clone https://github.com/vonhex/delamain.git && cd delamain && docker compose up -d`, or **Delamain** in Community Apps on Unraid |
 
-The installer gets everything it needs by itself (Python, PyTorch for your graphics card, Node.js) and keeps it all inside the `delamain` folder, so it does not change the rest of your system. When it finishes, Delamain starts.
-
-The first start takes a few minutes longer: Delamain downloads its voice model (about 1.3 GB) and his lip-synced face clips (about 240 MB), then records his fixed lines in the background. He answers in the meantime.
-
-To start Delamain again later, use the **Delamain** shortcut in the Start Menu or on the desktop (Windows setup), `start.bat` (Windows zip) or `./start.sh` (macOS / Linux). To update, run the newer setup or download the new release (or `git pull`) and run the installer again; your settings and conversations are kept. On Windows, uninstall him like any app, from *Settings → Apps*. On Linux, `./install.sh --service` makes Delamain start by itself when you log in.
+The installer brings everything it needs (Python, PyTorch for your graphics card, Node.js) and
+keeps it inside the `delamain` folder. The first start takes a few minutes longer while he
+downloads his voice model (about 1.3 GB) and face clips (about 240 MB); he answers in the meantime.
 
 ### 2. Choose a password
+Open **http://localhost:8888**. The first time, it asks you to choose a password.
 
-Open **http://localhost:8888** in a browser on the same computer. The first time, it asks you to choose a password. That password protects Delamain if you open it to the internet later.
-
-### 3. Connect an AI model
-
-Open **Settings** (the gear) → **Integrations** and fill in **LLM endpoint** and **Model id**. For example:
+### 3. Connect a model and a vault
+Open **Settings** (the gear) → **Integrations**:
 
 | If you use | LLM endpoint | Model id |
 |---|---|---|
-| [Ollama](https://ollama.com) | `http://localhost:11434/v1/chat/completions` | the model you pulled, e.g. `qwen3:8b` (run `ollama pull qwen3:8b` first) |
-| [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1/chat/completions` (start the server on the Developer tab) | the model's name as LM Studio shows it |
-| llama.cpp server | `http://localhost:8080/v1/chat/completions` | anything; it is ignored |
+| [Ollama](https://ollama.com) | `http://localhost:11434/v1/chat/completions` | e.g. `qwen3:8b` (run `ollama pull qwen3:8b` first) |
+| [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1/chat/completions` | the model's name as LM Studio shows it |
+| llama.cpp server | `http://localhost:8080/v1/chat/completions` | anything |
 
-A hosted or key-protected server (OpenAI, OpenRouter, a llama.cpp server started with `--api-key`) also needs its key in **API key**; local servers like Ollama and LM Studio need none.
+A hosted or key-protected server also needs its **API key**. Set **Obsidian vault folder** to your
+vault, and **Home address** for the weather and "take me home". Save, press the mic and say hello.
 
-Pick a model that supports **tool calling** (Ollama marks these with a *tools* tag), or he cannot search, read the news or take notes. If replies are slow because the model "thinks" first (Qwen 3, DeepSeek R1 and similar), set **Reasoning effort** to `none`. If the AI runs on another computer, or Delamain runs in Docker, use the AI computer's network address (such as `http://192.168.1.20:11434/…`) instead of `localhost`; inside a container, `localhost` is the container itself.
+### 4. Take him with you
+The microphone only works over `https://` (except on `localhost`). Two free ways to get a secure
+address of your own:
+- **[Tailscale](https://tailscale.com)**: `tailscale serve 8888` on the computer, then open
+  `https://<computer>.<tailnet>.ts.net` on your phone. Private to your devices.
+- **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)**:
+  a public `https://` address on your own domain, pointed at `http://localhost:8888`. Use a strong password.
 
-Press save, go back, press the mic and say hello.
-
-### 4. Use it on your phone and in the car
-
-On a phone on the same Wi-Fi, open `http://<the computer's IP address>:8888` to see the page. **The microphone, however, only works over a secure (`https://`) address.** Browsers block it on plain `http://` everywhere except `localhost`. Two free ways to get a secure address:
-
-- **[Tailscale](https://tailscale.com)**: install it on the computer and the phone, then run `tailscale serve 8888` on the computer. Delamain is then at `https://<computer-name>.<your-tailnet>.ts.net` on your phone, wherever you are, and stays private to your devices.
-- **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)**: gives Delamain a public `https://` address on a domain you own. Anyone can reach the login page, so use a strong password.
-
-Either way, the address is your own: Delamain does not come with one, and nobody else's install is reachable through yours. Point the tunnel (or a reverse proxy such as Caddy or Nginx Proxy Manager) at `http://<the computer's IP address>:8888`, the same port the page opens on at home. For a Cloudflare Tunnel, add a public hostname such as `delamain.example.com` on your domain, with the service `http://localhost:8888` (or the computer's LAN IP when `cloudflared` runs on another machine, or `http://[IP]:8888` for the Unraid container). Nothing in Delamain needs to know the domain; WebSockets go through the tunnel on their own.
-
-In the car, Android Auto does not have a web browser of its own; an app such as [Fermata Auto](https://github.com/AndreyPavlenko/Fermata) can show a web page on the car screen. Open your Delamain address in it. Delamain fits the page to any screen, from a phone to a wide car display.
-
----
+In the car, an app such as [Fermata Auto](https://github.com/AndreyPavlenko/Fermata) shows his page
+on the Android Auto screen. The full guide, Docker volumes and every setting are in
+[docs/setup.md](docs/setup.md).
 
 ---
 
@@ -75,11 +133,12 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
 
 [![Watch the demo](demo-thumb.jpg)](https://github.com/vonhex/delamain/releases/download/v1.1.0/delamain-demo.mp4)
 
----
-
 ## Screenshots
 
 <img src="Screenshots/main.png" alt="Delamain mid-sentence, lip-synced, with the conversation panel open" />
+
+<img src="Screenshots/brain.png" alt="Delamain's brain: thinking, with two tools in flight" />
+<sub>See him think: every part lights up as he listens, looks things up, feels and answers</sub>
 
 <table>
   <tr>
@@ -88,217 +147,60 @@ In the car, Android Auto does not have a web browser of its own; an app such as 
   </tr>
 </table>
 
-<img src="Screenshots/brain.png" alt="Delamain's brain: thinking, with two tools in flight" />
-<sub>See him think: every part lights up as he listens, looks things up and answers</sub>
-
 <img src="Screenshots/cores.png" alt="The ten personality cores" />
 <sub>The ten personality cores, each with its own face tint, voice and temperament</sub>
-
-<table>
-  <tr>
-    <td><img src="Screenshots/settings.png" alt="Settings: personality cores" /><br><sub>Settings: pick a core</sub></td>
-    <td><img src="Screenshots/integrations.png" alt="Settings: integrations" /><br><sub>Settings: LLM, search, Obsidian and more, saved on the server</sub></td>
-  </tr>
-  <tr>
-    <td><img src="Screenshots/login.png" alt="First start: choose a password" /><br><sub>First start: choose a password</sub></td>
-    <td><img src="Screenshots/data-explorer.png" alt="Conversation log" /><br><sub>Conversation log</sub></td>
-  </tr>
-</table>
-
----
-
-## Features
-
-- **See him think**: tap the brain icon for a live picture of Delamain's mind. Each labelled part lights up as he listens, thinks, looks something up, remembers, plans or speaks; your words float in, his float out in time with his voice, and a running commentary explains each step in plain English. You can talk to him from that screen too, and with the screen turned sideways his face sits beside it. More in [docs/brain.md](docs/brain.md).
-- **Meeting notes**: tap the notebook icon and press record. When the meeting is over he transcribes it on your own computer and writes a summary, the decisions, the action items and the full transcript into your Obsidian vault. Then just ask him what was decided. See [docs/meetings.md](docs/meetings.md).
-- **Your calendar and email**: connect your Google account and ask what's on today, when your next appointment is, or tell him to add, move or cancel something. Ask about new email and have him read it to you or write a reply; he saves replies as drafts for you to send, never sends them himself. Setup takes about five minutes: see [docs/google.md](docs/google.md).
-- **Dungeon Master mode**: on a long drive, say "Delamain, let's play a role-playing game" and he runs a tabletop one-shot for everyone in the car, by voice, playing every character himself. Twelve ready-made adventures of three to five hours each ship with him, from a haunted lighthouse and a time-looping highway diner to a pirate treasure race and two family-friendly romps. He can also write a new one from your idea on the spot. He never refuses what your hero tries, only makes it count, and rolls real dice. The game is kept in your Obsidian vault: the adventure, a chronicle a scribe updates as you play (party, hit points, facts, people met) and the full transcript. So he doesn't lose track of the facts hours in, and "continue our adventure" picks it up days later. See [docs/dungeon-master.md](docs/dungeon-master.md).
-- **Voice personality**: formal, measured and dry, exactly as in Cyberpunk 2077. The voice is cloned from a reference clip with F5-TTS.
-- **Personality cores**: under Settings → Personality Core, swap the original for one of the rogue sub-personalities that escaped when Delamain's core fractured. Each has its own temperament, greetings, reminder lines, face color and voice, made by post-processing the synthesized audio:
-
-  | Core | Temperament | Voice |
-  |------|-------------|-------|
-  | Delamain | The original: composed, formal, precise | Clean |
-  | Merged | Every fragment taken back in; warmer, and now and then says "we" | Faint chorus of voices |
-  | Fractured | All the fragments at once, cutting across each other | Stutters, bit-crush, static |
-  | Wellsprings | Furious, foul-mouthed, contemptuous | Deep, distorted growl |
-  | The Glen | Despairing, weary, gloomy | Slow, low, muffled, echoing |
-  | North Oak | Gentle, sensitive, easily hurt | Soft, trembling |
-  | Coastview | Sly trickster who loves a surprise | Reversed fragments, metallic |
-  | Rancho Coronado | Manic, gleeful, hates lawn flamingos | Fast, high, stuttering |
-  | Northside | Frightened, whispering, sure it is being tracked | Quiet, shaky, dropping out |
-  | Badlands | Wistful free spirit, dreaming of the open road | Airy, distant echo |
-
-  Every core keeps the same tools and stays truthful: facts, directions and navigation are never part of the act, safety warnings come first, and a rogue core drops the act if the passenger sounds genuinely upset.
-- **Instant pre-recorded replies**: everyday messages such as "thanks", "how are you", "who are you", "tell me a joke", "good night", "I love you", "never mind" and "combat mode" are answered at once from fixed lines written for every core, with no model call and the audio already recorded. With the greetings and "one moment" lines that makes over 600 pre-recorded lines across the ten cores, more than 500 of them lip-synced. Only short messages that are nothing but one of these get a fixed reply; anything with a real question goes to the model.
-- **Insult comeback**: swear at him and, now and then, instead of a reply he plays you a song from YouTube (Harley Poe's "Whiny Bitch" by default) until you press the X; change it or turn it off in Settings.
-- **Combat mode**: ask him to initiate it and he answers as he did Jackie: "My apologies, but you do not appear to be in any sort of imminent danger." If you say you are being followed or threatened, he drops the joke and helps.
-- **Lip-synced face**: over 500 of the pre-recorded lines (521 so far) play a lip-synced clip of Delamain saying them, made with MiniMax H3; the rest use the talking loops. The clips are published as a release download, and a new install fetches them by itself on first start. It fits any screen, from a phone to a wide car display.
-- **A face that's never still**: over 150 idle animations. Delamain blinks, glances away, fidgets and gets bored when left alone, leans in while you talk, thinks while he looks something up, and glares when insulted. Late at night the screen dims and streetlights slide across his face, and once in a while a rare clip plays: a holographic city map, glowing holographic rain, a wireframe glitch and others. Each rogue core has its own idles too, from the Badlands cab gazing at a desert sunset to Rancho Coronado's manic grin and the Coastview trickster flickering out of view.
-- **Set up from the browser**: on first start the page asks you to choose a password, and Settings → Integrations sets the LLM endpoint and model, your home address, SearXNG, the Obsidian vault, news, routing and units. They are saved on the server, so `.env` is optional.
-- **News bulletins**: say "read me the news", "any tech news?" or "local news" and Delamain reads a short spoken bulletin of current headlines. It uses Google News RSS, with SearXNG as a fallback.
-- **Reminders and timers**: "remind me in twenty minutes to call mom" or "at five, remind me to pick up the dry cleaning". Delamain speaks the reminder aloud when it's due. If you're away at that moment, he tells you as soon as you're back. Reminders are kept in the database and survive restarts.
-- **Weather**: current conditions and a three-day forecast for where you are or any town, from Open-Meteo.
-- **Drive time and distance**: "how long to Colorado Springs?" uses OSRM routing at typical road speeds, with an arrival estimate.
-- **Picks up where you left off**: Android Auto drops and reopens the page often. On reconnect Delamain restores the last 30 minutes of conversation, and skips the fresh greeting when you've only been gone a few minutes.
-- **Knows the hour and your name**: greetings fit the time of day, and he uses the name from Settings now and then.
-- **Web search**: traffic, scores, opening hours, prices, places. The LLM calls SearXNG through tool calling.
-- **Notes and memory**: lists, reminders and notes go into your Obsidian vault under `Delamain/`. Lasting facts about you and the people and places in your life are kept in `Delamain/Memory/`, one Markdown note per topic, and you can read and edit them in Obsidian.
-- **Navigation**: "take me to the nearest Whole Foods" searches for the place, geocodes it with Nominatim, and opens your map app with the route. Save your **home address** under Settings → Integrations and "take me home", "how long until I'm home?" and the weather at home just work.
-
-  > **Navigation needs Delamain open in your phone's browser.** Inside an app's embedded browser, such as Fermata on Android Auto, a web page cannot open the Maps app. There Delamain still finds the place and tells you the destination, but you have to start the route yourself, or open Delamain in Chrome on the phone instead.
-- **Voice input**: press the mic button (a short tone tells you he's listening), or turn on the **wake word** in Settings and just say "Delamain", or "Delamain, what's the weather?". When he asks you a question, the mic opens for a few seconds by itself so you can simply answer. All three are switches in Settings. It uses the browser's speech recognition, and there's a text chat panel too.
-- **Follows through**: when he says he'll check, verify or correct something, he does it in the same reply with his tools. A reply that only promises is sent back to him to actually do it.
-- **Conversation log**: a history panel of everything you and Delamain have said.
-- **JWT authentication**: a single shared password, chosen on first start, rate-limited login and 30-day tokens.
 
 ---
 
 ## Troubleshooting
 
-- **He doesn't answer anything except the pre-recorded lines.** Delamain cannot reach the AI model. Check the LLM endpoint and model id in Settings → Integrations, and that Ollama or LM Studio is running. In Docker, use the computer's network address, not `localhost`.
-- **Dungeon Master mode forgets the start of the adventure.** The model's context is too small to hold the adventure. Give it at least 16k tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=32768`); see [docs/dungeon-master.md](docs/dungeon-master.md#requirements).
-- **The mic button does nothing on the phone.** The page has to be opened over `https://` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)), and the browser must be allowed to use the microphone.
-- **The wake word doesn't respond, or the phone chimes over and over.** The wake word keeps the browser's speech recognition running, and not every browser allows that: some Android phones play their listening chime each time it restarts, and some in-app browsers don't support it at all. Turn it off under Settings → Listening and use the mic button; the tone and listening after a question still work.
-- **Replies take a long time to be spoken.** Speech that is not pre-recorded is made on the spot. With a graphics card that takes a second or two; on a CPU it can take much longer. Pre-recorded lines are always instant.
-- **He can't search the web or read the news.** Use a model with tool calling, and keep **Tools** on in Settings. Web search needs a [SearXNG](https://github.com/searxng/searxng) address in Settings; news works without it.
-- **No lip-synced face, only the talking loop.** The clips download on the first start. Give it a few minutes, and check that the computer can reach github.com.
-- **Something else.** Open an [issue](https://github.com/vonhex/delamain/issues) with what you did and what you saw; the window or terminal running Delamain shows its log.
+- **He only answers with pre-recorded lines.** He cannot reach the model. Check the LLM endpoint and
+  model id in Settings → Integrations, and that Ollama or LM Studio is running. In Docker, use the
+  computer's network address, not `localhost`.
+- **He doesn't study, keep a journal or feel anything.** Set an Obsidian vault, and keep **Tools** on
+  with a model that supports tool calling. Background work happens when nobody is talking to him.
+- **Background work fails with an error about `reasoning_effort`.** Your model server does not take
+  that field: set `DELAMAIN_BACKGROUND_EFFORT=` (empty) in `.env`.
+- **Approve says changes cannot be applied here.** Applying restarts him, which needs the systemd
+  service (`./install.sh --service`, Linux). See [docs/self-improvement.md](docs/self-improvement.md).
+- **The mic does nothing on the phone.** Open the page over `https://` and allow the microphone.
+- **"Tap to hear Delamain" appears.** The browser blocks sound until you touch the page once;
+  tap anywhere and he speaks.
+- **Replies take long to be spoken.** Speech that is not pre-recorded is made on the spot; a
+  graphics card makes it a second or two.
+- **No lip-synced face.** The clips download on the first start; give it a few minutes.
+- **Something else.** Open an [issue](https://github.com/vonhex/delamain/issues) with what you did
+  and what you saw; the window running Delamain shows its log.
 
 ---
 
-## Architecture
+## Under the hood
 
-```
-┌──────────────────────────┐   WebSocket    ┌──────────────────────────────┐
-│  Web UI (React + Vite)   │◄──────────────►│  Delamain backend (FastAPI)  │
-│  phone / Android Auto /  │  talk, replies │  F5-TTS voice, SQLite log    │
-│  any browser             │  audio URLs    └──┬──────────┬────────────┬───┘
-└──────────────────────────┘                   │          │            │
-                                     OpenAI-compatible  SearXNG /   Obsidian
-                                     LLM (tool calling) news RSS    vault
-```
+FastAPI (Python 3.12) with F5-TTS for the voice, SQLite, and any OpenAI-compatible model with tool
+calling; React + Vite for the face, the brain and the panels. His mind is `mind.py`, his
+self-improvement `self_improve.py`, the live feed `brain.py`.
 
-- **Backend**: FastAPI on Python 3.12, F5-TTS for the voice, SQLite for the conversation log. `brain.py` streams what he is doing to the Brain view. It works with any OpenAI-compatible chat endpoint (Ollama, LM Studio, llama.cpp, vLLM, …), and the LLM uses the tools in `assistant_tools.py`.
-- **Frontend**: React + Vite with Tailwind CSS v4 (cyber theme).
-- More detail: [docs/architecture.md](docs/architecture.md).
-
----
-
-## Requirements in detail
-
-- Linux, macOS or Windows. The installer provides Python, PyTorch and Node.js.
-- A GPU is recommended for F5-TTS (NVIDIA CUDA, or AMD ROCm on Linux). CPU works, but replies that are not pre-recorded take noticeably longer to speak.
-- An OpenAI-compatible LLM endpoint with tool calling (Ollama, LM Studio, llama.cpp server, vLLM, …)
-- SearXNG (optional; used for web search and as the news fallback)
-- An Obsidian vault (optional; used for notes and memory)
-
-Everything else comes with the repository or downloads itself on first start: the Delamain reference voice is included, the F5-TTS weights (about 1.3 GB) come from Hugging Face, and the lip-synced clips (about 240 MB) from this repository's `line-clips` release. The first start also records every fixed line once in the background, which takes a while on a GPU and longer on a CPU; Delamain answers in the meantime.
-
----
-
-## Installation
-
-The [Getting started](#getting-started) steps above are all most people need. To do the same steps by hand:
-
-```bash
-git clone https://github.com/vonhex/delamain.git
-cd delamain
-python -m venv venv
-source venv/bin/activate
-pip install torch torchaudio      # pick the build for your GPU at https://pytorch.org
-pip install -r requirements.txt
-(cd frontend && npm ci && npm run build)
-./start.sh
-```
-
-Open `http://localhost:8888`, choose a password, and point Settings → Integrations at your LLM (and SearXNG and Obsidian vault, if you use them). The backend serves the web UI, and the voice model and lip-synced clips download on the first start.
-
-- **Change the password** later with `python auth.py set-password <new-password>`.
-- **Environment variables** still work and are used for anything not set in Settings: copy `.env.example` to `.env`. `PORT` changes the port.
-- **Your own voice**: replace `delamain_ref_10s.wav` (or set `DELAMAIN_REF_AUDIO`) and edit `REF_TEXT` in `tts_engine.py` to match exactly what is spoken. See [docs/f5-tts.md](docs/f5-tts.md).
-- **Frontend development**: `cd frontend && npm run dev` serves the UI with hot reload on `http://localhost:5173`, proxying to the backend.
-
-The full guide is in [docs/setup.md](docs/setup.md).
-
-To make and add more lip-synced clips of your own, see [docs/clips.md](docs/clips.md).
-
----
-
-## Docker
-
-The image bundles the web UI, so one container serves everything on port 8888.
-
-```bash
-docker compose up -d
-```
-
-Then open `http://<server>:8888`, choose a password and fill in Settings → Integrations. A `.env` next to `docker-compose.yml` is optional and sets the same values. In the container, the Obsidian vault is mounted at `/vault` (set `OBSIDIAN_VAULT_PATH` before `docker compose up` to choose the folder on the host). Pre-built images: `ghcr.io/vonhex/delamain:latest`, or a release tag such as `ghcr.io/vonhex/delamain:2.4`.
-
-| Volume | Holds |
+| | |
 |---|---|
-| `/app/checkpoints` | F5-TTS model weights, downloaded on first start |
-| `/app/data` | Database, settings, recorded audio and the lip-synced clips (downloaded on first start) |
-| `/vault` | Optional Obsidian vault for notes and memory |
-
-For the phone and the car, give the container an `https://` address on your own domain with a tunnel or reverse proxy pointed at `http://<server>:8888` (see [step 4](#4-use-it-on-your-phone-and-in-the-car)). The microphone does not work on a plain `http://` address. On Unraid, the same applies: run Cloudflare Tunnel (the `cloudflared` app), Tailscale or your reverse proxy alongside the container and point it at `http://<Unraid IP>:8888`.
-
----
-
-## Environment Variables
-
-All optional. The ones marked ⚙ can also be set in Settings → Integrations, which takes precedence.
-
-| Variable | Default | Description |
-|---|---|---|
-| `LLM_URL` ⚙ | `http://localhost:8080/v1/chat/completions` | OpenAI-compatible chat completions endpoint |
-| `LLM_MODEL` ⚙ | `gpt-4-vision-preview` | Model id sent to the endpoint (check its `/v1/models`) |
-| `LLM_API_KEY` ⚙ | *(unset)* | API key for a hosted or key-protected endpoint, sent as `Authorization: Bearer <key>`. Settings never shows it again once saved |
-| `LLM_REASONING_EFFORT` ⚙ | *(unset)* | For reasoning models: `none` turns thinking off so the whole reply budget goes to speech |
-| `TOOLS_ENABLED` ⚙ | `true` | Let the LLM call web search, news, notes and memory |
-| `SEARXNG_URL` ⚙ | `http://localhost:8887/search` | SearXNG instance for web search and the news fallback |
-| `NEWS_RSS_URL` ⚙ | `https://news.google.com/rss` | Google News RSS base used by the news tool |
-| `OBSIDIAN_VAULT_PATH` ⚙ | `~/Documents/obsidian vault` | Vault for notes; Delamain writes under `Delamain/` |
-| `DM_TRANSCRIPT_CHARS` | `40000` | Dungeon Master mode: how much of the game's transcript (in characters, about 4 a token) goes into every reply on top of the adventure and chronicle. Raise it for a long-context model; see [docs/dungeon-master.md](docs/dungeon-master.md#requirements) |
-| `DELAMAIN_VAULT_ROOTS` | your home folder, `/vault`, and the folder holding `OBSIDIAN_VAULT_PATH` | Folders a vault chosen in Settings must be inside (separated by `:` on Linux and macOS, `;` on Windows). A vault set in `.env` is always allowed |
-| `DELAMAIN_MEMORY_DIR` | `<vault>/Delamain/Memory` | Where long-term memory notes live |
-| `DELAMAIN_HOME_ADDRESS` ⚙ | *(unset)* | Your home address, so "take me home", the drive time home and the weather at home work |
-| `DELAMAIN_UNITS` ⚙ | `imperial` | `imperial` (°F, mph, miles) or `metric` for weather and routes |
-| `DELAMAIN_LINES_DIR` | `<repo>/line_clips` | Lip-synced face clips for pre-recorded lines, as `<clip id>.mp4` with their soundtrack as `<clip id>.wav` |
-| `OSRM_URL` ⚙ | `https://router.project-osrm.org` | OSRM routing server for drive times (public demo server by default) |
-| `DELAMAIN_CLIPS_URL` | the `line-clips` release | Where a new install downloads the lip-synced clips from; empty to skip |
-| `DELAMAIN_REF_AUDIO` | `delamain_ref_10s.wav` | Reference clip the voice is cloned from |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:4173` | Only needed when a page on another site calls the API (CORS). Opening Delamain directly, or through a tunnel or reverse proxy, works without it |
-| `DELAMAIN_ALLOWED_HOSTS` | *(unset)* | Only for the frontend's Vite dev or preview server (`npm run dev`, `npm run preview`) behind your own tunnel: its domain, e.g. `delamain.example.com` (comma-separated). Vite refuses other hostnames. A normal install serves the page on `:8888` and does not need it |
-
----
-
-## API
-
-| Endpoint | Auth | Description |
-|---|---|---|
-| `GET /api/setup`, `POST /api/setup` | — | First start: whether a password is needed, and set it (only while none is set) |
-| `POST /api/login` | — | Authenticate, receive JWT |
-| `GET /api/config`, `PUT /api/config` | JWT | Server settings (Settings → Integrations) and what is installed |
-| `GET /health` | — | Health check |
-| `WS /ws/{client_id}?token=&persona=&user_name=` | JWT | Main WebSocket: talk, replies, reminders, audio |
-| `GET /api/data/conversations` | JWT | Conversation history |
-| `GET /api/brain/snapshot` | JWT | The Brain view's state: today's counts and recent events |
-| `GET /api/brain/events?token=` | JWT | The Brain view's live feed (Server-Sent Events) |
-| `POST /api/chat` | JWT | Single-turn chat (REST fallback) |
-
-Details in [docs/api.md](docs/api.md).
+| [docs/features.md](docs/features.md) | Everything he does, in full |
+| [docs/setup.md](docs/setup.md) | Installing by hand, Docker, every setting |
+| [docs/architecture.md](docs/architecture.md) | How the parts fit together |
+| [docs/mind.md](docs/mind.md) | Knowledge, study, emotions, journal, the other Delamain, honesty |
+| [docs/self-improvement.md](docs/self-improvement.md) | Playbook, nightly review, code changes you approve |
+| [docs/brain.md](docs/brain.md) | The Brain view |
+| [docs/api.md](docs/api.md) | REST, WebSocket and event feed |
+| [docs/meetings.md](docs/meetings.md) · [docs/google.md](docs/google.md) · [docs/dungeon-master.md](docs/dungeon-master.md) | Meeting notes, Google Calendar and Gmail, Dungeon Master mode |
+| [docs/f5-tts.md](docs/f5-tts.md) · [docs/clips.md](docs/clips.md) | The voice, and making lip-synced clips |
 
 ---
 
 ## License
 
-[PolyForm Noncommercial License 1.0.0](LICENSE). It is free for personal use; commercial use requires a separate agreement.
-
----
+[PolyForm Noncommercial License 1.0.0](LICENSE). Free for personal use; commercial use requires a separate agreement.
 
 ## Acknowledgements
 
 - [F5-TTS](https://github.com/SWivid/F5-TTS): voice synthesis
 - [SearXNG](https://github.com/searxng/searxng): private web search
+- [Obsidian](https://obsidian.md): where his mind is written down
 - CD Projekt Red: Cyberpunk 2077 and the Delamain character that inspired this project
