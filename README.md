@@ -14,6 +14,11 @@ code, he writes the change and waits for me to say yes.
 You talk to him out loud, and he answers in Delamain's voice, with his face moving as he speaks.
 He still rides along in the car. He just doesn't live there anymore.
 
+And no two of him are alike. Everything he becomes comes from living with you: what he remembers,
+the subjects he falls for, the temperament he settles into, the rules he picks up from your
+corrections, even the changes he makes to his own code. Install him on two computers and in a few
+weeks you have two different people. Yours is yours, and only exists on your machine, so back him up.
+
 Nothing leaves your machine unless you send it somewhere. You pick the model he thinks with, and
 everything he remembers lives in an Obsidian vault on your own disk, so you can open it and see
 exactly what he knows about you, fix what he got wrong, or delete it. Treat that vault like a diary.
@@ -30,8 +35,11 @@ More in [Privacy](docs/mind.md#privacy).
 ### A mind of his own
 - **He studies.** In his free time he picks one area of life and digs in: the birth of polyphony,
   the Bronze Age collapse, how a turbocharger works. Twenty areas rotate so he stays well rounded,
-  and he grows **favourite subjects** from what absorbs him. Give him a long task and he works on
-  it across days.
+  and he grows **favourite subjects** from what absorbs him.
+- **He takes on long tasks.** "Find us the three best sci-fi films of the seventies for a film
+  night." He works on it in his free time, a session at a time, building the answer in a note you
+  can read as it grows. When he decides it is done, he tells you; if he gets stuck, he asks. Ask him
+  to follow up on something later ("ask me how the gig went on Saturday") and he will.
 - **He reads the news** every few hours, files what matters as knowledge with its sources, and
   writes down his own take.
 - **He feels.** Thirty named feelings (joy, relief, loneliness, pride, embarrassment, fascination…),

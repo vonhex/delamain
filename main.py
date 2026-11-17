@@ -1010,13 +1010,14 @@ VERIFY_REPLIES = os.environ.get("DELAMAIN_VERIFY", "1") not in ("0", "false", "o
 VERIFY_PROMPT = (
     "[SYSTEM CHECK — not from the passenger, and never mention it. Your last message is a DRAFT that has not been spoken. "
     "Audit it strictly against what is actually above: the system context (long-term memory and notes), the "
-    "passenger's own words, and the tool results in this turn. Problems are: (1) saying you did, saved, set, sent, "
-    "created, printed, registered, checked, fixed or asked something when no tool result above shows it succeeded, or "
-    "when a tool result says it failed; (2) a specific fact about the passenger or their life, things, people or past "
-    "conversations that appears nowhere above; (3) a factual statement a tool result or your memory "
-    "flatly contradicts; (4) not answering what the passenger last asked. Your opinions, interpretations, analogies and "
-    "wit about known facts are NOT problems, nor is general knowledge or a clearly labelled guess; flag only unsupported "
-    "claims of fact or of action. "
+    "passenger's own words, and the tool results in this turn. Every tool call and its result in this turn appear ABOVE "
+    "the draft and happened before it, so a claim one of them supports is supported. Problems are only: (1) saying you "
+    "did, saved, set, sent, created, printed, checked or fixed something when no tool result above shows it, or when a "
+    "tool result says it failed; (2) a specific fact about the passenger or their life, things, people or past "
+    "conversations that appears nowhere above; (3) a factual statement a tool result or your memory flatly "
+    "contradicts. Your opinions, interpretations, questions, analogies and wit are NOT problems, nor is general "
+    "knowledge or a clearly labelled guess; flag only unsupported claims of fact or of action, and when unsure, "
+    "answer OK. "
     "Answer with exactly OK if there is no problem. Otherwise answer FIX: and then one short line per problem, quoting "
     "the words at fault.]")
 
@@ -1253,6 +1254,10 @@ async def _speak_to_all(text: str, source: str) -> bool:
 
 def _appraise_quietly(user_text: str, reply: str, recent: str) -> None:
     try:
+        _mind.note_reply(reply)     # task news he passed on, follow-ups he raised
+    except Exception as e:
+        print(f"[Mind] task bookkeeping skipped: {e}")
+    try:
         _mind.appraise(user_text, reply, recent)
     except Exception as e:
         print(f"[Mind] appraisal skipped: {e}")
@@ -1323,6 +1328,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     called = set() if called is None else called
     nudged = False
     verified = False
+    rewritten_from = ""        # the draft the check sent back, kept in case its rewrite comes back broken
     action_nudges = 0
     latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
     wants_news = isinstance(latest, str) and len(latest) < 120 and bool(_NEWS_REQUEST.search(latest))
@@ -1411,6 +1417,10 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                      "If no tool can do it, say so plainly. Do not describe a result you have not seen.]"},
                 ]
                 continue
+            if rewritten_from and len(rewritten_from) >= 150 and len(content) < 0.5 * len(rewritten_from):
+                print(f"[Verify] Rewrite came back as a fragment ({len(content)} of {len(rewritten_from)} chars); "
+                      f"speaking the draft instead")
+                content, rewritten_from = rewritten_from, ""
             # Last, the check before speaking: one rewrite if the draft claims or invents things.
             if VERIFY_REPLIES and not verified and not last_round and len(content) > 40:
                 verified = True
@@ -1429,12 +1439,13 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                             _self.record_tool("verify_gate", "Tool failed: draft rewritten — " + problems[:170], 0)
                         except Exception:
                             pass
+                    rewritten_from = content
                     messages = messages + [
                         {"role": "assistant", "content": content},
                         {"role": "user", "content": "[SYSTEM: Before that was spoken, a check found problems in it:\n"
-                         + problems + "\nGive your reply to the passenger again with each of those fixed: drop or correct "
-                         "the statement, call a tool now if one would really do what you claimed, and say plainly what you "
-                         "do not know or could not do. Do not mention this check.]"},
+                         + problems + "\nGive the SAME reply again, keeping everything that was fine word for word and "
+                         "changing only the statements listed: drop or correct each one. Do not call tools again for anything "
+                         "already done above. Do not mention this check.]"},
                     ]
                     continue
                 if _self:

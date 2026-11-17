@@ -47,9 +47,29 @@ become **favourite subjects**: they come round more often and sooner, and he may
 subject he loved. Areas that match what he knows about you come round a little more often too.
 His favourites show in the Self panel, and he lights up about them in conversation.
 
-Each session ends with the next question he wants answered. Give him **long tasks** ("dig into
-this over the next week") and research tasks get every other session; they survive restarts and
-are tracked in `Delamain/Tasks.md`.
+Each session ends with the next question he wants answered.
+
+### Long tasks
+
+Ask him to take something on ("find us the three best sci-fi films of the seventies for a film
+night", "work out which home media server I should run, and how to set it up") and he saves it as a
+**research task**. Then he really works on it:
+
+- Every other free-time session goes to the open research task he has touched least recently. He
+  reads his working note, `Delamain/Tasks/#<n> <task>.md`, picks the next step, researches it on the
+  web, and rewrites his **answer so far**: the deliverable itself (the list, the comparison, the plan),
+  with his findings and sources below it. You can read it grow in Obsidian.
+- After each session he judges whether the answer fully meets the goal. The first time he thinks it
+  does, he does not trust it: the next session is a **check**, verifying the answer's claims against
+  fresh sources and filling gaps. Only then is the task **done**: he tells you the gist at the next
+  natural moment in conversation and in your morning brief, and the full answer stays in the note.
+  Every task takes at least two sessions; bigger ones carry on across days and restarts.
+- If after twelve sessions it still is not finished, he marks it **stuck** and asks you how to go on.
+- A **follow-up** ("ask me how the gig went on Saturday") is not researched: from the day you gave,
+  he raises it in conversation. Once he has asked, it waits a day before coming up again, and it
+  closes when he records what you told him.
+- Projects and other tasks are kept and shown to him so he can keep track. Every task is listed in
+  `Delamain/Tasks.md` and in the Self panel.
 
 ### The other Delamain
 
@@ -93,6 +113,22 @@ announced. Strong feelings are kept in `Delamain/Self/Feelings.md`.
 rather than with a pre-recorded line.
 
 ---
+
+## One of a kind
+
+Every Delamain starts the same, and none stays that way. What makes yours *yours*:
+
+- **His memory of you** and of the people and places in your life.
+- **His knowledge**: what he has read and studied, and how his notes link together.
+- **His favourite subjects**, grown from what absorbed him.
+- **His temperament**: the resting mood he drifts toward, night by night, from the life he has had.
+- **His opinions, journal and self-portrait**, and the other Delamain's opinions, argued out with him.
+- **His playbook**: the rules he learned from your corrections, and the settings he tuned.
+- **His code**: the changes he proposed and you approved.
+
+All of that lives in two places: your vault (`Delamain/`) and his working state (`self/`, or
+`data/self` in Docker). **Back both up.** A reinstall keeps them; deleting them would give you a
+newborn Delamain with none of his past.
 
 ## Growing more alive
 
@@ -158,7 +194,7 @@ on your phone for three hours.
 | `Delamain/Study/` | One log per day of what he studied |
 | `Delamain/Conversations/` | Talks with the other Delamain |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
-| `Delamain/Tasks.md` | Long tasks |
+| `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |
 | `Delamain/Self/` | Journal, opinions, who he is becoming, feelings, playbook, reviews |
 
 His working state (mood, feelings, interests, tasks, the other Delamain's opinions) is in `self/`
