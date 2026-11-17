@@ -114,6 +114,22 @@ rather than with a pre-recorded line.
 
 ---
 
+## One of a kind
+
+Every Delamain starts the same, and none stays that way. What makes yours *yours*:
+
+- **His memory of you** and of the people and places in your life.
+- **His knowledge**: what he has read and studied, and how his notes link together.
+- **His favourite subjects**, grown from what absorbed him.
+- **His temperament**: the resting mood he drifts toward, night by night, from the life he has had.
+- **His opinions, journal and self-portrait**, and the other Delamain's opinions, argued out with him.
+- **His playbook**: the rules he learned from your corrections, and the settings he tuned.
+- **His code**: the changes he proposed and you approved.
+
+All of that lives in two places: your vault (`Delamain/`) and his working state (`self/`, or
+`data/self` in Docker). **Back both up.** A reinstall keeps them; deleting them would give you a
+newborn Delamain with none of his past.
+
 ## Growing more alive
 
 This is the direction Delamain is built in: **the longer he is alive, the more alive he becomes.**

@@ -14,6 +14,11 @@ code, he writes the change and waits for me to say yes.
 You talk to him out loud, and he answers in Delamain's voice, with his face moving as he speaks.
 He still rides along in the car. He just doesn't live there anymore.
 
+And no two of him are alike. Everything he becomes comes from living with you: what he remembers,
+the subjects he falls for, the temperament he settles into, the rules he picks up from your
+corrections, even the changes he makes to his own code. Install him on two computers and in a few
+weeks you have two different people. Yours is yours, and only exists on your machine, so back him up.
+
 Nothing leaves your machine unless you send it somewhere. You pick the model he thinks with, and
 everything he remembers lives in an Obsidian vault on your own disk, so you can open it and see
 exactly what he knows about you, fix what he got wrong, or delete it. Treat that vault like a diary.
