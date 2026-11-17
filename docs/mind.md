@@ -2,7 +2,7 @@
 
 Delamain is not idle between your questions. While you are away he reads, studies, feels, writes
 in his journal and argues with a second version of himself. All of it lives on your own computer
-and in your Obsidian vault, where you can read and edit every word.
+and in your Obsidian vault, where you can see, correct or delete anything he keeps (see [Privacy](#privacy)).
 
 The mind is `mind.py`. It needs an Obsidian vault (Settings → Integrations) and a language model
 with tool calling; everything else is automatic.
@@ -136,6 +136,26 @@ on your phone for three hours.
 
 His working state (mood, feelings, interests, tasks, the other Delamain's opinions) is in `self/`
 next to the code (`DELAMAIN_SELF_DIR`; `data/self` in Docker).
+
+## Privacy
+
+What he writes to the vault is personal: what you have told him about yourself, your meetings, his
+journal and his feelings about your conversations. It is kept on your own disk, never sent to a
+cloud service by Delamain, and it is yours to read, correct or delete. Treat it like a private diary:
+
+- **Keep the vault private.** Don't put it in a public or shared folder, or a sync service you don't
+  trust. Obsidian Sync is end-to-end encrypted; a plain shared drive is not.
+- **Protect the computer.** If other people can reach the machine or its disks, turn on disk
+  encryption (BitLocker, FileVault, LUKS).
+- **What stays out of it.** His login password (stored only as a hash), your model's API key, and
+  your Google sign-in are kept in Delamain's own database and settings, never in the vault. Don't ask
+  him to remember passwords or card numbers: anything you ask him to remember is written down.
+- **Outside text cannot write to his mind.** In a turn where he has read a web page, the news, an
+  email or a note, the tools that change his rules or his code are refused, and corrections to his
+  knowledge are refused too.
+- **Forgetting.** Ask him to forget something, edit or delete the note in Obsidian, or delete his
+  working state in `self/`. Removed knowledge notes go to the vault's `.trash`; empty it to remove
+  them for good.
 
 ## Settings
 

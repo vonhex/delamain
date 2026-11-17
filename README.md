@@ -8,9 +8,11 @@ reasons of his own, keeps a journal, argues with a second version of himself, an
 code when you approve it. He is modeled on Delamain from Cyberpunk 2077, and he started out as a
 voice companion for the drive. He has outgrown the car, but he still rides along.
 
-Nothing leaves your machine unless you point him at it. His model runs where you choose, his
-memory is your own Obsidian vault, and everything he thinks, feels and learns is written there in
-plain Markdown for you to read and edit.
+Nothing leaves your machine unless you point him at it. His model runs where you choose, and his
+memory stays on your own disk, in an Obsidian vault you control: you can see exactly what he knows
+about you, correct it, or delete it, and nothing is hidden in a cloud account. Keep that vault as
+private as a diary. His password, keys and sign-ins are stored separately and never written into it.
+See [Privacy](docs/mind.md#privacy).
 
 > [!WARNING]
 > **Delamain is a hobby project made for fun.** It is not a safety system. Do not interact with any interface, voice or otherwise, in a way that distracts you from driving. The authors accept no liability for accidents, injuries, traffic violations, or any other incidents arising from the use of this software. Use at your own risk. Always prioritise road safety above all else.
