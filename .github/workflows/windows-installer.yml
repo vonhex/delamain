@@ -91,10 +91,10 @@ jobs:
           $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir", '/TASKS=desktopicon', '/LOG=install.log' -Wait -PassThru
           if ($p.ExitCode) { Get-Content install.log; throw "setup exited with $($p.ExitCode)" }
           foreach ($f in 'main.py', 'brain.py', 'install.ps1', 'start.bat', 'requirements.txt', 'windows\launch.ps1',
-                         'windows\first-setup.ps1', 'windows\delamain.ico', 'frontend\dist\index.html', 'delamain_ref_10s.wav') {
+                         'windows\first-setup.ps1', 'windows\delamain.ico', 'frontend\dist\index.html', 'delamain_ref_clean.wav', 'mind.py', 'self_improve.py', 'pronunciations.txt') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "missing after install: $f" }
           }
-          foreach ($f in 'windows\delamain.iss', '.git', 'frontend\node_modules') {
+          foreach ($f in 'windows\delamain.iss', '.git', 'frontend\node_modules', 'delamain_ref_10s.wav') {
             if (Test-Path (Join-Path $dir $f)) { throw "should not be installed: $f" }
           }
           $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Delamain\Delamain.lnk'
