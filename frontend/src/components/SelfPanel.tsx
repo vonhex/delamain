@@ -16,7 +16,8 @@ type Mind = {
   last_journal: string | null;
   last_study?: { t: number; subject: string; summary?: string; learned?: number; next?: string; error?: string } | null;
   studies_today?: number; questions?: string[];
-  tasks?: { id: number; title: string; status: string; kind?: string; log?: { at: string; text: string }[] }[];
+  tasks?: { id: number; title: string; status: string; kind?: string; log?: { at: string; text: string }[];
+    sessions?: number; answer?: string; done_at?: string; when?: string }[];
   last_brief?: { date: string; delivered?: boolean; text?: string } | null;
   last_twin?: { t: number; date: string; topic: string; summary?: string; question?: string; started_by?: string } | null;
   twin_talking?: boolean;
@@ -142,7 +143,25 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
               })()}
               {mind.questions && mind.questions.length > 0 && <p className="text-xs text-gray-400">Open questions: {mind.questions.map(q => `“${q}”`).join(' · ')}</p>}
               {(mind.twin_talking || mind.last_twin) && <p className="text-xs text-gray-400">Talking with the other Delamain (transcripts in <span className="font-mono">Delamain/Conversations/</span>): {mind.twin_talking ? <b className="text-pink-200">talking now — watch in the Brain view…</b> : mind.last_twin && <>last {when(mind.last_twin.t)} about <b className="text-gray-300">{mind.last_twin.topic}</b>. {mind.last_twin.summary}</>}</p>}
-              {mind.tasks && mind.tasks.some(t => t.status === 'open') && <div className="text-xs text-gray-400">Open tasks (<span className="font-mono">Delamain/Tasks.md</span>):<ul className="list-disc pl-5 text-gray-300">{mind.tasks.filter(t => t.status === 'open').map(t => <li key={t.id}>#{t.id} {t.title}{t.log && t.log.length > 0 && <span className="text-gray-500"> — {t.log[t.log.length - 1].text}</span>}</li>)}</ul></div>}
+              {mind.tasks && mind.tasks.some(t => ['open', 'stuck'].includes(t.status) || (t.status === 'done' && !!t.answer)) && (
+                <div className="text-xs text-gray-400 space-y-1">Tasks (<span className="font-mono">Delamain/Tasks/</span>):
+                  <ul className="list-disc pl-5 text-gray-300 space-y-1">
+                    {mind.tasks.filter(t => ['open', 'stuck'].includes(t.status) || (t.status === 'done' && !!t.answer)).slice(-8).map(t => (
+                      <li key={t.id}>
+                        <b>#{t.id} {t.title}</b>{' '}
+                        <span className={t.status === 'done' ? 'text-green-300' : t.status === 'stuck' ? 'text-amber-300' : 'text-gray-500'}>
+                          {t.status === 'done' ? `done ${t.done_at ?? ''}` : t.status === 'stuck' ? 'stuck: needs you'
+                            : t.kind === 'research' ? `researching · ${t.sessions ?? 0} session${t.sessions === 1 ? '' : 's'}`
+                            : t.kind === 'follow_up' ? `follow-up from ${t.when ?? 'tomorrow'}` : t.kind}
+                        </span>
+                        {t.status === 'done' && t.answer
+                          ? <div className="text-gray-400 line-clamp-3 whitespace-pre-line">{t.answer}</div>
+                          : t.log && t.log.length > 0 && <div className="text-gray-500">{t.log[t.log.length - 1].text}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {mind.last_brief && <p className="text-xs text-gray-400">Morning brief {mind.last_brief.date} ({mind.last_brief.delivered ? 'spoken' : 'written only'}, in <span className="font-mono">Delamain/Briefings/</span>): {mind.last_brief.text?.slice(0, 220)}</p>}
               {mind.opinions.length > 0 && <ul className="list-disc pl-5 text-xs text-gray-300">{mind.opinions.map(o => <li key={o.topic}><b>{o.topic}:</b> {o.view}</li>)}</ul>}
               <div className="flex gap-3 text-xs">

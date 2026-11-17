@@ -1253,6 +1253,10 @@ async def _speak_to_all(text: str, source: str) -> bool:
 
 def _appraise_quietly(user_text: str, reply: str, recent: str) -> None:
     try:
+        _mind.note_reply(reply)     # task news he passed on, follow-ups he raised
+    except Exception as e:
+        print(f"[Mind] task bookkeeping skipped: {e}")
+    try:
         _mind.appraise(user_text, reply, recent)
     except Exception as e:
         print(f"[Mind] appraisal skipped: {e}")
