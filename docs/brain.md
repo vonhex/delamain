@@ -6,7 +6,7 @@ left sidebar, or add `#brain` to the address (`http://localhost:8888/#brain`) to
 straight away, for example on a second screen or a phone propped on the dash. Esc or the ✕
 closes it.
 
-<img src="../Screenshots/brain.png" alt="The Brain view: Delamain thinking, with two tools in flight" />
+<img src="../Screenshots/brain.png" alt="The Brain view: Delamain remembering, feeling fascination, and answering" />
 
 It is not a generic picture of "an AI". Every flash is a real event from Delamain's own
 backend: the moment he hears you, each call to the language model (with its token counts
