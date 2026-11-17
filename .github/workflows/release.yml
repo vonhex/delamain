@@ -44,7 +44,7 @@ jobs:
 
           # The reference voice is the one .wav that ships (the voice is cloned from it).
           rsync -a . "$DIR/" \
-            --include='/delamain_ref_10s.wav' \
+            --include='/delamain_ref_clean.wav' \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='frontend/node_modules' \
@@ -56,7 +56,9 @@ jobs:
             --exclude='audio_output' \
             --exclude='*.wav' \
             --exclude='*.db' \
-            --exclude='*.sqlite'
+            --exclude='*.sqlite' \
+            --exclude='/self' \
+            --exclude='pronunciations.local.txt'
 
           tar -czf "delamain-${VERSION}.tar.gz" "$DIR/"
           zip -r  "delamain-${VERSION}.zip"     "$DIR/"

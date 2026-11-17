@@ -127,6 +127,36 @@ All need the bearer token. See [meetings.md](meetings.md).
 
 While a meeting is written up, every open page gets `{"type": "meeting", "meeting": {…}}` over the WebSocket.
 
+### His notes in the Brain view
+
+| Call | |
+|---|---|
+| `GET /api/brain/graph` | `{"vault": "<vault folder name>", "nodes": [{"id": "Delamain/Knowledge/Rome.md", "title": "Rome", "region": "memory", "size": 12, "mtime": 1794700000, "links": ["Delamain/Knowledge/Italy.md"]}]}` |
+| `GET /api/brain/note?id=<vault path>&full=1` | one note: `title`, `text` (the first part) and, with `full=1`, `html` (the whole note rendered, raw HTML escaped, `[[links]]` as `note:<path>` links). Only `.md` files inside the vault, never hidden folders |
+
+### His mind
+
+See [mind.md](mind.md). 404 when `mind.py` could not load.
+
+| Call | |
+|---|---|
+| `GET /api/mind` | mood, feelings (`emotions`, `all_emotions`, `families`, `half_lives`), `thought`, `moments`, `baseline`, portrait, opinions, studies, `interests`, `favourites`, `questions`, `tasks`, `last_brief`, `last_twin` |
+| `POST /api/mind/news` | read the news now |
+| `POST /api/mind/journal` | write tonight's journal now |
+| `POST /api/mind/twin` | start a conversation with the other Delamain (runs in the background) |
+
+### Self-improvement
+
+See [self-improvement.md](self-improvement.md). 404 when `self_improve.py` could not load.
+
+| Call | |
+|---|---|
+| `GET /api/self` | playbook `rules`, `skills`, `tuning`, `stats`, `proposals`, `busy` (a draft in progress), `last_review`, `history`, and `can_apply` (empty, or why changes cannot be applied here), `reviewer`, `claude` |
+| `POST /api/self/proposals/{id}/{action}` | `approve`, `reject`, `rollback`, `retry`, or `claude` (hand it to Claude Code). 409 with the reason when it cannot be done now |
+| `POST /api/self/review` | run the nightly review now |
+
+Changes to the Self panel arrive over the WebSocket as `{"type": "self", "self": {…}}`.
+
 ### `GET /api/brain/events?token=`
 
 The Brain view's live feed, as Server-Sent Events. The browser's `EventSource` cannot send

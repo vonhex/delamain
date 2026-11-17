@@ -5,7 +5,8 @@ write_report() picks the source notes, then a background thread asks the languag
 the whole write-up in one long call, saves it as Markdown in <vault>/Delamain/Reports/ and
 prints that to a PDF beside it with headless Chromium. When it is done, `notify` (set by
 main) tells whoever is there. Editing the Markdown in Obsidian and asking for the PDF again
-(remake_report_pdf) re-prints it without rewriting a word.
+(remake_report_pdf) re-prints it without rewriting a word; correct_report puts exact name
+corrections into a report and its PDF, and checks both before saying so.
 """
 from __future__ import annotations
 
@@ -37,6 +38,7 @@ notify = None
 
 _lock = threading.Lock()
 _running: dict | None = None
+_edit_lock = threading.Lock()   # one change to a saved report (Markdown and PDF) at a time
 
 
 SYSTEM = """You write professional field reports from meeting notes and transcripts, for the person who \
@@ -50,7 +52,7 @@ recognition, so fix obvious mis-hearings of ordinary words, but keep anything un
 - Where a section needs something that was not said, write "*To confirm:*" and what is needed, \
 rather than guessing. Gather all of these in the "Information still needed" section as well.
 - Attribute opinions and requests to the person who said them, when that is clear.
-- Never quote or reuse a mis-heard word from the transcript (e.g. "Ruba" for Aruba): write the real \
+- Never quote or reuse a mis-heard word from the transcript (e.g. "Jon" for John, "Sisco" for Cisco): write the real \
 name when it is clear, or "*To confirm:*" when it is not.
 - Due dates and owners only as they were said; otherwise "*To confirm*".
 - Plain, precise, professional English. No filler, no marketing tone, no mention of AI, \
@@ -377,11 +379,15 @@ def _frontmatter(text: str) -> tuple[dict, str]:
     for line in m.group(1).splitlines():
         k, sep, v = line.partition(":")
         if sep and not line.startswith(" "):
-            v = v.strip()
-            if len(v) >= 2 and v[0] == v[-1] == '"':
-                v = v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
-            meta[k.strip()] = v
+            meta[k.strip()] = _unquote(v)
     return meta, text[m.end():]
+
+
+def _unquote(v: str) -> str:
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        v = v[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return v
 
 
 CSS = """
@@ -461,13 +467,178 @@ def render_pdf(md_path: Path) -> Path:
 
 def remake_report_pdf(report: str) -> str:
     """Print a report's Markdown (after editing it in Obsidian) to its PDF again."""
-    p = _find_report(report)
-    if not p:
-        return "No report by that name in " + REPORTS_FOLDER + "."
-    pdf = render_pdf(p)
+    with _edit_lock:
+        p = _find_report(report)
+        if not p:
+            return "No report by that name in " + REPORTS_FOLDER + "."
+        pdf = render_pdf(p)
     if notify:
         notify({"ok": True, "quiet": True, "title": p.stem, "pdf": _rel(pdf), "markdown": _rel(p)})
     return f"Printed {_rel(pdf)} again from {_rel(p)}."
+
+
+def note_to_report(note: str, title: str = "", kind: str = "") -> str:
+    """Put an existing vault note into the Reports screen as a PDF, word for word (nothing is rewritten)."""
+    src = _note_in_vault(note)
+    if not src:
+        hits = [p for p in _vault().rglob("*.md") if not any(x.startswith(".") for x in p.relative_to(_vault()).parts)
+                and note and all(w.lower() in p.stem.lower() for w in re.findall(r"[\w'-]{3,}", note))]
+        src = max(hits, key=lambda p: p.stat().st_mtime) if hits else None
+    if not src:
+        return f"Not done: no note matching '{note}' in the vault. Nothing was added to Reports."
+    if src.is_relative_to(_vault() / REPORTS_FOLDER):
+        return f"{_rel(src)} is already a report; use remake_report_pdf to print it again."
+    meta, body = _frontmatter(src.read_text(encoding="utf-8", errors="replace"))
+    m = re.match(r"\A\s*#\s+(.+)\n", body)
+    heading = m.group(1).strip() if m else ""
+    if m:
+        body = body[m.end():]
+    title = (title or heading or src.stem).strip()
+    with _edit_lock:
+        md = _save_markdown(kind or "Note", title, body, [src], "", "Delamain")
+        try:
+            pdf = render_pdf(md)
+        except Exception as e:
+            md.unlink(missing_ok=True)
+            return f"Not done: the PDF could not be printed ({e}). Nothing was added to Reports."
+    if not _pdf_ok(pdf):
+        return f"Not done: {_rel(pdf)} came out empty or unreadable."
+    if notify:
+        notify({"ok": True, "title": title, "pdf": _rel(pdf), "markdown": _rel(md)})
+    return f"Done and checked: {pdf.name} is now in the Reports screen (from {_rel(src)}, copied word for word)."
+
+
+_CORRECTABLE = ("title", "prepared_for", "prepared_by")   # frontmatter the PDF's cover and footer show
+_LINK = r"\[\[[^\]\n]*\]\]"                                 # Obsidian links name files; never rewritten
+
+
+def _word_rx(word: str) -> str:
+    return rf"(?<!\w){re.escape(word)}(?!\w)"
+
+
+def _correction_pairs(corrections) -> tuple[dict[str, str], str]:
+    """{wrong: right} from [{"wrong": ..., "right": ...}, ...], or ({}, why not)."""
+    if isinstance(corrections, dict):
+        corrections = [corrections]
+    if not isinstance(corrections, list) or not corrections:
+        return {}, "Give the corrections as a list of {wrong, right} pairs."
+    pairs: dict[str, str] = {}
+    for c in corrections:
+        if not isinstance(c, dict) or not isinstance(c.get("wrong"), str) or not isinstance(c.get("right"), str):
+            return {}, "Each correction needs the exact wrong name and the right one, as text."
+        wrong, right = c["wrong"].strip(), c["right"].strip()
+        if not wrong or not right or "\n" in wrong + right:
+            return {}, "Each correction needs a wrong name and a right name, each on one line; nothing is deleted this way."
+        if wrong == right:
+            continue
+        if pairs.get(wrong, right) != right:
+            return {}, f"'{wrong}' was given two different corrections; say which one is right."
+        pairs[wrong] = right
+    if not pairs:
+        return {}, "Those corrections change nothing."
+    return pairs, ""
+
+
+def _corrected(text: str, pairs: dict[str, str]) -> tuple[str, dict[str, int]]:
+    """The report with every whole-word, exact-case `wrong` made `right` (all at once, so one fix never feeds
+    another) in its body and its cover fields, and how many of each were made."""
+    alts = "|".join(re.escape(w) for w in sorted(pairs, key=len, reverse=True))
+    pattern = re.compile(rf"{_LINK}|(?<!\w)({alts})(?!\w)")
+    counts: dict[str, int] = {}
+
+    def sub(m: re.Match) -> str:
+        if m.group(1) is None:
+            return m.group(0)
+        counts[m.group(1)] = counts.get(m.group(1), 0) + 1
+        return pairs[m.group(1)]
+
+    m = re.match(r"\A---\n(.*?)\n---\n", text, flags=re.S)
+    if not m:
+        return pattern.sub(sub, text), counts
+    lines = []
+    for line in m.group(1).split("\n"):
+        k, sep, v = line.partition(":")
+        if sep and not line.startswith(" ") and k.strip() in _CORRECTABLE:
+            fixed = pattern.sub(sub, _unquote(v))
+            if fixed != _unquote(v):
+                line = f"{k.strip()}: {_yaml(fixed)}"
+        lines.append(line)
+    return "---\n" + "\n".join(lines) + "\n---\n" + pattern.sub(sub, text[m.end():]), counts
+
+
+def _names_left(text: str, pairs: dict[str, str]) -> list[str]:
+    """Wrong names still in the report's body or cover (read back from the file)."""
+    meta, body = _frontmatter(text)
+    seen = re.sub(_LINK, " ", "\n".join([body] + [meta.get(k, "") for k in _CORRECTABLE]))
+    return [w for w in pairs
+            if not any(re.search(_word_rx(w), r) for r in pairs.values())   # e.g. "Kim" -> "Sam Kim" keeps "Kim"
+            and re.search(_word_rx(w), seen)]
+
+
+def _write_atomic(p: Path, text: str) -> None:
+    tmp = p.with_name(f".{p.stem}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def _pdf_ok(pdf: Path) -> bool:
+    try:
+        data = pdf.read_bytes()
+    except OSError:
+        return False
+    return len(data) >= 1000 and data.startswith(b"%PDF-") and b"%%EOF" in data[-2048:]
+
+
+def correct_report(report: str = "latest", corrections: list[dict] | None = None) -> str:
+    """Put exact name corrections (e.g. Jon -> John) into a saved report's text, title and cover, then
+    print its PDF again. Success is only reported once the saved Markdown and the new PDF have been
+    read back; otherwise both are put back as they were."""
+    pairs, why = _correction_pairs(corrections)
+    if not pairs:
+        return why
+    with _edit_lock:
+        p = _find_report(report)
+        if not p:
+            return "No report by that name in " + REPORTS_FOLDER + "."
+        try:
+            original = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            return f"Could not read {_rel(p)}: {e}. Nothing was changed."
+        new, counts = _corrected(original, pairs)
+        missing = [w for w in pairs if w not in counts]
+        if not counts:
+            return (f"None of {', '.join(repr(w) for w in pairs)} appear as written in {_rel(p)}; nothing was changed. "
+                    "Names must match exactly, capitals included.")
+        pdf = p.with_suffix(".pdf")
+        old_pdf = pdf.read_bytes() if pdf.is_file() else None
+        try:
+            _write_atomic(p, new)
+            saved = p.read_text(encoding="utf-8")
+            if saved != new:
+                raise RuntimeError("the saved Markdown did not read back as written")
+            left = _names_left(saved, pairs)
+            if left:
+                raise RuntimeError("still found after saving: " + ", ".join(left))
+            render_pdf(p)
+            if not _pdf_ok(pdf):
+                raise RuntimeError("the new PDF is not a valid PDF")
+        except Exception as e:
+            try:
+                _write_atomic(p, original)
+                if old_pdf is not None:
+                    pdf.write_bytes(old_pdf)
+                elif pdf.exists():
+                    pdf.unlink()
+            except OSError as e2:
+                return f"Could not correct {_rel(p)} ({e}), and putting it back failed too ({e2}); check it in Obsidian."
+            print(f"[Report] correction of {p.name} failed: {e}")
+            return f"Could not correct {_rel(p)}: {e}. The report and its PDF were left as they were."
+    done = "; ".join(f"{pairs[w]} for {w} ({n}×)" for w, n in counts.items())
+    print(f"[Report] corrected {p.name}: {done}")
+    if notify:
+        notify({"ok": True, "quiet": True, "title": p.stem, "pdf": _rel(pdf), "markdown": _rel(p)})
+    return (f"Corrected {_rel(p)}: {done}. Printed {_rel(pdf)} again; both were read back and checked."
+            + (f" Not found as written, so unchanged: {', '.join(missing)}." if missing else ""))
 
 
 def _find_report(report: str) -> Path | None:

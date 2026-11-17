@@ -61,7 +61,7 @@ export function LoginPage({ onLogin }: Props) {
           >
             DELAMAIN
           </h1>
-          <p className="text-[10px] tracking-[0.45em] text-cyber-blue/35 uppercase mt-1">Executive Transport Intelligence</p>
+          <p className="text-[10px] tracking-[0.45em] text-cyber-blue/35 uppercase mt-1">Emergent Intelligence</p>
         </div>
 
         {/* Card */}

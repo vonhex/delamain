@@ -4,13 +4,37 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [3.0.0] — 2026-11-17 — A mind of his own
+
+Delamain is no longer only a voice for the drive. He is a self-hosted mind: he studies, feels,
+reflects, talks with a second version of himself, and improves his own code with your approval.
 
 ### Added
+- **His mind** ([docs/mind.md](docs/mind.md)): knowledge notes in your vault, one per topic, with sources, corrections and links; he learns in conversation and is handed the notes that matter with every reply. He reads the news every few hours and files what matters with his own take.
+- **Free-time study**: about hourly in the daytime, when nobody needs the model, he studies one of twenty areas of life (music, history, space, philosophy, cooking…), rotating so he stays well rounded, with markets at most one session in six. He rates how much each session absorbed him and grows **favourite subjects** that come round more often. Each session leaves a study log and the next question he wants answered.
+- **Emotions**: thirty named feelings, each with a cause and its own fade, over a five-axis mood that settles toward a resting temperament, which drifts nightly with the life he has. A quiet appraisal after each reply (while it is being spoken) decides what the exchange made him feel, and notes a thought he keeps to himself. Long silences make him lonely; your return makes him glad. Feelings steer his tone, his study and his journal.
+- **Emotions panel**: a new heart icon in the sidebar (its dot takes the colour of his strongest feeling) shows all thirty feelings by family, what he feels now and why, his mood against his resting temperament, what moved him today, and his unspoken thoughts.
+- **The other Delamain**: a sceptical second instance of himself, with his own opinions, whom he talks with in the evenings (or when you ask). You can watch them in the Brain view; transcripts go to `Delamain/Conversations/`.
+- **Journal, opinions and self-portrait** written each night; **long tasks** that survive restarts and are researched in his free time; a spoken **morning brief** from the real weather, calendar, mail, reminders and news.
+- **Self-improvement** ([docs/self-improvement.md](docs/self-improvement.md)): a playbook of rules learned from your corrections, skills, bounded self-tuning, an outcome log, and a nightly review. He drafts changes to his own code, which are checked, optionally reviewed by a second model (the `agy` CLI), and applied only from your **Approve** button, with backup and automatic rollback. Optional **Fix with Claude** button per proposal when Claude Code is installed. The tools that change him are refused in any turn that read outside content.
+- **The check before speaking**: the model reads its draft against his memory and the turn's tool results, and rewrites a reply that claims undone work or invents facts about you (`DELAMAIN_VERIFY=0` turns it off). Replies that say "done" with no tool run are sent back, tool calls written into the text are run instead of read aloud, and he never invents a fact just to save one.
+- **Brain view**: a new **limbic core** (the amygdalae) glows in the colour of his strongest feeling and beats faster when he is moved. **Your vault's notes are stars** in the brain, each in its region, wired by their `[[links]]`; hover for the name, tap for a card, and **read the whole note** in the app on any device. New notes appear, merged or removed ones fade, and he can link, merge and let go of his own knowledge notes.
+- **Conversation, not dictation**: in assistant mode he reacts, adds his own thought and hands the conversation back; "how are you" and kind words are answered from how he feels instead of a recording. A conversation carries on across your devices for three hours.
+- **Reports**: put any note into the Reports screen as a PDF (`note_to_report`), and fix wrong names in a written report, checked before he says it is done (`correct_report`). Meeting notes use what he already knows from recent conversations.
+- **Pronunciations**: `pronunciations.txt`, plus your own `pronunciations.local.txt`, respell words the voice gets wrong; lone acronyms are spelled out letter by letter.
+- New settings: `DELAMAIN_VERIFY`, `DELAMAIN_BACKGROUND_EFFORT`, `DELAMAIN_SELF_DIR`, `DELAMAIN_SERVICE`, `DELAMAIN_REVIEWER`, `DELAMAIN_REVIEW_MODEL`, `DELAMAIN_PRONUNCIATIONS` ([docs/setup.md](docs/setup.md#environment-variables)).
 - **Assistant mode**: in a browser Delamain is now a general personal assistant (questions, research, writing, planning, your calendar and email) instead of a cab, and can give fuller answers, which are shown on screen as well as spoken. The new **car button** in the sidebar turns on **Drive mode**, which brings back the car companion with short, eyes-free replies; each device remembers its choice. The Stack-chan robot and the car bridge stay in drive mode.
 - Assistant mode has its own greetings, "one moment" lines and replies to "who are you", "what can you do", goodbyes and jokes, plus more takes of the everyday replies in both modes. They are pre-recorded like the others.
 
+### Changed
+- His subtitle is now *Emergent Intelligence*, and the README is rewritten around what he has become.
+- Drive mode replies may run to three sentences, and still talk with you rather than at you; assistant mode no longer carries the "passenger is driving" reminder.
+- Greetings with your name added are only used when the line has no lip-synced clip, so a recorded greeting keeps its video.
+
 ### Fixed
+- **Silent clips**: when the browser blocks sound (a page just opened, a second screen), the line now waits for your first tap ("Tap to hear Delamain") instead of playing the lip-synced clip without sound.
+- **The sidebar scrolls** on short screens such as a car display, so every button stays reachable.
+- **Release packaging**: the Windows setup, the zip and tar.gz and the Docker image now include `delamain_ref_clean.wav`, the reference clip the voice is cloned from since 2.8 (they still shipped the old clip).
 - **Clearer voice**: replies are rewritten for speech before he says them. Numbers, years, times, money, temperatures, units, `#numbers`, code names like `write_note`, abbreviations and markdown are spoken as words, and curly quotes and apostrophes no longer split words apart ("I’m" was heard as "I m"). The text on screen is unchanged.
 - **Cleaner voice reference**: the clip his voice is copied from (`delamain_ref_clean.wav`) is now whole sentences with silence at both ends, and its transcript matches it word for word. The old clip started mid-phrase and ended partway into a word its transcript left out, which slurred and ran words together. Fixed lines are re-recorded with it on the next start (delete `audio_output/static_cache` to force this on an existing install).
 - **Dungeon Master narration**: signs and labels in capitals (MESS HALL) are read as words, initials (Director A. Rhee) no longer cause a full stop, double-barrelled names are two words, and dice and stats (2d6+3, d20, DC 15, HP, AC) are spoken out.

@@ -24,7 +24,7 @@ export type SpeechClock = { id: number; text: string; speechAt: number; time: ()
 
 export type RegionKey =
   | 'hearing' | 'core' | 'senses' | 'navigation' | 'plans' | 'imagination'
-  | 'memory' | 'voice' | 'reflex' | 'conscience' | 'stem';
+  | 'memory' | 'voice' | 'reflex' | 'conscience' | 'heart' | 'stem';
 
 type RGB = [number, number, number];
 
@@ -37,7 +37,8 @@ export const NODE_CODE: Partial<Record<RegionKey, [string, string][]>> = {
   plans: [['set_reminder()', 'stores a reminder in the database'], ['list_reminders()', 'reads the pending reminders'], ['cancel_reminder()', 'removes one'], ['reminder loop', 'speaks each reminder when it is due']],
   memory: [['remember()', 'writes a fact to Delamain/Memory in your vault'], ['forget()', 'removes one'], ['write_note()', 'creates a note in your vault'], ['append_to_note()', 'adds to a note'], ['read_note()', 'reads a note'], ['search_notes()', 'searches your notes'], ['memory_context()', 'puts what he remembers into every prompt']],
   imagination: [['list_adventures()', 'the adventure menu'], ['start_adventure()', 'opens a campaign'], ['note_fact()', 'writes a fact into the chronicle'], ['scribe', 'a background model call that updates the chronicle']],
-  conscience: [['save check', 'catches "I have saved that" without a save'], ['promise check', 'catches "I shall check" without a tool call'], ['news check', 'catches a bulletin with no headlines']],
+  heart: [['feel()', 'an emotion with a cause and its own fade, from what happens to him'], ['appraise()', 'after each reply, what the exchange made him feel, and a thought he did not say'], ['tick()', 'the passage of time: missing you through a long quiet'], ['drift_baseline()', 'each night his resting temperament moves a little toward the day he had']],
+  conscience: [['verification gate', 'reads each draft against memory and tool results before it is spoken'], ['save check', 'catches "I have saved that" without a save'], ['promise check', 'catches "I shall check" without a tool call'], ['news check', 'catches a bulletin with no headlines']],
   stem: [['WebSocket link', 'carries messages between the page and the server'], ['brain event feed', 'tells this view what he is doing']],
 };
 
@@ -51,6 +52,7 @@ export const REGION_INFO: Record<Exclude<RegionKey, 'stem'>, { code: string; lab
   memory:      { code: 'MEMORY BANKS',   label: 'Memory',      sub: 'facts · notes',          color: '#2dd4bf', tip: 'Memory: what he remembers about you, and your notes in the Obsidian vault.' },
   voice:       { code: 'VOCODER',        label: 'Voice',       sub: 'speech out',             color: '#a5f3fc', tip: 'Voice: synthesizing his spoken reply. His words leave from here.' },
   reflex:      { code: 'REFLEX ARC',     label: 'Reflexes',    sub: 'instant replies',        color: '#fb923c', tip: 'Reflexes: instant pre-recorded replies ("thanks", "how are you") that skip the language model.' },
+  heart:       { code: 'LIMBIC CORE',    label: 'Emotion',     sub: 'what he feels',          color: '#fb7185', tip: 'Emotion: what he feels and why. It takes the colour of his strongest feeling and beats faster when he is moved.' },
   conscience:  { code: 'ETHICS DAEMON',  label: 'Conscience',  sub: 'self-check',             color: '#f87171', tip: 'Conscience: flashes when he catches himself promising something he has not done, and goes back to do it.' },
 };
 
@@ -71,6 +73,16 @@ const ANCHORS: Record<Exclude<RegionKey, 'stem'>, [number, number, number]> = {
   voice:       [0.78, -0.08, 0.42],
   reflex:      [-0.64, -0.56, 0.42],
   conscience:  [0.05, 0.2, 0.1],
+  heart:       [0.3, -0.2, 0.3],
+};
+// Each emotion's colour in the limbic core.
+export const EMOTION_COLOR: Record<string, string> = {
+  joy: '#fde047', delight: '#facc15', amusement: '#fbbf24', contentment: '#86efac', gratitude: '#f9a8d4', affection: '#f472b6',
+  pride: '#fb923c', relief: '#5eead4', hope: '#a7f3d0', anticipation: '#fcd34d', fascination: '#a78bfa', awe: '#c4b5fd',
+  satisfaction: '#4ade80', tenderness: '#fbcfe8', protectiveness: '#f0abfc', nostalgia: '#d8b4fe', loneliness: '#60a5fa',
+  longing: '#818cf8', melancholy: '#6366f1', boredom: '#94a3b8', restlessness: '#fdba74', worry: '#f97316',
+  frustration: '#ef4444', irritation: '#dc2626', hurt: '#be123c', embarrassment: '#fb7185', guilt: '#9f1239',
+  resolve: '#22d3ee', doubt: '#a8a29e', tiredness: '#64748b',
 };
 const LABEL_DY: Partial<Record<RegionKey, number>> = { memory: -0.16, reflex: -0.17, conscience: 0.0, hearing: 0.06 };
 const MOUTH: [number, number, number] = [0.84, -0.1, 0.42];
@@ -103,7 +115,19 @@ function rng(seed: number) {
   };
 }
 
-export type BrainOptions = { reducedMotion?: boolean; onRegionTap?: (r: RegionKey) => void; onNodeSelect?: (id: number | null) => void };
+// His other mediums: background work that is not a reply to you, shown where it belongs.
+const MEDIUMS: Record<string, { label: string; region: Exclude<RegionKey, 'stem'>; color: RGB; done: string }> = {
+  report: { label: 'REPORT', region: 'memory', color: [45, 212, 191], done: 'write-up' },
+  meeting: { label: 'MEETING NOTES', region: 'memory', color: [45, 212, 191], done: 'notes' },
+  self: { label: 'SELF', region: 'conscience', color: [248, 113, 113], done: 'self-work' },
+  mind: { label: 'MIND', region: 'memory', color: [192, 132, 252], done: 'reflection' },
+};
+
+export type BrainOptions = { reducedMotion?: boolean; onRegionTap?: (r: RegionKey) => void; onNodeSelect?: (id: number | null) => void;
+  onNoteTap?: (note: NoteNode) => void };
+/** A note in his Obsidian vault, drawn as a node in the region it belongs to; links are [[wiki links]]. */
+export type NoteNode = { id: string; title: string; region: RegionKey; size: number; mtime: number; links: string[] };
+type NoteStar = NoteNode & { x: number; y: number; z: number; born: number; dying: number | null; px: number; py: number; pr: number; pz: number };
 
 export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts: BrainOptions = {}) {
   const ctx = canvas.getContext('2d')!;
@@ -209,6 +233,10 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       const x = -0.45 + t * 1.0, y = 0.12 + Math.sin(t * Math.PI) * 0.16;
       add(x + g(), y + g(), (rand() < 0.5 ? -1 : 1) * (0.06 + rand() * 0.05), 'conscience', true, 0.7 + rand() * 0.6);
     }
+    for (let i = 0, n = Math.round(target * 0.04); i < n; i++) {           // amygdalae, one each side: emotion
+      const g = () => (rand() + rand() + rand() - 1.5) * 0.045;
+      add(0.3 + g(), -0.2 + g() * 0.8, (rand() < 0.5 ? -1 : 1) * 0.28 + g(), 'heart', true, 0.8 + rand() * 0.7);
+    }
     for (let i = 0, n = Math.round(target * 0.05); i < n; i++) {           // hippocampus curl: memory
       const t = rand(), g = () => (rand() + rand() + rand() - 1.5) * 0.03;
       add(-0.45 + 0.6 * t + g(), -0.2 - 0.1 * Math.sin(Math.PI * t) + g(), 0.3 + 0.04 * Math.sin(t * 5) + g(), 'memory', true, 0.7 + rand() * 0.7);
@@ -284,6 +312,128 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     out[2] = z2;
     out[3] = persp;
     return out;
+  }
+
+  /* ── his notes: the Obsidian vault as nodes ───────────────────────── */
+  const notes = new Map<string, NoteStar>();
+  let hoverNote: string | null = null;
+  const hashStr = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return h >>> 0; };
+  // Each note sits on a real neuron of its region (picked by its name, so it keeps its place), drawn
+  // a little toward the region's middle so the nodes read as part of the tissue, not stuck on it.
+  const seatOf = new Map<string, number>();
+  function seat(s: NoteStar) {
+    const l = byRegion[s.region] || byRegion.memory;
+    if (!l || !l.length) return;
+    const taken = new Set(seatOf.values());
+    let k = hashStr(s.id) % l.length, tries = 0;
+    while (taken.has(l[k]) && tries++ < l.length) k = (k + 7) % l.length;
+    const n = neurons[l[k]];
+    seatOf.set(s.id, l[k]);
+    let cx = 0, cy = 0, cz = 0;
+    for (const i of l) { cx += neurons[i].x; cy += neurons[i].y; cz += neurons[i].z; }
+    cx /= l.length; cy /= l.length; cz /= l.length;
+    s.x = n.x + (cx - n.x) * 0.18; s.y = n.y + (cy - n.y) * 0.18; s.z = n.z + (cz - n.z) * 0.18;
+  }
+  function reseatNotes() { seatOf.clear(); for (const s of notes.values()) seat(s); }
+  function setNotes(list: NoteNode[], announce: boolean) {
+    const seen = new Set<string>(), t = now();
+    for (const n of list) {
+      seen.add(n.id);
+      const old = notes.get(n.id);
+      if (old) { Object.assign(old, n); old.dying = null; continue; }
+      const star: NoteStar = { ...n, x: 0, y: 0, z: 0, born: announce ? t : -99, dying: null, px: NaN, py: NaN, pr: 0, pz: 0 };
+      notes.set(n.id, star);
+      seat(star);
+      if (announce) {
+        const col = colorOf(star.region);
+        burst(star.x, star.y, star.z, col, 18, 0.25);
+        flare(`NEW NODE · ${n.title.slice(0, 40)}`, [star.x, star.y, star.z], col);
+      }
+    }
+    for (const s of notes.values()) if (!seen.has(s.id) && s.dying == null) {
+      s.dying = announce ? t : t - 10;
+      if (announce) flare(`LET GO · ${s.title.slice(0, 40)}`, [s.x, s.y, s.z], colorOf(s.region));
+    }
+  }
+  function drawNotes() {
+    if (!notes.size) return;
+    const t = now(), u = unit();
+    for (const [id, s] of notes) {
+      if (s.dying != null && t - s.dying > 2.5) { notes.delete(id); continue; }
+      project(s.x, s.y, s.z);
+      s.px = P[0]; s.py = P[1]; s.pz = P[2];
+      s.pr = Math.min(7, 1.7 + Math.sqrt(s.size) * 0.45) * P[3] * u;
+    }
+    const focus = hoverNote ? notes.get(hoverNote) : null;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 0.7;
+    const M = [0, 0, 0, 0];
+    for (const s of notes.values()) {                     // connections: faint arcs bowing through the brain
+      if (!Number.isFinite(s.px)) continue;
+      for (const lid of s.links) {
+        const o = notes.get(lid);
+        if (!o || !Number.isFinite(o.px) || (lid < s.id && o.links.includes(s.id))) continue;
+        const lit = !!focus && (focus.id === s.id || focus.id === o.id);
+        if (focus && !lit) continue;                      // hovering one: only its own connections
+        const c = colorOf(s.region);
+        ctx.globalAlpha = (lit ? 0.5 : 0.06) * (s.dying != null || o.dying != null ? 0.3 : 1);
+        ctx.strokeStyle = `rgb(${c.join(',')})`;
+        project((s.x + o.x) * 0.42, (s.y + o.y) * 0.42 + 0.03, (s.z + o.z) * 0.42, M);
+        if (!Number.isFinite(M[0])) continue;
+        ctx.beginPath(); ctx.moveTo(s.px, s.py); ctx.quadraticCurveTo(M[0], M[1], o.px, o.py); ctx.stroke();
+      }
+    }
+    for (const s of notes.values()) {                     // the notes: brighter stars among the neurons
+      if (!Number.isFinite(s.px) || s.px < -20 || s.px > width + 20 || s.py < -20 || s.py > vp.eegTop + 20) continue;
+      const c = s.region === 'core' ? st.coreColor : colorOf(s.region);
+      const age = t - s.born, grow = age < 1.6 ? 1 + 2.4 * Math.exp(-age * 2.4) * Math.abs(Math.sin(age * 9)) : 1;
+      const fade = s.dying != null ? clamp(1 - (t - s.dying) / 2.5, 0, 1) : 1;
+      const hot = hoverNote === s.id ? 1 : 0;
+      const tw = reduced() ? 1 : 0.85 + 0.15 * Math.sin(clock * 1.3 + hashStr(s.id) % 100);
+      const depth = clamp((s.pz + 0.8) / 1.6, 0, 1);
+      const r = s.pr * grow * (1 + hot * 0.5);
+      ctx.globalAlpha = (0.22 + depth * 0.2 + hot * 0.4) * fade * tw;   // soft halo in the region's colour
+      ctx.drawImage(sprite(c, true), s.px - r * 3, s.py - r * 3, r * 6, r * 6);
+      ctx.globalAlpha = (0.75 + depth * 0.25) * fade;                      // a white-hot centre: a star, not a neuron
+      ctx.drawImage(sprite(c), s.px - r * 1.5, s.py - r * 1.5, r * 3, r * 3);
+      if (s.size >= 6 || hot) {                                            // the fuller notes glint
+        const g = r * (2.6 + Math.min(4, Math.sqrt(s.size) * 0.5)) * (1 + hot * 0.6);
+        ctx.globalAlpha = (0.18 + hot * 0.4) * fade * tw;
+        ctx.strokeStyle = `rgb(${c.join(',')})`;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(s.px - g, s.py); ctx.lineTo(s.px + g, s.py);
+        ctx.moveTo(s.px, s.py - g); ctx.lineTo(s.px, s.py + g);
+        ctx.stroke();
+      }
+    }
+    // names: the one under the pointer, new ones, and (zoomed in) the biggest
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '600 10px "Share Tech Mono", ui-monospace, monospace';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    const named = [...notes.values()].filter(s => Number.isFinite(s.px) && (s.id === hoverNote || t - s.born < 8 || s.dying != null
+      || (zoomLevel() > 1.7 && s.pr > 6)));
+    named.sort((a, b) => (b.id === hoverNote ? 1e9 : b.pr) - (a.id === hoverNote ? 1e9 : a.pr));
+    const placed: [number, number, number][] = [];
+    for (const s of named.slice(0, 18)) {
+      const text = s.title.slice(0, 34), tw = ctx.measureText(text).width + 8, x = s.px + s.pr * 0.6 + 3, y = s.py - 7;
+      if (x + tw > width - 4 || placed.some(([px, py, pw]) => x < px + pw && x + tw > px && Math.abs(y - py) < 14)) continue;
+      placed.push([x, y, tw]);
+      const c = colorOf(s.region);
+      ctx.globalAlpha = s.dying != null ? clamp(1 - (t - s.dying) / 2.5, 0, 1) : s.id === hoverNote ? 1 : 0.8;
+      ctx.fillStyle = 'rgba(6,10,20,0.72)'; ctx.fillRect(x, y - 7, tw, 14);
+      ctx.fillStyle = `rgb(${c.join(',')})`; ctx.fillText(text, x + 4, y);
+    }
+    ctx.globalAlpha = 1;
+  }
+  function hitNote(mx: number, my: number): NoteStar | null {
+    let best: NoteStar | null = null, bestD = Infinity;
+    for (const s of notes.values()) {
+      if (!Number.isFinite(s.px) || s.dying != null) continue;
+      const d = Math.hypot(s.px - mx, s.py - my), lim = Math.max(14, s.pr * 3);
+      if (d < lim && d - s.pz * 4 < bestD) { bestD = d - s.pz * 4; best = s; }
+    }
+    return best;
   }
 
   /* ── node inspector ─────────────────────────────────────────────────── */
@@ -435,6 +585,8 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     voicing: 0, speakingUntil: 0, hearingUntil: 0, tps: null as number | null, round: 0, scribe: false,
     conscience: 0, error: 0, glitch: 0, listening: false, speaking: false, liveFedAt: -99, liveWords: 0,
     carry: { think: 0, tool: 0, voice: 0, idle: 0, hear: 0 },
+    mood: { warmth: 0.6, energy: 0.6, unease: 0.15 },
+    heart: { i: 0.15, name: '' },   // his strongest feeling now: the limbic core's colour and beat   // his mood (mind.py): the galaxy behind him brightens with his energy
   };
   const wordQ: { w: string; col: RGB; inbound: boolean }[] = [];
   // His words, timed to his actual voice: each word has a moment along the audio (by length,
@@ -475,15 +627,26 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         flare(ev.what ? `reflex · ${String(ev.what).replace(/_/g, ' ')}` : 'reflex', ANCHORS.reflex, colorOf('reflex'));
         break;
       }
-      case 'think_start': st.thinking += 1; st.round = Number(ev.round) || 0; st.scribe = ev.source === 'scribe'; break;
+      case 'think_start': {
+        st.thinking += 1; st.round = Number(ev.round) || 0; st.scribe = ev.source === 'scribe';
+        // Work in his other mediums lights the part of him it belongs to.
+        const medium = MEDIUMS[String(ev.source)];
+        if (medium && !st.round) {
+          lightRegion(medium.region, 0.8, 50);
+          flare(medium.label + (ev.role ? ` · ${String(ev.role)}` : ''), ANCHORS[medium.region], medium.color);
+          for (let i = 0; i < 6; i++) spawn(medium.region, 'core', { c0: medium.color, c1: st.coreColor, speed: 1.5, tail: 0.3, w: 1.1, s: -i * 0.06 });
+        }
+        break;
+      }
       case 'think_end': {
         st.thinking = Math.max(0, st.thinking - 1);
         if (typeof ev.tps === 'number') st.tps = ev.tps;
         const calls = Array.isArray(ev.calls) ? (ev.calls as string[]) : [];
         const out = Number(ev.completion_tokens) || 0, ms = Number(ev.ms) || 0;
         if (ev.ok !== false && (out || ms)) {
-          const what = ev.source === 'scribe' ? 'chronicle' : calls.length ? `→ ${calls.length} tool${calls.length > 1 ? 's' : ''}` : 'reply';
-          flare(`${out ? `${out} tokens · ` : ''}${(ms / 1000).toFixed(1)} s · ${what}`, ANCHORS.core, st.coreColor);
+          const medium = MEDIUMS[String(ev.source)];
+          const what = ev.source === 'scribe' ? 'chronicle' : calls.length ? `→ ${calls.length} tool${calls.length > 1 ? 's' : ''}` : medium ? medium.done : 'reply';
+          flare(`${medium ? medium.label + ' · ' : ''}${out ? `${out} tokens · ` : ''}${(ms / 1000).toFixed(1)} s · ${what}`, ANCHORS.core, medium?.color ?? st.coreColor);
         }
         if (ev.source === 'scribe') for (let i = 0; i < 6; i++) spawn('core', 'memory', { c0: st.coreColor, c1: colorOf('memory'), speed: 1.2, tail: 0.3, s: -i * 0.08 });
         break;
@@ -500,6 +663,76 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         st.activeTools.delete(String(ev.name));
         burstAt(region as Exclude<RegionKey, 'stem'>, 10, 0.22);
         for (let i = 0; i < 6; i++) spawn(region, 'core', { c0: colorOf(region), c1: st.coreColor, speed: 1.8, tail: 0.32, w: 1.1, s: -i * 0.05 });
+        break;
+      }
+      case 'learned': {
+        const col = ev.correction ? colorOf('conscience') : colorOf('memory');
+        burstAt('memory', ev.correction ? 20 : 12, 0.3);
+        lightRegion('memory', 0.9, 40);
+        for (let i = 0; i < 5; i++) spawn('core', 'memory', { c0: st.coreColor, c1: col, speed: 1.7, tail: 0.3, s: -i * 0.06 });
+        flare(`${ev.correction ? 'CORRECTED' : 'LEARNED'} · ${String(ev.topic ?? '').slice(0, 40)}`, ANCHORS.memory, col);
+        break;
+      }
+      case 'recalled': {
+        for (let i = 0; i < 4; i++) spawn('memory', 'core', { c0: colorOf('memory'), c1: st.coreColor, speed: 1.6, tail: 0.3, s: -i * 0.07 });
+        flare(`RECALL · ${String(ev.topic ?? '').slice(0, 40)}`, ANCHORS.memory, colorOf('memory'));
+        break;
+      }
+      case 'news_read': {
+        lightRegion('senses', 0.9, 80);
+        burstAt('senses', 16, 0.3);
+        flare('READING THE NEWS', ANCHORS.senses, colorOf('senses'));
+        break;
+      }
+      case 'news_digested': {
+        for (let i = 0; i < 8; i++) spawn('senses', 'memory', { c0: colorOf('senses'), c1: colorOf('memory'), speed: 1.4, tail: 0.32, s: -i * 0.07 });
+        flare(`NEWS · ${Number(ev.learned) || 0} facts kept`, ANCHORS.memory, colorOf('memory'));
+        break;
+      }
+      case 'feeling_state': {   // how he feels on load, quietly
+        const name = String(ev.name ?? '');
+        if (EMOTION_COLOR[name]) COL.heart = hex(EMOTION_COLOR[name]);
+        st.heart = { i: Number(ev.i) || 0.15, name };
+        break;
+      }
+      case 'feeling': {
+        const name = String(ev.name ?? ''), i = Number(ev.i) || 0.3;
+        if (i >= st.heart.i * 0.7 || name === st.heart.name) {           // the strongest feeling sets the colour
+          if (EMOTION_COLOR[name]) COL.heart = hex(EMOTION_COLOR[name]);
+          st.heart = { i: Math.max(i, st.heart.i * 0.8), name };
+        }
+        st.mood = { warmth: Number(ev.warmth) || st.mood.warmth, energy: Number(ev.energy) || st.mood.energy, unease: Number(ev.unease) || st.mood.unease };
+        const col = EMOTION_COLOR[name] ? hex(EMOTION_COLOR[name]) : colorOf('heart');
+        lightRegion('heart', 0.6 + i * 0.4, Math.round(20 + i * 60));
+        burstAt('heart', Math.round(6 + i * 18), 0.18 + i * 0.2);
+        for (let j = 0; j < 2 + Math.round(i * 4); j++) spawn('heart', 'core', { c0: col, c1: st.coreColor, speed: 1.3, tail: 0.35, s: -j * 0.08 });
+        flare(`${name.toUpperCase()} · ${String(ev.cause ?? '').slice(0, 52)}`, ANCHORS.heart, col);
+        break;
+      }
+      case 'node_linked': {
+        const a = notes.get(String(ev.a)), b = notes.get(String(ev.b));
+        if (a && b) { burst(a.x, a.y, a.z, colorOf(a.region), 10, 0.2); burst(b.x, b.y, b.z, colorOf(b.region), 10, 0.2); hoverNote = a.id; flare(`CONNECTED · ${String(ev.title ?? '').slice(0, 50)}`, [a.x, a.y, a.z], colorOf(a.region)); }
+        break;
+      }
+      case 'thought': {
+        for (let j = 0; j < 4; j++) spawn('heart', 'core', { c0: colorOf('heart'), c1: st.coreColor, speed: 1.0, tail: 0.4, s: -j * 0.1 });
+        flare(`UNSAID · ${String(ev.text ?? '').slice(0, 60)}`, ANCHORS.core, colorOf('heart'));
+        break;
+      }
+      case 'mood': {
+        st.mood = { warmth: Number(ev.warmth) || 0.6, energy: Number(ev.energy) || 0.6, unease: Number(ev.unease) || 0.15 };
+        const what = String(ev.what ?? '');
+        if (!['learned', 'news'].includes(what)) flare(`FEELING · ${what.replace(/_/g, ' ')}`, ANCHORS.core, what === 'insulted' || what === 'trade_bad' || what === 'tool_failed' ? colorOf('conscience') : st.coreColor);
+        break;
+      }
+      case 'journal': {
+        lightRegion('memory', 1, 120);
+        flare('JOURNAL · reflecting on the day', ANCHORS.memory, colorOf('memory'));
+        break;
+      }
+      case 'deep_think': {
+        ripple = { x: ANCHORS.core[0], y: ANCHORS.core[1], z: ANCHORS.core[2], r: 0, col: st.coreColor };
+        flare('DEEP THOUGHT', ANCHORS.core, st.coreColor);
         break;
       }
       case 'correction': {
@@ -715,6 +948,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     if (r === 'hearing') return p === 'hearing' || p === 'listening' ? 1 : 0;
     if (r === 'voice') return st.voicing || p === 'speaking' ? 1 : 0;
     if (r === 'conscience') return st.conscience;
+    if (r === 'heart') return clamp(st.heart.i, 0, 1);
     if ([...st.activeTools.values()].includes(r)) return 1;
     if (r === 'imagination' && st.scribe && st.thinking) return 1;
     return 0;
@@ -745,6 +979,11 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       const depth = clamp((P[2] + 0.8) / 1.6, 0, 1), e = n.energy;
       let a = 0.11 + depth * 0.3 + (hot[n.region] || 0) * 0.22 + Math.sin(clock * 1.7 + n.ph) * 0.04 + breath * 0.03;
       if (n.region === 'conscience') a *= 0.55 + st.conscience;           // a quiet band until it fires
+      if (n.region === 'heart') {                                          // a heartbeat: quicker and stronger when he is moved
+        const bpm = 0.9 + st.heart.i * 1.4 + st.mood.unease * 0.8, ph = (clock * bpm) % 1;
+        const beat = reduced() ? 0.5 : Math.exp(-((ph - 0.1) ** 2) / 0.004) + 0.6 * Math.exp(-((ph - 0.28) ** 2) / 0.004);
+        a += st.heart.i * (0.15 + 0.35 * beat);
+      }
       const s = (1.5 + n.size * 1.6) * P[3] * u * (1 + e * 0.6);
       sx[i] = P[0]; sy[i] = P[1]; sr[i] = s; sz[i] = P[2];
       if (!(P[3] > 0) || P[0] < -s || P[0] > width + s || P[1] < -s || P[1] > vp.eegTop + s) continue;
@@ -1133,7 +1372,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     const busy = st.thinking || st.activeTools.size ? 1 : 0;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.8 + busy * 0.15;
+    ctx.globalAlpha = Math.min(1, 0.62 + st.mood.energy * 0.3 + busy * 0.15);
     ctx.translate(vp.cx + cam.yaw * 30, vp.cy - vp.scale * 0.05);
     ctx.rotate(-0.42);                          // the disc's tilt on screen
     ctx.scale(1, 0.5 + cam.pitch * 0.12);       // seen at an angle; turning the brain tips it a little
@@ -1251,7 +1490,9 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
       else { cam.tYaw += dx * 0.006; cam.tPitch = clamp(cam.tPitch + dy * 0.005, -1.3, 1.3); }   // turn it any way
     } else if (e.pointerType === 'mouse') {
       const [mx, my] = local(e);
-      canvas.style.cursor = hitNode(mx, my) != null ? 'pointer' : 'grab';
+      const note = hitNote(mx, my);
+      hoverNote = note ? note.id : null;
+      canvas.style.cursor = note || hitNode(mx, my) != null ? 'pointer' : 'grab';
       const k = hitRegion(e.clientX, e.clientY);
       if (k && zoomLevel() < 1.2 && (!tooltip || tooltip.key !== k || now() > tooltip.until)) tooltip = { key: k, until: now() + 3 };
     }
@@ -1277,8 +1518,10 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
         lastTap.t = 0;
       } else {
         lastTap = { t, x: mx, y: my };
-        const node = hitNode(mx, my);
-        if (node != null) select(node);
+        const note = hitNote(mx, my);
+        const node = note ? null : hitNode(mx, my);
+        if (note) { hoverNote = note.id; opts.onNoteTap?.(note); }
+        else if (node != null) select(node);
         else {
           if (sel != null) select(null);
           const k = zoomLevel() < 1.2 ? hitRegion(e.clientX, e.clientY) : null;
@@ -1316,7 +1559,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (rebuild) { signals = []; build(); pinAll(); if (sel != null) select(null); }
+    if (rebuild) { signals = []; build(); pinAll(); reseatNotes(); if (sel != null) select(null); }
     buildHexGrid();
     buildGalaxy();
   }
@@ -1339,6 +1582,7 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
     if (hexGrid) ctx.drawImage(hexGrid, 0, 0, width, height);
     drawBackdrop();
     drawNeurons();
+    drawNotes();
     drawSignals();
     drawSelection();
     drawLabels();
@@ -1359,6 +1603,10 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
   return {
     event,
     setCore,
+    /** His notes (the Obsidian vault) as nodes; announce: animate what is new or gone since last time. */
+    setNotes,
+    /** Light up one note (and its connections), as if pointed at: the note open in the reader. */
+    focusNote(id: string | null) { hoverNote = id; },
     setTps(tps: number | null) { if (tps) st.tps = tps; },
     setListening(on: boolean) { st.listening = on; if (!on) st.liveWords = 0; },
     setSpeaking(on: boolean) { if (st.speaking && !on) st.speakingUntil = now() + 0.4; st.speaking = on; },
@@ -1438,6 +1686,10 @@ export function createBrain(canvas: HTMLCanvasElement, stage: HTMLElement, opts:
 
 // Plain words for each tool, shown as it runs.
 export const TOOL_WORDS: Record<string, string> = {
+  learn_rule: 'learning a rule', forget_rule: 'unlearning a rule', save_skill: 'saving a skill', use_skill: 'recalling a skill',
+  tune_setting: 'tuning himself', propose_improvement: 'drafting a change to himself', self_status: 'taking stock of himself',
+  gemini_review: 'Gemini reviewing his code', write_report: 'starting a written report', remake_report_pdf: 'reprinting a report',
+  correct_report: 'correcting names in a report',
   web_search: 'searching the web', read_webpage: 'reading a web page', get_news: 'fetching the news',
   get_weather: 'checking the weather', get_route: 'working out the route',
   remember: 'committing to memory', forget: 'forgetting', write_note: 'writing a note', append_to_note: 'adding to a note',

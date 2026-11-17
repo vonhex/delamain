@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { X, Info, Mic, Send, Radio, Maximize2, Minimize2, PanelBottomOpen, ZoomIn, ZoomOut, Crosshair, Zap } from 'lucide-react';
-import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock, type ModelInfo, type NodePin, NODE_CODE } from './brain/brainRenderer';
+import { createBrain, REGION_INFO, TOOL_WORDS, type Brain, type BrainEvent, type RegionKey, type SpeechClock, type ModelInfo, type NodePin, type NoteNode, NODE_CODE } from './brain/brainRenderer';
 import { PERSONAS } from '../personas';
 
 // Delamain's neural core: a live view of what he is doing, fed by the backend's brain events
@@ -38,6 +38,9 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
     case 'heard': return { icon: '👂', text: `${tag('hearing')} · Heard you: ${quote(ev.text)}`, color: R.hearing.color };
     case 'reflex': return { icon: '⚡', text: `${tag('reflex')} · Instant pre-recorded reply to ${REFLEX_WORDS[String(ev.what)] ?? String(ev.what ?? 'that').replace(/_/g, ' ')}. No language model needed.`, color: R.reflex.color };
     case 'think_start':
+      if (ev.source === 'report') return { icon: '📄', text: `${tag('memory')} · Writing a full report from your meeting notes.`, color: R.memory.color };
+      if (ev.source === 'mind') return { icon: '🌌', text: `${tag('memory')} · His mind at work: reading, digesting, or reflecting.`, color: R.memory.color };
+      if (ev.source === 'self') return { icon: '🪞', text: `${tag('conscience')} · Working on himself: drafting a change to his own code, or reviewing his day.`, color: R.conscience.color };
       if (ev.source === 'meeting') return { icon: '📝', text: `${tag('memory')} · Writing up your meeting notes in the background.`, color: R.memory.color };
       return ev.source === 'scribe'
         ? { icon: '📜', text: `${tag('imagination')} · Writing up the adventure chronicle in the background.`, color: R.imagination.color }
@@ -55,10 +58,38 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
       const w = TOOL_WORDS[String(ev.name)] ?? String(ev.name);
       return { icon: '🛠️', text: `${R[region]?.code ?? ''} · ${w[0].toUpperCase()}${w.slice(1)}${ev.auto ? ' (automatic search)' : ''}…`, color: R[region]?.color ?? R.senses.color };
     }
-    case 'tool_end': return null;
+    case 'tool_end':
+      if (ev.name === 'gemini_review') return ev.verdict === 'approve'
+        ? { icon: '✅', text: `${tag('conscience')} · Gemini approved his code change. It is waiting for your approval.`, color: '#4ade80' }
+        : { icon: '🔍', text: `${tag('conscience')} · Gemini ${ev.verdict === 'changes_needed' ? `asked for changes (${ev.issues} issue${ev.issues === 1 ? '' : 's'}); he is revising` : 'could not finish its review'}.`, color: '#fbbf24' };
+      return null;
+    case 'learned': return { icon: ev.correction ? '✏️' : '📚', text: `${tag('memory')} · ${ev.correction ? 'Corrected his notes on' : 'Learned about'} ${String(ev.topic)}: ${quote(ev.fact, 90)}${ev.source && !ev.correction ? ` (${String(ev.source).slice(0, 40)})` : ''}`, color: ev.correction ? R.conscience.color : R.memory.color };
+    case 'recalled': return { icon: '🗂️', text: `${tag('memory')} · Remembering what he knows about ${String(ev.topic)}.`, color: R.memory.color };
+    case 'news_read': return { icon: '📰', text: `${tag('senses')} · Reading the news (${ev.sections} sections) to learn what is new in the world.`, color: R.senses.color };
+    case 'study': return { icon: '🔭', text: `${tag('memory')} · Free time: studying ${quote(ev.subject, 80)}${ev.why ? ` (${quote(ev.why, 90)})` : ''}`, color: R.memory.color };
+    case 'node_added': return { icon: '✨', text: `${tag('memory')} · A new node in his mind: ${quote(ev.title, 80)} (a new note in Obsidian)`, color: R.memory.color };
+    case 'node_removed': return { icon: '🍂', text: `${tag('memory')} · Let go of ${quote(ev.title, 60)}${ev.why ? `: ${quote(ev.why, 100)}` : ''} (moved to the vault's trash)`, color: R.memory.color };
+    case 'node_linked': return { icon: '🔗', text: `${tag('memory')} · Connected ${quote(ev.title, 100)}`, color: R.memory.color };
+    case 'feeling': return { icon: '💗', text: `${tag('memory')} · Feels ${ev.name}${Number(ev.i) > 0.6 ? ' strongly' : Number(ev.i) < 0.3 ? ' faintly' : ''}: ${quote(ev.cause, 160)}`, color: R.memory.color };
+    case 'thought': return { icon: '💭', text: `${tag('memory')} · Thinks, but does not say: ${quote(ev.text, 220)}`, color: R.memory.color };
+    case 'twin_start': return { icon: '🪞', text: `${tag('memory')} · Talking with the other Delamain about ${quote(ev.topic, 90)}`, color: R.memory.color };
+    case 'twin_say': return { icon: ev.who === 'Delamain' ? '🗨️' : '🪞', text: `${ev.who === 'Delamain' ? 'Delamain' : 'The other Delamain'}: ${quote(ev.text, 400)}`, color: R.memory.color };
+    case 'twin_done': return { icon: '🤝', text: `${tag('memory')} · Finished talking with the other Delamain: ${quote(ev.summary, 220)}`, color: R.memory.color };
+    case 'brief': return { icon: '☀️', text: `${tag('memory')} · ` + (ev.stage === 'start' ? 'Putting together your morning brief from the weather, calendar, mail and news.' : ev.delivered ? 'Gave you the morning brief.' : 'Wrote the morning brief (nobody was listening).'), color: R.memory.color };
+    case 'task': return { icon: '📌', text: `${tag('memory')} · Task #${ev.id} ${quote(ev.title, 80)}: ${ev.action}`, color: R.memory.color };
+    case 'study_done': return { icon: '🎓', text: `${tag('memory')} · Finished studying ${quote(ev.subject, 60)}: ${ev.learned} new facts.${ev.next ? ` Now wondering: ${quote(ev.next, 90)}` : ''}`, color: R.memory.color };
+    case 'news_digested': return { icon: '🧩', text: `${tag('memory')} · Digested the news into ${ev.learned} new facts. His take: ${quote(ev.take, 120)}`, color: R.memory.color };
+    case 'mood': {
+      const words: Record<string, string> = { praised: 'warmed by your praise', insulted: 'stung by that', corrected: 'humbled by your correction', approved: 'proud: Gemini approved his work', rejected: 'chastened: Gemini found problems', trade_good: 'pleased with the trading day', trade_bad: 'troubled by the trading day', tool_failed: 'frustrated: a tool failed', night: 'tired; the day is ending' };
+      const w = words[String(ev.what)];
+      return w ? { icon: '💗', text: `Feeling ${w}.`, color: '#f9a8d4' } : null;
+    }
+    case 'journal': return { icon: '📓', text: `${tag('memory')} · Writing in his journal about the day.`, color: R.memory.color };
+    case 'deep_think': return { icon: '🌀', text: `${tag('core')} · You asked him to think it through: deep thinking for this one.`, color: R.core.color };
     case 'correction': return {
       icon: '🫢',
-      text: `${tag('conscience')} · ` + (ev.reason === 'action' ? `Caught himself promising ${quote(ev.promise, 40)} without doing it. Going back to actually do it.`
+      text: `${tag('conscience')} · ` + (ev.reason === 'verify' ? `Checked his draft before speaking and found a problem: ${quote(ev.promise, 120)}. Rewriting it.`
+        : ev.reason === 'action' ? `Caught himself promising ${quote(ev.promise, 40)} without doing it. Going back to actually do it.`
         : ev.reason === 'save' ? 'Caught himself claiming to have saved something without saving it. Going back to do it.'
         : 'Started the news without reading the headlines. Going back for them.'),
       color: R.conscience.color,
@@ -179,6 +210,39 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   const nodeRef = useRef<NodeInfo | null>(null);
   useEffect(() => { nodeRef.current = node; });   // before the effects below that read it
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  // His notes: the Obsidian vault drawn as nodes; tapping one opens this card.
+  const [note, setNote] = useState<(NoteNode & { text?: string }) | null>(null);
+  const vaultRef = useRef('');
+  const graphTimer = useRef(0);
+  const loadGraph = useCallback((announce: boolean) => {
+    fetch('/api/brain/graph', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(g => { if (g) { vaultRef.current = g.vault; brainRef.current?.setNotes(g.nodes, announce); } })
+      .catch(() => { /* the brain still runs without its notes */ });
+  }, [token]);
+  const loadGraphRef = useRef(loadGraph);
+  useEffect(() => { loadGraphRef.current = loadGraph; }, [loadGraph]);
+  const openNote = useCallback((n: NoteNode) => {
+    setNote(n);
+    fetch(`/api/brain/note?id=${encodeURIComponent(n.id)}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null)).then(d => d && setNote(cur => (cur && cur.id === n.id ? { ...cur, text: d.text } : cur)))
+      .catch(() => {});
+  }, [token]);
+  // The reader: a whole note, readable on any device (Obsidian itself only opens on a PC that has the vault).
+  const [reader, setReader] = useState<{ id: string; title: string; html: string; mtime?: number } | null>(null);
+  const [readerTrail, setReaderTrail] = useState<string[]>([]);
+  const readNote = useCallback((id: string, back = false) => {
+    fetch(`/api/brain/note?full=1&id=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d) { setReader(cur => cur && { ...cur, html: '<p><em>That note is not in the vault any more.</em></p>' }); return; }
+        setReader(cur => { if (cur && !back && cur.id !== d.id) setReaderTrail(t => [...t, cur.id]); return { id: d.id, title: d.title, html: d.html, mtime: d.mtime }; });
+        brainRef.current?.focusNote(d.id);
+      }).catch(() => {});
+  }, [token]);
+  const closeReader = () => { setReader(null); setReaderTrail([]); brainRef.current?.focusNote(null); };
+  const openNoteRef = useRef(openNote);
+  useEffect(() => { openNoteRef.current = openNote; }, [openNote]);
   useEffect(() => {
     let live = true;
     fetch('/api/brain/model', { headers: { Authorization: `Bearer ${token}` } })
@@ -222,8 +286,10 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
   useEffect(() => {
     if (!canvasRef.current || !stageRef.current) return;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const b = createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced });
+    const b = createBrain(canvasRef.current, stageRef.current, { reducedMotion: reduced, onNoteTap: n => openNoteRef.current(n) });
     brainRef.current = b;
+    loadGraphRef.current(false);
+    const graphPoll = setInterval(() => loadGraphRef.current(true), 60000);   // notes you add or delete in Obsidian too
     if (modelRef.current) b.setModel(modelRef.current);   // a renderer made after the model arrived still gets it
     if (location.search.includes('debug')) (window as unknown as { __delamainBrain: Brain }).__delamainBrain = b;
     const opened = Date.now();
@@ -233,7 +299,20 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
       setHud({ signals: s.signals, lit: s.lit, neurons: s.neurons, session: Math.floor((Date.now() - opened) / 1000), zoom: s.zoom });
       setNode(b.inspect());
     }, 250);
-    return () => { clearInterval(id); b.destroy(); brainRef.current = null; };
+    // ?debug: send how the brain is running to the server log every few seconds
+    let diag = 0, frames = 0, fraf = 0;
+    if (location.search.includes('debug')) {
+      const count = () => { frames++; fraf = requestAnimationFrame(count); };
+      fraf = requestAnimationFrame(count);
+      let since = performance.now();
+      diag = window.setInterval(() => {
+        const t = performance.now(), fps = Math.round(frames * 1000 / (t - since));
+        frames = 0; since = t;
+        const body = JSON.stringify({ fps, dpr: devicePixelRatio, phase: b.phase(), reduced, ...b.stats(), ua: navigator.userAgent });
+        fetch('/api/brain/diag', { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('delamain_token')}`, 'Content-Type': 'application/json' }, body }).catch(() => {});
+      }, 3000);
+    }
+    return () => { clearInterval(id); clearInterval(graphPoll); clearInterval(diag); cancelAnimationFrame(fraf); b.destroy(); brainRef.current = null; };
   }, []);
 
   // The mic and the speaker drive the brain directly: listening lights the audio intake,
@@ -256,6 +335,7 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
       const p = s.state?.persona ?? 'delamain';
       setPersona(p);
       brainRef.current?.setCore(coreOf(p).color);
+      if (s.feeling) brainRef.current?.event({ kind: 'feeling_state', ...s.feeling } as BrainEvent);
       setTps(s.metrics?.tps ?? null);
       lineId.current = 0;
       const recent: Line[] = [];
@@ -280,6 +360,10 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
       if (ev.kind === 'tool_end') toolsRunning.current.delete(String(ev.name));
       setTool([...toolsRunning.current.values()].pop() ?? null);
       brainRef.current?.event(ev);
+      if (['node_added', 'node_removed', 'node_linked', 'learned', 'study_done', 'twin_done', 'journal', 'brief', 'task'].includes(ev.kind)) {
+        clearTimeout(graphTimer.current);                       // his mind changed shape: redraw its notes
+        graphTimer.current = window.setTimeout(() => loadGraphRef.current(true), 1500);
+      }
       push(ev);
       setToday(t => {
         if (!t) return t;
@@ -417,6 +501,56 @@ export function BrainView({ token, onClose, talk, face }: { token: string; onClo
               )}
               {hud.zoom <= 1.01 && !node && <span className="ml-2 hidden sm:inline text-gray-500">DRAG TO TURN · PINCH OR SCROLL TO FLY IN · TAP ANY DOT</span>}
             </div>
+
+            {/* a note from his vault */}
+            {note && (() => {
+              const r = regionName(note.region);
+              const uri = `obsidian://open?vault=${encodeURIComponent(vaultRef.current)}&file=${encodeURIComponent(note.id.replace(/\.md$/, ''))}`;
+              return (
+                <div className={`absolute right-3 sm:right-4 top-9 w-[min(340px,calc(100%-24px))] p-3 border bg-[#05060a]/92 text-sm shadow-xl space-y-1.5 ${cut(10)}`}
+                  style={{ borderColor: `${r.color}99` }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: r.color, boxShadow: `0 0 8px ${r.color}` }} />
+                    <span className="font-mono text-xs tracking-[0.2em] text-gray-300">NOTE · {r.code}</span>
+                    <button onClick={() => setNote(null)} title="Close" className="ml-auto text-gray-500 hover:text-cyber-red"><X size={15} /></button>
+                  </div>
+                  <div className="font-mono text-[13px]" style={{ color: r.color }}>{note.title}</div>
+                  <div className="text-gray-500 text-[11px] font-mono break-all">{note.id}</div>
+                  <div className="text-gray-400 text-xs">{note.size} {note.region === 'memory' ? 'facts' : 'parts'} · {note.links.length} connection{note.links.length === 1 ? '' : 's'} · changed {new Date(note.mtime * 1000).toLocaleString()}</div>
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-snug text-gray-300 font-sans">{note.text ?? 'Reading…'}</pre>
+                  <div className="flex items-center gap-3 text-xs">
+                    <button onClick={() => { setReaderTrail([]); readNote(note.id); setNote(null); }} className="px-2 py-1 border border-cyber-blue/50 text-cyber-blue hover:bg-cyber-blue/10">Read the whole note</button>
+                    <a href={uri} title="Opens the Obsidian app; only works on a computer that has this vault" className="text-gray-400 hover:text-cyber-blue hover:underline">Open in Obsidian ↗</a>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* the note reader: works on any device */}
+            {reader && (
+              <div className={`absolute inset-x-3 sm:inset-x-auto sm:right-4 top-9 bottom-4 sm:w-[min(560px,calc(100%-32px))] flex flex-col border border-cyber-blue/50 bg-[#05060a]/95 shadow-2xl ${cut(10)}`}>
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                  {readerTrail.length > 0 && (
+                    <button onClick={() => { const t = [...readerTrail]; const prev = t.pop()!; setReaderTrail(t); readNote(prev, true); }}
+                      className="text-xs text-cyber-blue hover:underline">← back</button>
+                  )}
+                  <span className="font-mono text-[13px] text-cyber-blue truncate">{reader.title}</span>
+                  <a href={`obsidian://open?vault=${encodeURIComponent(vaultRef.current)}&file=${encodeURIComponent(reader.id.replace(/\.md$/, ''))}`}
+                    title="Opens the Obsidian app; only works on a computer that has this vault" className="ml-auto text-[11px] text-gray-500 hover:text-cyber-blue">Obsidian ↗</a>
+                  <button onClick={closeReader} title="Close" className="text-gray-500 hover:text-cyber-red"><X size={16} /></button>
+                </div>
+                <div className="px-3 pt-1 text-[10px] font-mono text-gray-500 break-all">{reader.id}{reader.mtime ? ` · changed ${new Date(reader.mtime * 1000).toLocaleString()}` : ''}</div>
+                <div className="note-html flex-1 overflow-auto px-4 py-3 text-sm text-gray-200 leading-relaxed"
+                  onClick={e => {
+                    const a = (e.target as HTMLElement).closest('a');
+                    if (!a) return;
+                    const href = a.getAttribute('href') || '';
+                    if (href.startsWith('note:')) { e.preventDefault(); readNote(decodeURIComponent(href.slice(5))); }
+                    else if (/^https?:/.test(href)) { e.preventDefault(); window.open(href, '_blank', 'noopener,noreferrer'); }
+                  }}
+                  dangerouslySetInnerHTML={{ __html: reader.html }} />
+              </div>
+            )}
 
             {/* the node inspector */}
             {node && (() => {

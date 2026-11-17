@@ -27,7 +27,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # App source and the built web UI
-COPY *.py delamain_ref_10s.wav ./
+COPY *.py delamain_ref_clean.wav pronunciations.txt ./
 COPY campaigns/ ./campaigns/
 COPY --from=frontend /frontend/dist /app/frontend_dist
 
@@ -42,6 +42,7 @@ ENV PYTHONUNBUFFERED=1 \
     DELAMAIN_DB=/app/data/delamain.db \
     DELAMAIN_AUDIO_DIR=/app/data/audio_output \
     DELAMAIN_LINES_DIR=/app/data/line_clips \
+    DELAMAIN_SELF_DIR=/app/data/self \
     FRONTEND_DIST=/app/frontend_dist \
     OBSIDIAN_VAULT_PATH=/vault
 

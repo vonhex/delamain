@@ -8,6 +8,7 @@ screen is unchanged.
 """
 from __future__ import annotations
 
+import os
 import re
 
 _ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
@@ -117,21 +118,34 @@ _GAME = [
     (r"\bDC\s*(?=\d)", "difficulty "), (r"\bHP\b", "hit points"), (r"\bAC\b(?=\s*\d|\s+of\b)", "armour class"),
     (r"\bXP\b", "experience"), (r"\bNPCs\b", "characters"), (r"\bNPC\b", "character"), (r"\bD&D\b", "D and D"),
 ]
-_KEEP_CAPS = {"NASA", "FBI", "CIA", "USA", "NATO", "GPS", "DNA", "ETA", "ASAP", "OK", "TV", "UFO", "CEO", "PDF", "URL", "API"}
+_LETTER_NAMES = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", (
+    "Ay Bee See Dee Ee Eff Gee Aitch Eye Jay Kay El Em En Oh Pee Cue Ar Ess Tee You Vee Double-you Ex Why Zee").split()))
+# Acronyms said as words, which must not be spelled out letter by letter.
+_KEEP_CAPS = {"NASA", "NATO", "ASAP", "OK", "NOAA", "FEMA", "OSHA", "UNICEF", "AWOL", "SWAT", "SCUBA", "LASER",
+              "RADAR", "COVID", "GIF", "JPEG", "PIN", "RAM", "ROM", "SIM", "WIFI", "CAD", "ZIP", "UEFA", "FIFA", "MIT"}
 
 
 def _uncap(t: str) -> str:
-    """Capital words of 3+ letters, and 2-letter ones next to another capital word (BE QUIET), become
-    Title case; a lone short acronym (AI, HP) or a known one (NASA) is kept."""
+    """Words in capitals. A run of them (MESS HALL, BE QUIET, DIRECTOR A. RHEE) is a sign or label
+    and is read as words. A lone one of five letters or more (WARNING) is a shouted word. A lone
+    short one is an acronym (KDVR, CNN, AI) and is spelled out, unless it is said as a word (NASA)."""
     toks = list(re.finditer(r"[A-Za-z']+", t))
-    caps = [len(w) >= 2 and w.replace("'", "").isalpha() and w.replace("'", "").isupper()
-            for w in (m.group(0) for m in toks)]
+    caps = [w.replace("'", "").isalpha() and w.replace("'", "").isupper() for w in (m.group(0) for m in toks)]
     out, last = [], 0
     for i, m in enumerate(toks):
         w = m.group(0)
-        near = (i > 0 and caps[i - 1]) or (i + 1 < len(toks) and caps[i + 1])
-        if caps[i] and w not in _KEEP_CAPS and (len(w) >= 3 or near):
-            out.append(t[last:m.start()]); out.append(w.capitalize()); last = m.end()
+        if not caps[i] or len(w) < 2 or w in _KEEP_CAPS:
+            continue
+        # Neighbours count only when nothing but spaces and punctuation separate them.
+        def joined(a, b):
+            return re.fullmatch(r"[\s.:!?\"'-]*", t[toks[a].end():toks[b].start()]) is not None   # a comma ends a run: "CNN, NPR"
+        near = (i > 0 and caps[i - 1] and joined(i - 1, i)) or (i + 1 < len(toks) and caps[i + 1] and joined(i, i + 1))
+        if near or len(w) >= 5:
+            rep = w.capitalize()
+        else:
+            # Letter names, not bare letters: "K D V R" runs together into "Virar" in F5.
+            rep = " ".join(_LETTER_NAMES[c] for c in w.upper() if c in _LETTER_NAMES)
+        out.append(t[last:m.start()]); out.append(rep); last = m.end()
     out.append(t[last:])
     return "".join(out)
 
@@ -149,8 +163,41 @@ _CHARS = str.maketrans({"’": "'", "‘": "'", "‛": "'", "ʼ": "'", "“": '"
                         " ": " ", " ": " ", " ": " ", "​": "", "…": "...", "‑": "-", "−": "-"})
 
 
+# ── Pronunciations ────────────────────────────────────────────────────────────
+# Words the voice gets wrong, respelled the way they sound: pronunciations.txt ships with
+# Delamain, pronunciations.local.txt (not in git) is for your own. One "Word = respelling"
+# per line; matching ignores case and whole words only. Edits apply without a restart.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_PRON_FILES = [os.path.join(_HERE, "pronunciations.txt"),
+               os.environ.get("DELAMAIN_PRONUNCIATIONS", os.path.join(_HERE, "pronunciations.local.txt"))]
+_pron_cache: tuple[tuple, list] = ((), [])
+
+
+def _pronunciations() -> list[tuple[re.Pattern, str]]:
+    global _pron_cache
+    stamp = tuple(os.path.getmtime(f) if os.path.exists(f) else 0 for f in _PRON_FILES)
+    if stamp != _pron_cache[0]:
+        table: dict[str, str] = {}
+        for f in _PRON_FILES:
+            if not os.path.exists(f):
+                continue
+            for raw in open(f, encoding="utf-8"):
+                line = raw.split("#", 1)[0].strip()
+                if "=" in line:
+                    word, say = (x.strip() for x in line.split("=", 1))
+                    if word and say:
+                        table[word.lower()] = say          # a later file overrides an earlier one
+        # Longest first, so "Buena Vista" wins over "Vista".
+        rules = [(re.compile(rf"(?<![\w-]){re.escape(w)}(?![\w-])", re.I), say)
+                 for w, say in sorted(table.items(), key=lambda kv: -len(kv[0]))]
+        _pron_cache = (stamp, rules)
+    return _pron_cache[1]
+
+
 def speakable(text: str) -> str:
     t = text.translate(_CHARS)
+    for pat, say in _pronunciations():
+        t = pat.sub(say, t)
     # Markdown and links: say the words, not the markup.
     t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
     t = re.sub(r"https?://\S+", "a link", t)

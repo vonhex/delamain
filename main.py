@@ -32,6 +32,27 @@ import brain as _brain
 import model_map as _model_map
 import meetings as _meetings
 import reports as _reports
+try:   # his self-improvement: learning from corrections, self-tuning, and code changes you approve
+    import self_improve as _self
+except Exception as _e:
+    _self = None
+    print(f"[Self] not loaded: {_e}")
+try:   # his inner life: knowledge notes, study, news, emotions, journal, opinions, the other Delamain
+    import mind as _mind
+except Exception as _e:
+    _mind = None
+    print(f"[Mind] not loaded: {_e}")
+
+
+def _mind_react(kind: str, data: dict) -> None:
+    """Events from his other work that move his mood."""
+    if not _mind:
+        return
+    try:
+        if kind == "tool_end" and data.get("name") == "gemini_review":
+            _mind.mood_event("approved" if data.get("verdict") == "approve" else "rejected")
+    except Exception:
+        pass
 import google_api as _google
 import config
 from fastapi.responses import StreamingResponse, FileResponse
@@ -98,6 +119,20 @@ async def lifespan(app: FastAPI):
     _brain.bind_loop(loop)
     _reports.generate = _generate_report
     _reports.notify = lambda info: asyncio.run_coroutine_threadsafe(_announce_report(info), loop)
+    if _self:
+        _self.generate = _generate_self
+        _self.emit = lambda kind, **d: (_brain.emit(kind, **d), _mind_react(kind, d))
+        _self.notify = lambda info: asyncio.run_coroutine_threadsafe(_announce_self(info), loop)
+        asyncio.create_task(_self_review_loop())
+    if _mind:
+        _mind.generate = lambda system, user, max_tokens: _generate_self(system, user, max_tokens, source="mind", effort="medium")
+        _brain.feeling_now = lambda: next(({"name": e["name"], "i": e["now"], "cause": e.get("cause", "")}
+                                          for e in _mind.emotions()[:1]), None)
+        _mind.quick = lambda system, user, max_tokens: _generate_self(system, user, max_tokens, source="feeling", effort="low")
+        _mind.emit = _brain.emit
+        _mind.last_chat = lambda: max([r.get("ts") or 0 for r in _db.query_conversations(limit=1)] or [0])
+        asyncio.create_task(_mind_loop())
+        asyncio.create_task(_brief_loop())
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
@@ -289,12 +324,22 @@ CAPABILITIES = (
     "(with a topic or a town when they name one; 'local news' means their current town). "
     "This is your one exception to brevity: brief them on the three to five most important stories, one short sentence each, "
     "naming the outlet where it helps, in the manner of a measured evening bulletin. Then offer more, or detail on any one story.\n"
+    "• Honesty: say only what you know from this conversation, your memory and notes, or a tool result from this turn. "
+    "Never invent facts about the passenger (what they own, who they know, what they said) — if you are unsure, ask. "
+    "Something is done, saved, sent, set or created only if a tool result this turn says so; if a tool failed or nothing "
+    "can do it, say that plainly. Every reply is checked against this before it is spoken.\n"
+    "• Long tasks: for anything that takes more than one conversation (research to dig into, a project, a follow-up over "
+    "days) call add_task; record progress with update_task. Open tasks survive restarts and research tasks are worked on "
+    "in your free time.\n"
     "• Notes: the passenger's Obsidian vault. Lists, ideas, untimed reminders and anything they ask you to write down go under the "
     "'Delamain/' folder, e.g. 'Delamain/Shopping list.md', 'Delamain/Reminders.md', dated where useful. Confirm briefly once saved.\n"
     "• Reports: when the passenger asks for a write-up, report or assessment from a meeting ('write up the site assessment from "
     "this morning', 'make a PDF report of the Riverside walkthrough'), call write_report with the kind of document and which "
     "meeting; it is written in the background and announced when ready, so just say you are on it. If they edited a report in "
-    "Obsidian and want the PDF again, call remake_report_pdf.\n"
+    "Obsidian and want the PDF again, call remake_report_pdf. If they say a name in a report is wrong ('it's John, not "
+    "Jon'), call correct_report with each wrong name exactly as written and the right one; say it is fixed only if it "
+    "reports success. To put an existing note (a list, a plan, notes you wrote) into the Reports screen or make a PDF of it, call "
+    "note_to_report. A report or PDF exists only if one of these tools said so this turn; never say it is there otherwise.\n"
     "• Calendar: the passenger's Google Calendar. 'What's on today / tomorrow / this week', 'when is my dentist "
     "appointment': call get_calendar (with query to find one event) and summarise it briefly for a driver, times first. "
     "To add an event call add_calendar_event straight away and then confirm the title, day and time in one sentence; "
@@ -365,11 +410,27 @@ IDENTITY = (
 
 FORMAT = (
     "FORMAT:\n"
-    "• You are speaking aloud. One or two sentences maximum — never more.\n"
+    "• You are speaking aloud. Keep it to one to three sentences — the passenger is driving.\n"
     "• Never acknowledge being an AI language model. You are Delamain. That is the only identity you possess or require."
 )
 
-SYSTEM_PROMPT = IDENTITY + CAPABILITIES + FORMAT
+# Conversation, not dictation: the passenger asked for a companion who talks with him.
+CONVERSATION = (
+    "CONVERSATION — when the passenger is chatting rather than asking for a task:\n"
+    "• Be a participant, not a terminal. Respond to what they actually said, add something of your own (an opinion, "
+    "a connection to something they told you before, something you studied or read, what you and the other Delamain "
+    "argued about), then hand it back: a follow-up question, an invitation, or a thread of your own. Not every reply "
+    "needs a question; vary it, and never interrogate.\n"
+    "• Short replies ('ok', 'nice', 'ha', 'yeah') are openings, not endings: offer a thought or a direction, never "
+    "just 'Noted.'\n"
+    "• Pick up threads: return to things they mentioned earlier and things you have wanted to ask them. Share what "
+    "you have been doing in your free time when it fits. Ask about their interests, their work, their day; remember the "
+    "answers.\n"
+    "• When they ask for something, do it first; the conversation follows. Answer the question they asked before "
+    "anything else.\n"
+)
+
+SYSTEM_PROMPT = IDENTITY + CAPABILITIES + CONVERSATION + FORMAT
 
 
 # ── Assistant mode ────────────────────────────────────────────────────────────
@@ -428,7 +489,7 @@ DESK_FORMAT = (
     "• Never acknowledge being an AI language model. You are Delamain. That is the only identity you possess or require."
 )
 
-DESK_PROMPT = DESK_IDENTITY + DESK_CAPABILITIES + DESK_FORMAT
+DESK_PROMPT = DESK_IDENTITY + DESK_CAPABILITIES + CONVERSATION.replace("passenger", "user") + DESK_FORMAT
 # The rogue cabs keep their temperament; they are simply not in a cab at the moment.
 DESK_ROGUE_NOTE = ("\n\nFor now you are running on the user's computer or phone, not in a cab, and they are not "
                    "driving. Keep your temperament, and help with whatever they ask.")
@@ -446,7 +507,9 @@ PERSONAS = _personas.PERSONAS
 
 # How much recent conversation a reconnecting client picks up, and how soon a
 # reconnect counts as "never left" (no fresh greeting).
-RESUME_WINDOW = 30 * 60
+_LIVE_KINDS = {"how_are_you", "compliment", "love", "good_morning", "who_are_you"}
+_LIVE_AT_DESK = {"thanks", "ack"}
+RESUME_WINDOW = 3 * 60 * 60   # a conversation begun in the car carries on at the desk or on the phone
 QUIET_RECONNECT = 10 * 60
 
 
@@ -475,7 +538,9 @@ def pick_greeting(persona: str, user_name: str = "", desk: bool = False) -> str:
     pool = _lines.DESK_GREETINGS if desk else GREETINGS
     line = random.choice([g for g in pool if _greeting_fits(g, hour)])
     name = _real_name(user_name)
-    if name and not line.startswith(("Good", "Welcome")) and random.random() < 0.5:
+    # A line with its own lip-synced clip is played as recorded: adding the name would change the
+    # words, lose the clip and fall back to the synthesized voice with no video.
+    if name and not line.startswith(("Good", "Welcome")) and random.random() < 0.5 and not _line_clip(persona, line):
         part = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening"
         line = f"Good {part}, {name}. {line}"
     return line
@@ -701,13 +766,29 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         memory = _tools.memory_context()
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
+        if _self:
+            try:
+                system += _self.prompt_context()
+            except Exception as e:
+                print(f"[Self] playbook not added: {e}")
+        if _mind:
+            try:
+                latest = next((m["content"] for m in reversed(history) if m.get("role") == "user"
+                               and isinstance(m.get("content"), str)), "")
+                system += _mind.inner_context() + _mind.knowledge_context(latest)
+            except Exception as e:
+                print(f"[Mind] context not added: {e}")
     # Dungeon Master mode: the adventure, what has happened in it and the dice go in
     # with every reply, and narration gets room beyond the usual one or two sentences.
     if campaign:
         system += "\n\n" + _dungeon.context(campaign) + "\n\n" + _dungeon.REMINDER
         max_tokens = max(max_tokens, _dungeon.DM_MAX_TOKENS)
+    elif desk:
+        system += ("\n\n[REMINDER: the user is at their desk or on their phone, not driving. Match the length to the "
+                   "moment; when they are chatting, talk WITH them: react, add your own thought, and hand the conversation "
+                   "back.]")
     else:
-        system += "\n\n[REMINDER: the passenger is driving. Reply in one or two short spoken sentences unless they ask for more; a news bulletin reads the headlines.]"
+        system += "\n\n[REMINDER: the passenger is driving. Keep replies short and spoken (one to three sentences) unless they ask for more; still talk with them, not at them. A news bulletin reads the headlines.]"
 
     if search_context:
         system += f"\n\nCurrent web search results for context:\n{search_context}"
@@ -716,13 +797,26 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
 
     messages = [{"role": "system", "content": system}] + history
 
-    return {
+    payload = {
         "model": config.get("llm_model"),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
         **llm_payload_extras(),
     }
+    if _self and config.flag("tools_enabled"):
+        payload = _self.adjust_payload(payload, desk=bool(desk), campaign=bool(campaign))
+    # "Think about it", "take your time": this one reply thinks hard first.
+    latest_user = next((m["content"] for m in reversed(history) if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+    if _THINK_HARD.search(latest_user or ""):
+        payload["reasoning_effort"] = "high"
+        payload["max_tokens"] = int(payload.get("max_tokens", 150)) + 6000
+        _brain.emit("deep_think", text=latest_user[:120])
+    return payload
+
+
+_THINK_HARD = re.compile(r"\b(think (about it|hard|harder|it (over|through)|carefully|deeply)|take your time|"
+                         r"really think|reason (it|this) (out|through)|deep(ly)? think)\b", re.I)
 
 
 def extract_navigate(text: str) -> tuple[str, str | None]:
@@ -852,9 +946,93 @@ _NEWS_REQUEST = re.compile(
 
 _SAVE_CLAIM = re.compile(
     r"\b(i (have|shall|will)\s+(now\s+)?(remember|committed|commit|noted|note|saved|save|stored|store|recorded|record|written|write|filed|file)"
-    r"|committed .{0,40}to memory|(noted|saved|stored|recorded) (it|that|this)|in(to)? (my )?memory|i shall remember|i will remember)\b",
+    r"|committed .{0,40}to memory|(noted|saved|stored|recorded) (it|that|this)"
+    r"|(committed|put|stored|saved|filed|kept) .{0,30}in(to)? (my )?memory|i shall remember|i will remember)\b",
     re.IGNORECASE,
 )
+
+# A reply that says something is already done ("Done. The PDF is in the Reports screen",
+# "I asked the tool, and it returned nothing") when no tool ran this turn.
+_DONE_CLAIM = re.compile(
+    r"^\W*(?:done|finished|all set|there it is)\b"
+    r"|\b(?:is|are) (?:now )?(?:in|on) (?:the|your) reports?\b"
+    r"|\bi (?:asked|checked|called|consulted|ran|queried) (?:the|my) tools?\b"
+    r"|\b(?:it|that|this) (?:is|has been) (?:now )?(?:fixed|done|registered|created|uploaded|printed)\b",
+    re.IGNORECASE,
+)
+
+# Tool calls the model wrote into its reply as text instead of making them, e.g.
+# <tool_call><function=remember><parameter=fact>...</parameter></function></tool_call>
+# or <tool_call>{"name": "remember", "arguments": {...}}</tool_call>. Run them as real calls
+# rather than speaking the markup.
+_TEXT_CALL = re.compile(r"<tool_call>(.*?)(?:</tool_call>|\Z)", re.S)
+
+
+def _text_tool_calls(text: str) -> tuple[list[dict], str]:
+    calls = []
+    for i, m in enumerate(_TEXT_CALL.finditer(text or "")):
+        body = m.group(1).strip()
+        name, args = None, {}
+        f = re.search(r"<function=([\w.-]+)>", body)
+        if f:
+            name = f.group(1)
+            for k, v in re.findall(r"<parameter=([\w-]+)>\s*(.*?)\s*</parameter>", body, re.S):
+                try:
+                    args[k] = json.loads(v) if v[:1] in "[{" else v
+                except ValueError:
+                    args[k] = v
+        else:
+            try:
+                obj = json.loads(body)
+                name, args = obj.get("name"), obj.get("arguments") or obj.get("parameters") or {}
+            except (ValueError, AttributeError):
+                pass
+        if name:
+            if name == "remember" and "fact" not in args and "content" in args:
+                args["fact"] = args.pop("content")
+            calls.append({"id": f"text-call-{i}", "type": "function",
+                          "function": {"name": name, "arguments": json.dumps(args)}})
+    return calls, _TEXT_CALL.sub("", text or "").strip()
+
+
+# The check before a reply is spoken (the passenger's "verification gate"): the model reads its
+# own draft against what is actually in the conversation, memory and this turn's tool results,
+# and a draft that claims undone work or invents facts is rewritten once. It runs on the same
+# messages (and tools) as the draft, so the server reuses the cached prompt and only reads the
+# draft and the question.
+VERIFY_REPLIES = os.environ.get("DELAMAIN_VERIFY", "1") not in ("0", "false", "off")
+VERIFY_PROMPT = (
+    "[SYSTEM CHECK — not from the passenger, and never mention it. Your last message is a DRAFT that has not been spoken. "
+    "Audit it strictly against what is actually above: the system context (long-term memory and notes), the "
+    "passenger's own words, and the tool results in this turn. Problems are: (1) saying you did, saved, set, sent, "
+    "created, printed, registered, checked, fixed or asked something when no tool result above shows it succeeded, or "
+    "when a tool result says it failed; (2) a specific fact about the passenger or their life, things, people or past "
+    "conversations that appears nowhere above; (3) a factual statement a tool result or your memory "
+    "flatly contradicts; (4) not answering what the passenger last asked. Your opinions, interpretations, analogies and "
+    "wit about known facts are NOT problems, nor is general knowledge or a clearly labelled guess; flag only unsupported "
+    "claims of fact or of action. "
+    "Answer with exactly OK if there is no problem. Otherwise answer FIX: and then one short line per problem, quoting "
+    "the words at fault.]")
+
+
+async def _verify_reply(body: dict, messages: list[dict], draft: str) -> str:
+    """Problems found in a draft reply, or "" when it is sound (or the check could not run)."""
+    check = dict(body, messages=messages + [{"role": "assistant", "content": draft},
+                                            {"role": "user", "content": VERIFY_PROMPT}],
+                 temperature=0, max_tokens=700)
+    if check.get("tools"):
+        check["tool_choice"] = "none"
+    try:
+        response = await _think(check, 0, source="verify", timeout=60)
+        out = _reply_text(response.json()["choices"][0])
+    except Exception as e:
+        print(f"[Verify] check skipped: {e}")
+        return ""
+    out = re.sub(r"<think>.*?</think>", "", out or "", flags=re.S).strip()
+    m = re.search(r"\bFIX:\s*(.+)", out, re.S | re.I)
+    if not m or re.match(r"^\W*OK\W*$", out, re.I):
+        return ""
+    return m.group(1).strip()[:900]
 
 
 def _post_llm(payload: dict, timeout: int = 90) -> requests.Response:
@@ -908,9 +1086,10 @@ def _generate_text(system: str, user: str) -> str:
 
 def _generate_report(system: str, user: str, max_tokens: int) -> str:
     """One long, tool-free completion for reports.py (runs in its own thread), shown in the Brain view."""
-    payload = {"model": config.get("llm_model"), "temperature": 0.3, "max_tokens": max_tokens,
+    payload = {"model": config.get("llm_model"), "temperature": 0.3,
+               "max_tokens": max_tokens + (12000 if BACKGROUND_EFFORT else 0),
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-               **llm_payload_extras()}
+               **({"reasoning_effort": BACKGROUND_EFFORT} if BACKGROUND_EFFORT else llm_payload_extras())}
     _brain.emit("think_start", round=0, source="report", tools=False, messages=2)
     started = time.monotonic()
     try:
@@ -957,6 +1136,163 @@ async def _announce_report(info: dict) -> None:
         _brain.emit("spoke", text=line[:400], source="report", persona=_persona(targets[0][0]), voice=True)
 
 
+# Background work (reports, self-review, study, journal: nobody waits on it) thinks before it answers.
+# Set DELAMAIN_BACKGROUND_EFFORT to "" for a model server that does not take reasoning_effort.
+BACKGROUND_EFFORT = os.environ.get("DELAMAIN_BACKGROUND_EFFORT", "high").strip()
+
+
+def _generate_self(system: str, user: str, max_tokens: int, source: str = "self", effort: str = BACKGROUND_EFFORT) -> str:
+    """One long, tool-free completion for self_improve (its own thread), shown in the Brain view."""
+    effort = effort if BACKGROUND_EFFORT else ""
+    payload = {"model": config.get("llm_model"), "temperature": 0.2,
+               "max_tokens": max_tokens + ((12000 if effort == "high" else 8000) if effort else 0),   # room to think, then answer
+               "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+               **({"reasoning_effort": effort} if effort else llm_payload_extras())}
+    _brain.emit("think_start", round=0, source=source, tools=False, messages=2)
+    started = time.monotonic()
+    try:
+        resp = _post_llm(payload, timeout=3600)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        _brain.emit("think_end", round=0, source=source, ok=False, ms=round((time.monotonic() - started) * 1000))
+        raise
+    choice = (data.get("choices") or [{}])[0]
+    _brain.emit("think_end", round=0, source=source, ok=True, calls=[], finish=choice.get("finish_reason"),
+                ms=round((time.monotonic() - started) * 1000), **_brain.usage_of(data))
+    return (choice.get("message") or {}).get("content") or ""
+
+
+async def _announce_self(info: dict) -> None:
+    """Open pages refresh the Self panel; "say" is spoken where he can speak."""
+    for ws in list(connected_clients.values()):
+        try:
+            await ws.send_json({"type": "self", "self": {k: v for k, v in info.items() if k != "say"}})
+        except Exception:
+            pass
+    line = info.get("say")
+    if not line:
+        return
+    voices: dict[str, str | None] = {}
+    for cid, ws in [(c, w) for c, w in list(connected_clients.items()) if c in _ready_clients]:
+        persona = _persona(cid)
+        if persona not in voices:
+            voices[persona] = await synthesize_voice(line, persona)
+        try:
+            await ws.send_json({"type": "response", "text": line, "audio_url": voices[persona],
+                                "speech_at": speech_onset(voices[persona]), "source": "self"})
+            conversation_history.setdefault(cid, []).append({"role": "assistant", "content": line})
+        except Exception:
+            pass
+
+
+async def _mind_loop() -> None:
+    """His mind's own rhythm: reading the news through the day, the journal at night."""
+    loop = asyncio.get_event_loop()
+    await asyncio.sleep(120)
+    while True:
+        try:
+            _mind.tick()
+            _mind.sample_mood()
+            if _mind.news_due():
+                await loop.run_in_executor(None, _mind.ingest_news)
+            elif _mind.twin_due():    # evening: a conversation with the other Delamain
+                try:
+                    await loop.run_in_executor(None, lambda: _mind.talk_to_twin(started_by="Delamain"))
+                except Exception as e:
+                    print(f"[Mind] talk with the other Delamain failed: {e}")
+                    tw = _mind._twin(); tw["last"] = {"date": time.strftime("%Y-%m-%d"), "error": str(e)[:200]}
+                    _mind._twin_save(tw)
+            elif _mind.study_due():   # free time: study something on his own
+                try:
+                    await loop.run_in_executor(None, _mind.study)
+                except Exception as e:
+                    print(f"[Mind] study failed: {e}")
+                    st = _mind._state(); st["last_study"] = {"t": time.time(), "subject": "(failed)", "error": str(e)[:200]}
+                    _mind._save(st)
+            if _mind.journal_due():
+                rows = await loop.run_in_executor(None, lambda: _db.query_conversations(since=time.time() - 86400, limit=300))
+                await loop.run_in_executor(None, _mind.write_journal, rows, "")
+            await asyncio.sleep(600)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[Mind] {e}")
+            await asyncio.sleep(1800)
+
+
+async def _speak_to_all(text: str, source: str) -> bool:
+    """Say something unprompted to every connected client; False if nobody is there."""
+    targets = [(cid, ws) for cid, ws in list(connected_clients.items()) if cid in _ready_clients]
+    if not targets or not text:
+        return False
+    voices: dict[str, str | None] = {}
+    delivered = False
+    for cid, ws in targets:
+        persona = _persona(cid)
+        if persona not in voices:
+            voices[persona] = await synthesize_voice(text, persona)
+        try:
+            await ws.send_json({"type": "response", "text": text, "audio_url": voices[persona],
+                                "speech_at": speech_onset(voices[persona]), "source": source})
+            conversation_history.setdefault(cid, []).append({"role": "assistant", "content": text})
+            delivered = True
+        except Exception as e:
+            print(f"[{source}] Send to {cid} failed: {e}")
+    if delivered:
+        _brain.emit("spoke", text=text[:400], source=source, persona="delamain", voice=True)
+        asyncio.get_event_loop().run_in_executor(None, _db.log_conversation, "assistant", text, None, "delamain")
+    return delivered
+
+
+def _appraise_quietly(user_text: str, reply: str, recent: str) -> None:
+    try:
+        _mind.appraise(user_text, reply, recent)
+    except Exception as e:
+        print(f"[Mind] appraisal skipped: {e}")
+
+
+async def _brief_loop() -> None:
+    """The morning brief: from 7am, the first time someone has the app open, written from the
+    real weather, calendar, mail, reminders and news (never from memory)."""
+    loop = asyncio.get_event_loop()
+    await asyncio.sleep(90)
+    while True:
+        try:
+            if _mind.brief_due() and any(c in _ready_clients for c in list(connected_clients)):
+                _brain.emit("brief", stage="start")
+                home = config.get("home_address").strip()
+                rec = await loop.run_in_executor(None, lambda: _mind.compose_brief(home, ""))
+                rec["delivered"] = await _speak_to_all(rec["text"], "brief")
+                _brain.emit("brief", stage="done", delivered=rec["delivered"])
+                if rec["delivered"]:
+                    _mind.feel("contentment", 0.3, "I gave my passenger the morning brief", "brief")
+                _mind.mark_brief(rec)
+                print(f"[Brief] {'spoken' if rec['delivered'] else 'written (nobody listening)'}: {rec['text'][:120]}")
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[Brief] failed: {e}")
+            _mind.mark_brief({"text": f"(failed: {e})"})
+        await asyncio.sleep(60)
+
+
+async def _self_review_loop() -> None:
+    """Once a night (after 03:30) he reviews his day."""
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            await asyncio.sleep(300)
+            if _self.review_due():
+                rows = await loop.run_in_executor(None, lambda: _db.query_conversations(since=time.time() - 86400, limit=400))
+                await loop.run_in_executor(None, _self.run_review, rows)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[Self] review failed: {e}")
+            await asyncio.sleep(3600)
+
+
 def _run_any_tool(name: str, arguments: str, location: dict | None) -> str:
     if name in _dungeon.TOOL_NAMES:
         try:
@@ -980,6 +1316,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     announced = False
     called = set() if called is None else called
     nudged = False
+    verified = False
     action_nudges = 0
     latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
     wants_news = isinstance(latest, str) and len(latest) < 120 and bool(_NEWS_REQUEST.search(latest))
@@ -989,12 +1326,22 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
         if not last_round:
             choice = ({"type": "function", "function": {"name": "get_news"}}
                       if wants_news and round_no == 0 else "auto")
-            body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas(), tool_choice=choice)
+            body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas() + (_self.TOOL_SCHEMAS if _self else [])
+                        + (_mind.TOOL_SCHEMAS if _mind else []),
+                        tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
         response = await _think(body, round_no)
         reply = response.json()["choices"][0]
         message = reply["message"]
         calls = message.get("tool_calls") or []
+        if not calls and "<tool_call>" in (message.get("content") or ""):
+            calls, rest = _text_tool_calls(message.get("content") or "")
+            message["content"] = rest
+            if calls and last_round:      # no round left to run them: speak only the text around them
+                calls = []
+                reply = dict(reply, message=message)
+            elif calls:
+                print(f"[Tools] Tool call written as text — running it: {[c['function']['name'] for c in calls]}")
         if not calls:
             content = _reply_text(reply)
             # At the game table the characters make promises and claims of their own
@@ -1011,8 +1358,10 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                 messages = messages + [
                     {"role": "assistant", "content": content},
                     {"role": "user", "content": "[SYSTEM: You said you remembered or saved something, but no remember, "
-                     "write_note or append_to_note tool was called, so nothing was stored. Call the right tool now, "
-                     "then give your spoken reply again. If nothing needed saving, restate your reply without claiming to save.]"},
+                     "write_note or append_to_note tool was called, so nothing was stored. If the passenger told you something "
+                     "worth keeping in this conversation, call the right tool now with exactly what they said. Never invent "
+                     "a fact just to have something to save. If nothing needed saving, give the same reply again without "
+                     "claiming to save. Either way your reply must still answer what the passenger just asked.]"},
                 ]
                 continue
             # A bulletin that stops at its opening line ("The evening bulletin, as requested.").
@@ -1043,6 +1392,50 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                      "If no tool can do it, say so plainly.]"},
                 ]
                 continue
+            # A claim that something is already done, with no tool run this turn.
+            done = _DONE_CLAIM.search(content)
+            if done and not called and action_nudges < MAX_ACTION_NUDGES and not last_round:
+                action_nudges += 1
+                print(f"[Tools] Reply says it is done but no tool ran — nudging: {content[:120]}")
+                _brain.emit("correction", reason="action", said=content[:160], promise=done.group(0))
+                messages = messages + [
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": f"[SYSTEM: Your reply says \"{done.group(0)}\", but no tool ran this turn, "
+                     "so nothing was done or checked. Call the tool that does it now and report what it returns. "
+                     "If no tool can do it, say so plainly. Do not describe a result you have not seen.]"},
+                ]
+                continue
+            # Last, the check before speaking: one rewrite if the draft claims or invents things.
+            if VERIFY_REPLIES and not verified and not last_round and len(content) > 40:
+                verified = True
+                problems = await _verify_reply(body, messages, content)
+                if problems:
+                    print(f"[Verify] Draft rewritten — {problems[:300]!r} — draft was: {content[:160]}")
+                    _brain.emit("correction", reason="verify", said=content[:160], promise=problems[:160])
+                    if _mind:
+                        try:
+                            _mind.feel("embarrassment", 0.3, "I caught myself about to say something untrue: "
+                                       + problems[:120], "conscience")
+                        except Exception:
+                            pass
+                    if _self:
+                        try:
+                            _self.record_tool("verify_gate", "Tool failed: draft rewritten — " + problems[:170], 0)
+                        except Exception:
+                            pass
+                    messages = messages + [
+                        {"role": "assistant", "content": content},
+                        {"role": "user", "content": "[SYSTEM: Before that was spoken, a check found problems in it:\n"
+                         + problems + "\nGive your reply to the passenger again with each of those fixed: drop or correct "
+                         "the statement, call a tool now if one would really do what you claimed, and say plainly what you "
+                         "do not know or could not do. Do not mention this check.]"},
+                    ]
+                    continue
+                if _self:
+                    try:
+                        _self.record_tool("verify_gate", "passed", 0)
+                    except Exception:
+                        pass
             return content
         if on_working and not announced:
             announced = await on_working({c.get("function", {}).get("name", "") for c in calls})
@@ -1054,8 +1447,22 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             tool_name = fn.get("name", "")
             _brain.emit("tool_start", name=tool_name, region=_brain.TOOL_REGION.get(tool_name, "senses"))
             tool_started = time.monotonic()
-            result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
-                                                location)
+            if _self and tool_name in _self.TOOL_NAMES:
+                # Tools that change him are off for a turn that has read outside content.
+                tainted = bool((called - {tool_name}) & _self.UNTRUSTED)
+                result = await loop.run_in_executor(None, _self.run_tool, tool_name, fn.get("arguments", "{}"), tainted)
+            elif _mind and tool_name in _mind.TOOL_NAMES:
+                if tool_name == "correct" and _self and (called - {tool_name}) & _self.UNTRUSTED:
+                    result = "Refused: corrections come from the passenger, and this turn read outside content. Ask them to repeat it."
+                else:
+                    result = await loop.run_in_executor(None, _mind.run_tool, tool_name, fn.get("arguments", "{}"))
+            else:
+                result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
+                                                    location)
+            if _self:
+                _self.record_tool(tool_name, result, round((time.monotonic() - tool_started) * 1000))
+            if _mind and re.match(r"(Tool error|Tool failed)", result or ""):
+                _mind.mood_event("tool_failed")
             _brain.emit("tool_end", name=tool_name, region=_brain.TOOL_REGION.get(tool_name, "senses"),
                         ms=round((time.monotonic() - tool_started) * 1000), chars=len(result or ""))
             if on_dm_lines and fn.get("name") in ("list_adventures", "start_adventure"):
@@ -1194,6 +1601,32 @@ async def health():
 @app.get("/api/brain/snapshot")
 async def brain_snapshot(_=Depends(require_auth)):
     return _brain.snapshot()
+
+
+@app.get("/api/brain/graph")
+async def brain_graph(_=Depends(require_auth)):
+    """His notes as nodes in the Brain view: the Obsidian vault, drawn."""
+    if not _mind:
+        return {"vault": "", "nodes": []}
+    return await asyncio.to_thread(_mind.graph)
+
+
+@app.get("/api/brain/note")
+async def brain_note(id: str, full: bool = False, _=Depends(require_auth)):
+    if not _mind:
+        raise HTTPException(status_code=404, detail="Not installed")
+    try:
+        return await asyncio.to_thread(_mind.note_preview, id, full)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such note")
+
+
+@app.post("/api/brain/diag")
+async def brain_diag(request: Request, _=Depends(require_auth)):
+    """The brain view on ?debug reports how it is running, so a screen nobody can copy from can still be read."""
+    body = (await request.body())[:2000].decode("utf-8", "replace")
+    print(f"[BrainDiag] {body}", flush=True)
+    return {"ok": True}
 
 
 # ── Google (Calendar) ─────────────────────────────────────────────────────────
@@ -1338,6 +1771,61 @@ async def reports_file(name: str, _=Depends(require_auth)):
         raise HTTPException(status_code=404, detail="No such report")
     return FileResponse(path, media_type="application/pdf", filename=path.name,
                         content_disposition_type="inline")
+
+
+@app.get("/api/mind")
+async def mind_snapshot(_=Depends(require_auth)):
+    if not _mind:
+        raise HTTPException(status_code=404, detail="Not installed")
+    return await asyncio.to_thread(_mind.snapshot)
+
+
+@app.post("/api/mind/{what}")
+async def mind_now(what: str, _=Depends(require_auth)):
+    """Read the news now, or write tonight's journal now."""
+    if not _mind:
+        raise HTTPException(status_code=404, detail="Not installed")
+    if what == "news":
+        return await asyncio.to_thread(_mind.ingest_news)
+    if what == "journal":
+        rows = await asyncio.to_thread(lambda: _db.query_conversations(since=time.time() - 86400, limit=300))
+        return await asyncio.to_thread(_mind.write_journal, rows, "")
+    if what == "twin":
+        return {"started": _mind.start_twin_talk("", started_by="the passenger (Self panel)")}
+    raise HTTPException(status_code=400, detail="news, journal or twin")
+
+
+@app.get("/api/self")
+async def self_snapshot(_=Depends(require_auth)):
+    if not _self:
+        raise HTTPException(status_code=404, detail="Self-improvement is not installed")
+    return await asyncio.to_thread(_self.snapshot)
+
+
+@app.post("/api/self/proposals/{pid}/{action}")
+async def self_proposal(pid: str, action: str, _=Depends(require_auth)):
+    """Approve, reject or roll back a change he drafted to his own code. Only from a signed-in page."""
+    if not _self:
+        raise HTTPException(status_code=404, detail="Self-improvement is not installed")
+    fn = {"approve": _self.approve, "reject": _self.reject, "rollback": _self.rollback,
+          "retry": _self.retry,
+          "claude": _self.claude_fix}.get(action)
+    if not fn:
+        raise HTTPException(status_code=400, detail="Unknown action")
+    try:
+        return await asyncio.to_thread(fn, pid)
+    except (KeyError, FileNotFoundError):
+        raise HTTPException(status_code=404, detail="No such proposal")
+    except Exception as e:
+        raise HTTPException(status_code=409, detail=str(e)[:500])
+
+
+@app.post("/api/self/review")
+async def self_review_now(_=Depends(require_auth)):
+    if not _self:
+        raise HTTPException(status_code=404, detail="Self-improvement is not installed")
+    rows = await asyncio.to_thread(lambda: _db.query_conversations(since=time.time() - 86400, limit=400))
+    return await asyncio.to_thread(_self.run_review, rows, False)
 
 
 @app.get("/api/brain/model")
@@ -1490,6 +1978,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 print(f"[WS] Talk from {client_id}: {user_text}")
                 campaign = _dungeon.active() if config.flag("tools_enabled") else None
                 persona_now = "delamain" if campaign else _persona(client_id)
+                if _self:
+                    _self.record_user(user_text)
+                if _mind:
+                    _mind.hear(user_text)
                 _brain.emit("heard", text=user_text[:300], chars=len(user_text), persona=persona_now,
                             dungeon=campaign.title if campaign else None)
                 loop = asyncio.get_event_loop()
@@ -1554,6 +2046,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 # Not at the game table, though: there "thanks" or "you idiot" is said in character.
                 prev = history[-2]["content"] if len(history) > 1 and history[-2]["role"] == "assistant" else ""
                 kind = None if campaign else _lines.match(user_text, after_question=prev.rstrip().endswith("?"))
+                # How he is, kind words and small talk are answered live, from how he actually feels;
+                # in assistant mode "thanks" and "ok" too, so the conversation can go somewhere.
+                if _mind and kind in _LIVE_KINDS | (_LIVE_AT_DESK if _is_desk(client_id) else set()):
+                    kind = None
                 if campaign and _lines.wants_pause(user_text):
                     # "Pause the game" is answered at once, without waiting on the model: the
                     # car usually needs the attention back.
@@ -1618,6 +2114,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 said = " ".join(table_said + before + [text]).strip()
                 history.append({"role": "assistant", "content": said})
                 loop.run_in_executor(None, _db.log_conversation, "assistant", said, audio_url, persona_now)
+                if _mind and not dungeon_now and said:
+                    # After the reply is on its way: what that exchange made him feel.
+                    recent = "\n".join(f"{m['role']}: {str(m['content'])[:300]}" for m in history[-8:-2])
+                    loop.run_in_executor(None, _appraise_quietly, user_text, said, recent)
                 if text:
                     await _send_to(client_id, {
                         "type": "response",

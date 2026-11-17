@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon, NotebookPen, Car } from 'lucide-react';
+import { Send, Terminal, Settings, User, X, Save, MessageSquare, ChevronRight, MapPin, Mic, Database, LogOut, Swords, Brain as BrainIcon, NotebookPen, Car, Sparkles } from 'lucide-react';
 import DelamainFace from './components/DelamainFace';
 import { IntegrationsPanel, type IntegrationsHandle } from './components/IntegrationsPanel';
 import { SongPlayer, type Song } from './components/SongPlayer';
 import { DataDashboard } from './components/DataDashboard';
 import { BrainView } from './components/BrainView';
 import { MeetingPanel, type Meeting } from './components/MeetingPanel';
+import { SelfPanel } from './components/SelfPanel';
+import { EmotionsPanel, EmotionIcon, useTopFeeling } from './components/EmotionsPanel';
 import { useMeetingRecorder, fmtClock } from './components/meetingRecorder';
 import type { SpeechClock } from './components/brain/brainRenderer';
 import { LoginPage } from './components/LoginPage';
@@ -128,6 +130,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isDataOpen, setIsDataOpen] = useState(false);
   // Meeting notes: the recorder lives here, so closing the panel does not stop a meeting.
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
+  const [isSelfOpen, setIsSelfOpen] = useState(false);
+  const topFeeling = useTopFeeling(token);
+  const [isEmotionsOpen, setIsEmotionsOpen] = useState(false);
+  // The browser would not play his voice (no tap on this page yet): the line waits for one.
+  const [needsTap, setNeedsTap] = useState(false);
+  const [selfTick, setSelfTick] = useState(0);
   const [meetingUpdate, setMeetingUpdate] = useState<Meeting | null>(null);
   const [reportTick, setReportTick] = useState(0);   // bumped when a report is done, so the Meetings panel reloads its list
   const meetingRecRef = useRef(false);
@@ -286,8 +294,27 @@ function MainApp({ token, onLogout }: MainAppProps) {
       audio.onplaying = talkWhenHeard;
       audio.onended = finish;
       audio.onerror = finish;
-      audio.play().catch(() => {
+      audio.play().catch((err: unknown) => {
         if (done) return;
+        if (err instanceof DOMException && err.name === 'NotAllowedError') {
+          // Sound is blocked until the page is touched (just opened, or a second screen). Rather than a
+          // silent clip, hold the line and play it, voice and video together, on the first tap or key.
+          clearTimeout(watchdog);
+          setNeedsTap(true);
+          const stop = () => { window.removeEventListener('pointerdown', resume, true); window.removeEventListener('keydown', resume, true); setNeedsTap(false); };
+          const resume = () => {
+            stop();
+            if (done) return;
+            audio.play().then(() => {
+              clearTimeout(watchdog);
+              watchdog = setTimeout(finish, ((Number.isFinite(audio.duration) ? audio.duration : 20) + 5) * 1000);
+            }).catch(() => finish());
+          };
+          window.addEventListener('pointerdown', resume, true);
+          window.addEventListener('keydown', resume, true);
+          watchdog = setTimeout(() => { stop(); finish(); }, 60_000);   // nobody came: let it go
+          return;
+        }
         done = true;
         clearTimeout(watchdog);
         if (text) {
@@ -329,6 +356,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
         const m = msg.meeting as Meeting;
         setMeetingUpdate(m);
         if (m.status === 'done') setMessages(prev => [...prev, { role: 'delamain', content: `📝 The notes from “${m.title}” are in your vault: ${m.note}` }]);
+      } else if (msg.type === 'self') {
+        setSelfTick(n => n + 1);
       } else if (msg.type === 'report') {
         setReportTick(n => n + 1);
       } else if (msg.type === 'dungeon') {
@@ -712,8 +741,15 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
   return (
     <div className="flex bg-cyber-dark text-gray-200 font-rajdhani overflow-hidden h-screen">
+      {needsTap && (
+        <button onClick={() => setNeedsTap(false)}
+          className="fixed left-1/2 -translate-x-1/2 bottom-24 z-50 px-4 py-2 border border-cyber-blue/60 bg-[#05060a]/90 text-cyber-blue font-mono text-xs tracking-widest shadow-lg animate-pulse">
+          🔇 TAP TO HEAR DELAMAIN
+        </button>
+      )}
       {/* Sidebar (Minimal) */}
-      <div className="w-16 border-r border-cyber-gray flex flex-col items-center py-6 gap-8 z-20">
+      {/* scrolls when the screen is short (the car's display): every button stays reachable */}
+      <div className={`w-16 shrink-0 border-r border-cyber-gray flex flex-col items-center py-6 z-20 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:thin] [&>*]:shrink-0 ${settings.driveMode ? 'gap-5' : 'gap-8'}`}>
         <div className="p-2 bg-cyber-blue/10 rounded-lg text-cyber-blue">
           <Terminal size={24} />
         </div>
@@ -748,6 +784,20 @@ function MainApp({ token, onLogout }: MainAppProps) {
         >
           <NotebookPen size={24} />
           {meeting.state !== 'idle' && <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />}
+        </button>
+        <button
+          onClick={() => setIsSelfOpen(o => !o)}
+          className={`p-2 rounded-lg transition-colors ${isSelfOpen ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
+          title="Self-improvement: what he has learned, and changes to his own code waiting for your approval"
+        >
+          <Sparkles size={24} />
+        </button>
+        <button
+          onClick={() => setIsEmotionsOpen(o => !o)}
+          className={`p-2 rounded-lg transition-colors ${isEmotionsOpen ? 'bg-pink-400/20 text-pink-300' : 'text-gray-500 hover:text-pink-300 hover:bg-cyber-gray'}`}
+          title={topFeeling ? `Emotions: what he feels and why (now mostly ${topFeeling.name})` : 'Emotions: what he feels and why'}
+        >
+          <EmotionIcon size={24} color={topFeeling?.color} />
         </button>
         <button
           onClick={() => setSettings(s => ({ ...s, driveMode: !s.driveMode }))}
@@ -951,7 +1001,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
                   <Swords size={11} className="shrink-0" /> Dungeon Master · {dungeon.title}
                 </span>
               ) : (
-              <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Executive Transport</span>
+              <span className="text-[7px] xl:text-[8px] tracking-[0.3em] xl:tracking-[0.45em] text-cyber-blue/35 font-mono uppercase">Emergent Intelligence</span>
               )}
               <div className="h-px w-10 xl:w-16 bg-linear-to-l from-transparent to-cyber-blue/35" />
             </div>
@@ -1021,6 +1071,18 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {isMeetingOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[440px]">
             <MeetingPanel token={token} recorder={meeting} update={meetingUpdate} reportTick={reportTick} onClose={() => setIsMeetingOpen(false)} />
+          </div>
+        )}
+
+        {isEmotionsOpen && (
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[480px]">
+            <EmotionsPanel token={token} onClose={() => setIsEmotionsOpen(false)} />
+          </div>
+        )}
+
+        {isSelfOpen && (
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[520px]">
+            <SelfPanel token={token} tick={selfTick} onClose={() => setIsSelfOpen(false)} />
           </div>
         )}
 
