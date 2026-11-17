@@ -68,3 +68,6 @@ Thumbs.db
 settings.json
 settings.tmp
 meetings/
+pronunciations.local.txt
+# Delamain's own state: self-improvement, mind, proposals (runtime data, never committed)
+self/

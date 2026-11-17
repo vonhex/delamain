@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 import config
+import db as _db
 
 BASE_DIR = Path(__file__).resolve().parent
 MEETINGS_DIR = Path(os.environ.get("DELAMAIN_MEETINGS_DIR", BASE_DIR / "meetings"))
@@ -91,6 +92,21 @@ def list_recent(limit: int = 30) -> list[dict]:
                 continue
     out.sort(key=lambda m: m.get("started", 0), reverse=True)
     return out[:limit]
+
+
+def _known_context(limit: int = 20) -> str:
+    """Recent conversation history used to avoid asking about facts already known."""
+    try:
+        rows = _db.query_conversations(limit=limit)
+    except Exception:
+        return ""
+    out = []
+    for r in rows:
+        role = (r.get("role") or "").strip()
+        text = (r.get("content") or "").strip()
+        if text:
+            out.append(f"{role}: {text[:300]}" if role else text[:300])
+    return "\n".join(out)
 
 
 def start(title: str = "", mime: str = "") -> dict:
@@ -207,9 +223,13 @@ PART_SYSTEM = (
 )
 
 
-async def _summarise(mid: str, paras: list[tuple[float, str]], think) -> tuple[str, str]:
+async def _summarise(mid: str, paras: list[tuple[float, str]], think, known_context: str = "") -> tuple[str, str]:
     """(title, notes markdown). `think(payload)` makes one LLM call (main adds its settings and
     reports it to the Brain view)."""
+    context = (
+        f"Known context from prior interactions (do not ask questions about information already covered here):\n{known_context}\n\n"
+        if known_context else ""
+    )
     async def ask(system: str, user: str, max_tokens: int) -> str:
         resp = await think({"model": config.get("llm_model"), "temperature": 0.2, "max_tokens": max_tokens,
                             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
@@ -228,14 +248,14 @@ async def _summarise(mid: str, paras: list[tuple[float, str]], think) -> tuple[s
     meta = load(mid)
     hint = f"The meeting was called: {meta['title']}\n\n" if meta.get("title") else ""
     if len(parts) <= 1:
-        body = await ask(NOTES_SYSTEM, hint + "Transcript:\n" + (parts[0] if parts else ""), 2500)
+        body = await ask(NOTES_SYSTEM, context + hint + "Transcript:\n" + (parts[0] if parts else ""), 2500)
     else:
         notes = []
         for i, part in enumerate(parts, 1):
             update(mid, progress=round((i - 1) / (len(parts) + 1), 3))
-            notes.append(f"### Part {i} of {len(parts)}\n" + await ask(PART_SYSTEM, f"Part {i} of {len(parts)}:\n{part}", 1500))
+            notes.append(f"### Part {i} of {len(parts)}\n" + await ask(PART_SYSTEM, context + f"Part {i} of {len(parts)}:\n{part}", 1500))
         update(mid, progress=round(len(parts) / (len(parts) + 1), 3))
-        body = await ask(NOTES_SYSTEM, hint + "The meeting was long, so here are notes on each part, in order. "
+        body = await ask(NOTES_SYSTEM, context + hint + "The meeting was long, so here are notes on each part, in order. "
                          "Write the notes for the whole meeting from them, as one meeting: do not mention the parts, and no timestamps.\n\n" + "\n\n".join(notes), 2500)
     m = re.match(r"\s*TITLE:\s*(.+)", body)
     title = re.sub(r"^meeting notes:\s*", "", m.group(1).strip().strip('"*# '), flags=re.I) if m else ""
@@ -278,10 +298,11 @@ async def _run(mid: str, think, notify) -> None:
         segs = await loop.run_in_executor(None, _transcribe, mid, wav)
         (_folder(mid) / "transcript.json").write_text(json.dumps(segs))
         paras = _paragraphs(segs)
+        known_context = await loop.run_in_executor(None, _known_context) if paras else ""
         update(mid, status="summarising", progress=0.0, words=sum(len(t.split()) for _, t in paras))
         await notify(mid)
         if paras:
-            title, body = await _summarise(mid, paras, think)
+            title, body = await _summarise(mid, paras, think, known_context)
         else:
             title, body = "", "## Summary\nNo speech was recognised in this recording."
         meta = load(mid)

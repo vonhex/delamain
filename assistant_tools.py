@@ -627,6 +627,20 @@ TOOL_SCHEMAS = [
     _fn("remake_report_pdf", "Print a report's PDF again from its Markdown, after the passenger edited it in Obsidian. "
         "Does not rewrite anything.",
         {"report": {"type": "string", "description": "Report title or words from it; 'latest' for the newest."}}, []),
+    _fn("note_to_report", "Put an existing note from the vault (a list, a plan, notes you wrote) into the Reports "
+        "screen as a PDF, word for word. Use this when the passenger wants a note they can open in Reports or as a PDF; "
+        "write_report is only for writing a new report from meeting notes.",
+        {"note": {"type": "string", "description": "Vault path ('Delamain/Packing list.md') or words from the note's name."},
+         "title": {"type": "string", "description": "Cover title, if different from the note's heading."},
+         "kind": {"type": "string", "description": "Label above the title, e.g. 'Checklist', 'Plan'. Default 'Note'."}}, ["note"]),
+    _fn("correct_report", "Fix wrong names in a written report (people, companies, places, products), e.g. 'Jon' "
+        "should be 'John': replaces each exact name in its text, title and cover, prints the PDF again and checks "
+        "both. Only for name corrections the passenger gave; nothing else is rewritten.",
+        {"report": {"type": "string", "description": "Report title or words from it; 'latest' for the newest."},
+         "corrections": {"type": "array", "items": {"type": "object", "properties": {
+             "wrong": {"type": "string", "description": "The name exactly as it is written in the report, capitals included."},
+             "right": {"type": "string", "description": "The correct name."}}, "required": ["wrong", "right"]}}},
+        ["corrections"]),
     # Google Calendar (google_api.py); they say so when it is not connected.
     _fn("get_calendar", "The passenger's Google Calendar: events from a day, for a number of days. Today with no "
         "arguments (what is left of it). Each event has an [E#] reference for moving or removing it.",
@@ -679,6 +693,7 @@ _HANDLERS = {
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
     "write_report": _reports.write_report, "remake_report_pdf": _reports.remake_report_pdf,
+    "correct_report": _reports.correct_report, "note_to_report": _reports.note_to_report,
 }
 _HANDLERS.update(_google.HANDLERS)
 

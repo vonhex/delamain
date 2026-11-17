@@ -1,0 +1,9 @@
+# How Delamain should say words the voice model gets wrong.
+# One per line:  Word = respelling   (matching ignores case; whole words only)
+# For your own additions (local places, names, stations) use pronunciations.local.txt next to
+# this file; it is not in git. Changes apply to the next thing he says; no restart needed.
+#
+# Examples:
+# Worcestershire = Wooster-sher
+# Nguyen = Win
+# Saoirse = Seer-sha

@@ -36,6 +36,14 @@ TOOL_REGION = {
     "get_email": "senses", "read_email": "senses", "draft_email": "memory", "draft_reply": "memory",
     "list_adventures": "imagination", "start_adventure": "imagination", "pause_adventure": "imagination",
     "end_adventure": "imagination", "note_fact": "imagination",
+    # self-improvement, reports, and his mind
+    "learn_rule": "conscience", "forget_rule": "conscience", "save_skill": "conscience", "use_skill": "conscience",
+    "tune_setting": "conscience", "propose_improvement": "conscience", "self_status": "conscience",
+    "gemini_review": "conscience", "write_report": "memory", "remake_report_pdf": "memory",
+    "correct_report": "memory", "note_to_report": "memory",
+    "learn": "memory", "correct": "memory", "recall": "memory", "follow_topic": "memory", "add_task": "plans",
+    "update_task": "plans", "list_tasks": "plans", "link_topics": "memory", "merge_topics": "memory",
+    "remove_topic": "memory", "talk_to_other_delamain": "imagination",
 }
 
 _loop: asyncio.AbstractEventLoop | None = None
@@ -133,8 +141,17 @@ def _broadcast(msg: str) -> None:
             pass
 
 
+feeling_now = None   # set by main: () -> {"name", "i"} his strongest feeling, or None
+
+
 def snapshot() -> dict:
-    return {"state": _state, "today": _today, "recent": list(_recent)[-40:],
+    feeling = None
+    if feeling_now:
+        try:
+            feeling = feeling_now()
+        except Exception:
+            pass
+    return {"state": _state, "today": _today, "recent": list(_recent)[-40:], "feeling": feeling,
             "metrics": {k: _metrics[k] for k in ("available", "tps", "busy")},
             "tool_regions": TOOL_REGION, "llm_model": config.get("llm_model")}
 

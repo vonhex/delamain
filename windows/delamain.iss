@@ -56,9 +56,9 @@ Name: installdeps; Description: "&Download and set up everything he needs now (r
 ; (settings.json, delamain.db, .env, downloaded models and clips) is never in the setup file,
 ; so an update can't overwrite it.
 Source: "..\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion; \
-  Excludes: "\.git,\.github,\frontend\node_modules,\venv,\checkpoints,\audio_output,\line_clips,\dist-installer,__pycache__,*.pyc,\.env,*.db,*.sqlite,\settings.json,*.wav,\windows\*.iss"
+  Excludes: "\.git,\.github,\frontend\node_modules,\venv,\checkpoints,\audio_output,\line_clips,\dist-installer,__pycache__,*.pyc,\.env,*.db,*.sqlite,\settings.json,*.wav,\windows\*.iss,\self,pronunciations.local.txt"
 ; The reference voice he is cloned from is the one .wav that ships.
-Source: "..\delamain_ref_10s.wav"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\delamain_ref_clean.wav"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Delamain"; Filename: "{#PowerShell}"; \

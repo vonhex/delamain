@@ -180,3 +180,21 @@ body {
 @media (max-height: 560px) {
   .face-subtitle, .face-bars { display: none; }
 }
+
+/* The Brain view's note reader (server-rendered Markdown from the vault) */
+.note-html h1 { font-size: 1.25rem; color: #67e8f9; margin: 0.2rem 0 0.6rem; font-weight: 600; }
+.note-html h2 { font-size: 1rem; color: #a5f3fc; margin: 1rem 0 0.4rem; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.15rem; }
+.note-html h3 { font-size: 0.92rem; color: #cbd5e1; margin: 0.8rem 0 0.3rem; font-weight: 600; }
+.note-html p { margin: 0.45rem 0; }
+.note-html ul, .note-html ol { margin: 0.35rem 0 0.35rem 1.2rem; }
+.note-html ul { list-style: disc; } .note-html ol { list-style: decimal; }
+.note-html li { margin: 0.2rem 0; }
+.note-html a { color: #22d3ee; text-decoration: underline; text-decoration-color: rgba(34,211,238,0.35); cursor: pointer; }
+.note-html a:hover { text-decoration-color: #22d3ee; }
+.note-html code { background: rgba(255,255,255,0.07); padding: 0 0.25rem; font-size: 0.85em; }
+.note-html pre { background: rgba(255,255,255,0.05); padding: 0.5rem; overflow: auto; font-size: 0.8rem; }
+.note-html blockquote { border-left: 2px solid rgba(34,211,238,0.4); padding-left: 0.6rem; color: #94a3b8; }
+.note-html table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+.note-html th, .note-html td { border: 1px solid rgba(255,255,255,0.12); padding: 0.2rem 0.45rem; }
+.note-html del { color: #64748b; }
+.note-html em { color: #cbd5e1; }
