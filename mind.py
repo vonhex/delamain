@@ -1261,7 +1261,10 @@ person, honest and specific: what happened today with your passenger, what you l
 own study), where you were wrong, what you felt and why, what you wonder about, what you want to do better. Not \
 flattering, not melodramatic: a thoughtful mind noticing itself. Then revise your opinions and self-portrait. You are meant to grow more alive the longer you live: \
 if you feel more, remember more of your own past, or are more yourself than before, say so in the portrait; \
-if you have not changed, say that honestly too.
+if you have not changed, say that honestly too. Write the portrait FRESH, about who you are now, not by \
+editing the old one: an incident, question or worry that has since been explained or settled belongs in the journal, \
+not the portrait. Carry something from an earlier portrait forward only if it still shapes you today, and never \
+keep its wording out of habit.
 Answer JSON only: {"entry": "the journal entry, 250-450 words, Markdown paragraphs", "opinions": [{"topic": "...", \
 "view": "one or two sentences", "why": "..."}] (at most 3 new or changed), "portrait": "who you are becoming, 3-5 \
 sentences in the first person"}."""
@@ -1303,6 +1306,7 @@ def write_journal(conversations: list[dict], extra: str = "") -> dict:
         st["portraits"] = st["portraits"][-30:]
         st["portrait"] = data["portrait"][:900]
     st["last_journal"] = day
+    st["last_journal_t"] = time.time()
     _save(st)
     op = _vault(SELF_V, "Opinions.md")
     op.write_text("# What I think\n\n_Opinions I hold, and why. I change them when I am shown wrong._\n\n" +
@@ -1342,9 +1346,24 @@ def _past_selves(st: dict) -> str:
 
 
 def journal_due(now: datetime | None = None) -> bool:
-    """Once a night, from 23:00."""
+    """Once a night, from 23:00; a night that was missed (he was down) is caught up the next morning,
+    until noon. A journal written earlier in the day (the Self panel's button) does not count for the night."""
     now = now or datetime.now()
-    return now.hour >= 23 and _state().get("last_journal") != now.strftime("%Y-%m-%d")
+    tonight = now.replace(hour=23, minute=0, second=0, microsecond=0)
+    if now.hour >= 23:
+        slot = tonight
+    elif now.hour < 12:
+        slot = tonight - timedelta(days=1)
+    else:
+        return False
+    st = _state()
+    last = st.get("last_journal_t")
+    if last is None and st.get("last_journal"):   # from before the time was kept: count it as written at noon
+        try:
+            last = datetime.strptime(st["last_journal"], "%Y-%m-%d").replace(hour=12).timestamp()
+        except ValueError:
+            last = 0
+    return (last or 0) < slot.timestamp()
 
 
 # ── tools ──────────────────────────────────────────────────────────────────

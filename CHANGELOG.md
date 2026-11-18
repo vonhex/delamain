@@ -12,6 +12,9 @@ All notable changes to Delamain are documented here.
 - **Going to see**: when something in his free-time study makes him wonder what it looks like, he finds pictures and looks at them with his own model (one that reads images). What he saw goes into the study, the study log shows the picture, and pictures are kept in `Delamain/Seen/`. Its own switch in Features (`DELAMAIN_VISION`).
 - **Delete old proposals**: failed, out-of-date, rejected, replaced and rolled-back code proposals can be deleted from the Self panel, one by one or all at once. Applied changes are kept for their rollback.
 
+### Fixed
+- The nightly journal (and the self-portrait it rewrites) was skipped on any day a journal had already been written from the Self panel; a night he was down for is now caught up the next morning. The portrait is written fresh each night instead of carrying old, settled incidents forward.
+
 ### Changed
 - On/off settings are switches instead of drop-downs.
 
