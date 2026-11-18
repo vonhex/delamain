@@ -92,6 +92,9 @@ CAT_DOINGS = {"inside": ["asleep on the windowsill in the sun", "curled up under
 emit = None
 _lock = threading.RLock()
 _weather_cache: dict = {}
+# Where the garden is: kept in memory only, never written to garden.json (it is personal).
+_home: dict = {}       # {"key": address as set, "lat", "lon"}, geocoded once a run
+_shared: dict = {}     # {"lat", "lon"}: where the passenger's device last was, rounded to ~1 km
 
 
 def _ev(kind: str, **data) -> None:
@@ -133,13 +136,18 @@ def _state() -> dict:
     if g.get("version") != VERSION:      # the first garden (no real plants yet): start again, keep the cat
         g = _new(g.get("cat"))
         _save(g)
+    if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
+        g.pop("where", None)
+        g.pop("shared", None)
+        _save(g)
     return g
 
 
 def _save(g: dict) -> None:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(g, indent=1))
+    tmp.write_text(json.dumps({k: v for k, v in g.items() if k not in ("where", "shared")}, indent=1))
+    os.chmod(tmp, 0o600)
     tmp.replace(STATE)
 
 
@@ -151,16 +159,12 @@ def _log(g: dict, text: str, who: str = "garden") -> None:
 
 def set_location(location: dict | None) -> None:
     """The last position the passenger's device shared (rounded to about a kilometre), for the garden's
-    weather when no home address is set. Kept only in self/garden.json."""
+    weather when no home address is set. Kept in memory only."""
     try:
         lat, lon = round(float(location["lat"]), 2), round(float(location["lon"]), 2)
     except (TypeError, KeyError, ValueError):
         return
-    with _lock:
-        g = _state()
-        if g.get("shared") != {"lat": lat, "lon": lon}:
-            g["shared"] = {"lat": lat, "lon": lon}
-            _save(g)
+    _shared.update(lat=lat, lon=lon)
 
 
 def local_now(w: dict | None = None) -> datetime:
@@ -192,18 +196,16 @@ def weather() -> dict:
         import assistant_tools as _tools
         home = (config.get("home_address") or "").strip()
         where, source = {}, "default"
-        with _lock:
-            g = _state()
-            if home:
-                if (g.get("where") or {}).get("address") != home:
-                    hit = _tools._geocode(home)
-                    if hit:
-                        g["where"] = {"address": home, "lat": hit[0], "lon": hit[1]}
-                        _save(g)
-                if (g.get("where") or {}).get("address") == home:
-                    where, source = g["where"], "home"
-            if not where and (g.get("shared") or {}).get("lat") is not None:
-                where, source = g["shared"], "shared"
+        if home:
+            if _home.get("key") != home:
+                hit = _tools._geocode(home)
+                _home.clear()
+                if hit:
+                    _home.update(key=home, lat=hit[0], lon=hit[1])
+            if _home.get("lat") is not None:
+                where, source = _home, "home"
+        if not where and _shared.get("lat") is not None:
+            where, source = _shared, "shared"
         if where.get("lat") is not None:
             d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
                 "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 1,
