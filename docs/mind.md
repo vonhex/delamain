@@ -144,7 +144,11 @@ decides what to do (plant, water, harvest, clear, switch the grow light, name a 
 whatever names he likes, or just sit) and comes away feeling something about it. Ask him to go and
 check on his garden and he goes. The **Garden** tab (the sprout icon) draws it live: the real sky,
 every plant by its kind and stage, the cat, and Delamain himself, only while he is actually there,
-walking to whatever he is tending. His own account of each visit goes to `Delamain/Garden/`.
+walking to whatever he is tending, under real light: the sun's rays through the glass, light falling
+through the house window, the lantern and the lamp post at night. Full screen with the button or **F**.
+And he sees it too: while the tab is open it sends him a picture of the scene, and on his next visit he
+looks at it along with the facts (with a model that reads images). His own account of each visit goes
+to `Delamain/Garden/`.
 Turn it off in Settings → Integrations → Features → Delamain's garden.
 
 ### Sleep and dreams

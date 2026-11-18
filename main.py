@@ -1874,6 +1874,17 @@ async def garden_snapshot(_=Depends(require_auth)):
     return await asyncio.to_thread(_garden.snapshot)
 
 
+@app.post("/api/garden/view")
+async def garden_view(request: Request, _=Depends(require_auth)):
+    """The Garden tab's picture of the garden, so Delamain can see what it looks like."""
+    if not _garden:
+        raise HTTPException(status_code=404, detail="Not installed")
+    body = await request.json()
+    if not await asyncio.to_thread(_garden.save_view, (body or {}).get("image", "")):
+        raise HTTPException(status_code=400, detail="Not a PNG picture")
+    return {"ok": True}
+
+
 @app.post("/api/garden/visit")
 async def garden_visit(_=Depends(require_auth)):
     """Send him to his garden now."""

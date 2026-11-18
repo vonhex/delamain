@@ -2,7 +2,8 @@
 // greenhouse, raised beds outdoors) that live in real time under the real sky over home. Plants come up,
 // grow, flower, fruit, go dormant, wilt and die by their real needs; a cat comes and goes; and Delamain
 // appears only while he is actually there, walking to whatever he is tending.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { render, W, H, SPOTS, BENCH_STAND, type PWorld } from './gardenPixels';
 import { X, Sprout, Maximize2, Minimize2 } from 'lucide-react';
 
@@ -35,8 +36,9 @@ const STAGE: Record<string, string> = {
 };
 const PLACE: Record<string, string> = { window: 'South windowsill', shelf: 'Grow-light shelf', greenhouse: 'Greenhouse', outdoors: 'Outdoor beds' };
 
-function PixelScene({ g, big = false }: { g: Garden; big?: boolean }) {
+function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; capture?: MutableRefObject<HTMLCanvasElement | null> }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => { if (capture) capture.current = ref.current; });
   const gRef = useRef(g);
   gRef.current = g;
   const pos = useRef<{ x: number; y: number; facing: number } | null>(null);
@@ -80,7 +82,7 @@ function PixelScene({ g, big = false }: { g: Garden; big?: boolean }) {
   }, []);
   return (
     <canvas ref={ref} width={W} height={H} className={big ? 'block bg-black' : 'w-full rounded-md border border-emerald-400/25 bg-black'}
-      style={big ? { imageRendering: 'pixelated', width: `min(100vw, calc((100vh - 84px) * ${W / H}))`, height: 'auto' } : { imageRendering: 'pixelated' }} role="img" aria-label={`Delamain's garden${g.here ? ', with Delamain in it' : ''}`} />
+      style={big ? { imageRendering: 'pixelated', width: `min(100vw, calc((100vh - 76px) * ${W / H}))`, height: 'auto', maxHeight: 'calc(100vh - 76px)' } : { imageRendering: 'pixelated' }} role="img" aria-label={`Delamain's garden${g.here ? ', with Delamain in it' : ''}`} />
   );
 }
 
@@ -90,6 +92,36 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const [now, setNow] = useState(Date.now() / 1000);
   const [sending, setSending] = useState(false);
   const [full, setFull] = useState(false);
+  const fullRef = useRef<HTMLDivElement>(null);
+  const shot = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (full) fullRef.current?.requestFullscreen?.().catch(() => { /* the overlay still fills the window */ });
+    else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  }, [full]);
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setFull(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  // Delamain can see: while the tab is open, the scene is sent to the server now and then, and he is
+  // shown it on his next visit (scaled up, pixels kept crisp, so his model can make it out).
+  useEffect(() => {
+    const send = () => {
+      const c = shot.current;
+      if (!c) return;
+      const big = document.createElement('canvas');
+      big.width = c.width * 4; big.height = c.height * 4;
+      const ctx = big.getContext('2d');
+      if (!ctx) return;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(c, 0, 0, big.width, big.height);
+      fetch('/api/garden/view', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: big.toDataURL('image/png') }) }).catch(() => {});
+    };
+    const first = setTimeout(send, 4000);
+    const id = setInterval(send, 180000);
+    return () => { clearTimeout(first); clearInterval(id); };
+  }, [token]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -134,8 +166,8 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
           <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close"><X size={18} /></button>
         </div>
       </div>
-      {full && g && (
-        <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center" role="dialog" aria-label="Delamain's garden, full screen">
+      {full && g && createPortal(
+        <div ref={fullRef} className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center" role="dialog" aria-label="Delamain's garden, full screen">
           <PixelScene g={g} big />
           <div className="w-full flex items-start gap-3 px-4 py-2 text-xs text-gray-300 min-h-[84px]">
             <div className="flex-1 space-y-1">
@@ -146,14 +178,14 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
             </div>
             <button onClick={() => setFull(false)} className="text-gray-400 hover:text-white shrink-0" title="Back (F or Esc)" aria-label="Leave full screen"><Minimize2 size={18} /></button>
           </div>
-        </div>
+        </div>, document.body,
       )}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {error && <p className="text-xs text-red-400">{error}</p>}
         {!g ? <p className="text-xs text-gray-500 font-mono">Walking down to the garden…</p> : !g.enabled ? (
           <p className="text-xs text-gray-400">Delamain's garden is switched off (Settings → Integrations → Features → Delamain's garden).</p>
         ) : (<>
-          <PixelScene g={g} />
+          <PixelScene g={g} capture={shot} />
           <div className="text-xs text-gray-300 space-y-1">
             {g.here && g.visit ? (
               <p className="text-cyan-200"><b>Delamain is in the garden now</b>{step ? `: ${step.text}` : ', looking around'}. Here until {new Date(g.visit.until * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>

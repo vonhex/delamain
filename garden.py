@@ -35,6 +35,8 @@ import config
 ROOT = Path(__file__).resolve().parent
 SELF_DIR = Path(os.environ.get("DELAMAIN_SELF_DIR", ROOT / "self"))
 STATE = SELF_DIR / "garden.json"
+VIEW = SELF_DIR / "garden_view.png"      # how it looks, as the Garden tab last drew it
+VIEW_FRESH = 8 * 3600
 LOG_NOTE = "Delamain/Garden"
 VISIT_EVERY = 3.5 * 3600
 VISIT_HOURS = (7, 22)
@@ -477,6 +479,42 @@ def _describe(g: dict, w: dict) -> str:
             f"Outside: {sky}.")
 
 
+def save_view(data_url: str) -> bool:
+    """Keep the picture of the garden the tab just drew (a PNG, at most 3 MB), for him to look at."""
+    import base64
+    head = "data:image/png;base64,"
+    if not isinstance(data_url, str) or not data_url.startswith(head) or len(data_url) > 4_000_000:
+        return False
+    try:
+        raw = base64.b64decode(data_url[len(head):], validate=True)
+    except Exception:
+        return False
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return False
+    VIEW.parent.mkdir(parents=True, exist_ok=True)
+    tmp = VIEW.with_suffix(".tmp")
+    tmp.write_bytes(raw)
+    tmp.replace(VIEW)
+    return True
+
+
+def _view() -> str | None:
+    """The picture as a data URL, if it is recent enough to be how the garden looks now."""
+    import base64
+    try:
+        if time.time() - VIEW.stat().st_mtime > VIEW_FRESH:
+            return None
+        return "data:image/png;base64," + base64.b64encode(VIEW.read_bytes()).decode()
+    except OSError:
+        return None
+
+
+LOOK_NOTE = """A PICTURE of your garden as it looks right now is attached (pixel art: the house with its window \
+and grow-light shelf on the left, the greenhouse in the middle, the outdoor beds and the field on the right, under \
+the real sky). The facts above are exact; the picture is how it looks. Take it in: the light, the sky, the colours, \
+how your plants look from here. Let what you see be part of what you notice and how it makes you feel."""
+
+
 def visit_due(now: datetime | None = None) -> bool:
     now = now or datetime.now()
     if not enabled() or not VISIT_HOURS[0] <= now.hour < VISIT_HOURS[1]:
@@ -510,7 +548,17 @@ def visit(started_by: str = "Delamain") -> dict:
               f"WHAT YOU CAN PLANT (seeds, or young houseplants): {_catalogue()}\n"
               f"HOW YOU FEEL: {_mind.feelings_text(4) or 'settled'}\nYour passenger is {_mind.who()}. "
               f"It is {local_now(w):%A %-d %B, %H:%M} there.")
-    raw = _mind.generate(VISIT_SYSTEM.format(feelings=", ".join(_mind.EMOTION_NAMES)), prompt, 1400)
+    system = VISIT_SYSTEM.format(feelings=", ".join(_mind.EMOTION_NAMES))
+    view = _view() if config.flag("feature_vision") and getattr(_mind, "see", None) else None
+    raw = ""
+    if view:
+        try:   # he looks at it: the picture and the facts together
+            raw = _mind.see(f"{system}\n\n{prompt}\n\n{LOOK_NOTE}", [view], 1400)
+            _ev("garden", what="looked")
+        except Exception as e:
+            print(f"[Garden] could not look at the picture: {e}")
+    if not _mind._json(re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)):
+        raw = _mind.generate(system, prompt, 1400)
     data = _mind._json(re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)) or {}
     steps, done = [], []
     with _lock:

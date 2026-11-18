@@ -93,7 +93,10 @@ function skyStops(hour: number): RGB[] {
 }
 
 function sky(b: Buf, w: PWorld, t: number) {
-  const stops = skyStops(w.hour);
+  const base = skyStops(w.hour);
+  const stops: RGB[] = [];
+  for (let i = 0; i < (base.length - 1) * 4; i++) { const f = i / 4, k = Math.floor(f); stops.push(mix(base[k], base[k + 1], f - k)); }
+  stops.push(base[base.length - 1]);
   const grey = Math.max(0, (w.cloud - 50) / 50);
   const greyC: RGB = w.isDay ? [148, 163, 184] : [30, 34, 48];
   for (let y = YOFF; y < 122; y++) {
@@ -117,7 +120,7 @@ function sky(b: Buf, w: PWorld, t: number) {
     const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
     const sx = 60 + st * 180, sy = 90 - Math.sin(st * Math.PI) * 36;
     const vis = 1 - w.cloud / 130;
-    b.glow(sx, sy, 22, [255, 240, 180], 0.35 * vis);
+    b.glow(sx, sy, 16, [255, 240, 180], 0.28 * vis);
     b.disc(sx, sy, 5, [253, 224, 71], vis);
     b.disc(sx - 1, sy - 1, 3, [254, 249, 195], vis);
   }
@@ -126,7 +129,8 @@ function sky(b: Buf, w: PWorld, t: number) {
   for (let k = 0; k < n; k++) {
     const speed = 1.2 + hash(k + 3) * 1.5;
     const cx = ((hash(k) * (W + 60) + t * speed) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
-    const lit: RGB = w.isDay ? (grey > 0.5 ? [203, 213, 225] : [248, 250, 252]) : [71, 85, 105];
+    const golden = w.isDay && (w.hour < 8.5 || w.hour > 15.3);
+    const lit: RGB = w.isDay ? (grey > 0.5 ? [203, 213, 225] : golden ? [255, 214, 170] : [248, 250, 252]) : [71, 85, 105];
     const shade: RGB = w.isDay ? (grey > 0.5 ? [148, 163, 184] : [203, 213, 225]) : [51, 65, 85];
     const parts = [[0, 0, 6], [-7, 2, 4], [7, 2, 5], [3, -3, 4], [-3, -2, 3]];
     for (const [dx, dy, r] of parts) {
@@ -137,14 +141,46 @@ function sky(b: Buf, w: PWorld, t: number) {
       }
     }
   }
-  // mountains: the far range with snow, then the near foothills
+  // mountains: a hazy distant range, the far range with snow, then the near foothills
   const far: RGB = w.isDay ? [100, 116, 139] : [30, 36, 56], farSnow: RGB = w.isDay ? [241, 245, 249] : [120, 130, 160];
   const near: RGB = w.isDay ? [71, 85, 105] : [22, 26, 42];
+  const horizon = stops[stops.length - 1];
+  for (let x = 0; x < W; x++) {
+    const hd = 86 + Math.sin(x * 0.021 + 4) * 7 + Math.sin(x * 0.083) * 3;
+    for (let y = Math.floor(hd); y < 122; y++) b.set(x, y, mix(far, horizon, 0.55));
+    if (hd < 84) for (let y = Math.floor(hd); y < hd + 2; y++) b.set(x, y, mix(farSnow, horizon, 0.4));
+  }
   for (let x = 0; x < W; x++) {
     const hf = 92 + Math.sin(x * 0.045) * 9 + Math.sin(x * 0.13 + 1) * 4 + Math.sin(x * 0.31) * 1.5;
     for (let y = Math.floor(hf); y < 122; y++) b.set(x, y, y < hf + 3 + Math.sin(x * 0.5) && hf < 90 ? farSnow : far);
     const hn = 108 + Math.sin(x * 0.03 + 2) * 5 + Math.sin(x * 0.11) * 2;
     for (let y = Math.floor(hn); y < 122; y++) b.set(x, y, dith(x, y, 0.15) ? far : near);
+  }
+  // air between here and the mountains: haze, thickest at the horizon
+  for (let y = 88; y < 122; y++) {
+    const a = ((y - 88) / 34) * (w.isDay ? 0.26 : 0.2);
+    for (let x = 0; x < W; x++) b.set(x, y, horizon, a);
+  }
+  // a treeline along the edge of the field
+  const tree: RGB = w.isDay ? [36, 64, 44] : [12, 20, 18];
+  for (let x = 0; x < W; x++) {
+    const h = 2 + Math.floor(hash(x * 0.7) * 4) + (hash(Math.floor(x / 5)) > 0.5 ? 2 : 0);
+    for (let j = 0; j < h; j++) if (Math.abs((x % 5) - 2) <= (h - j) / 2.2) b.set(x, 117 - j, mix(tree, horizon, 0.25));
+  }
+  // birds by day, a shooting star now and then by night
+  if (w.isDay && w.cloud < 85) for (let k = 0; k < 3; k++) {
+    const bx = ((t * (6 + k) + k * 70) % (W + 40)) - 20, by = 60 + k * 6 + Math.sin(t * 0.8 + k) * 2;
+    const up = Math.floor(t * 5 + k) % 2 === 0;
+    const c: RGB = [30, 41, 59];
+    b.set(bx, by, c); b.set(bx - 1, by + (up ? -1 : 0), c); b.set(bx + 1, by + (up ? -1 : 0), c);
+    b.set(bx - 2, by + (up ? -1 : 1), c); b.set(bx + 2, by + (up ? -1 : 1), c);
+  }
+  if (!w.isDay && w.cloud < 60) {
+    const ph = (t % 19) / 19;
+    if (ph < 0.07) {
+      const f = ph / 0.07, x0 = 40 + hash(Math.floor(t / 19)) * 150, y0 = 44 + hash(Math.floor(t / 19) + 1) * 20;
+      for (let k = 0; k < 9; k++) b.set(x0 + f * 40 - k, y0 + f * 14 - k * 0.35, [255, 255, 255], (1 - k / 9) * (1 - f));
+    }
   }
 }
 
@@ -427,10 +463,93 @@ function cat(b: Buf, c: NonNullable<PWorld['cat']>, t: number) {
   }
 }
 
+function cone(b: Buf, cx: number, y0: number, y1: number, half: number, c: RGB, a: number) {
+  for (let y = y0; y < y1; y++) {
+    const f = (y - y0) / (y1 - y0), hw = 2 + half * f;
+    for (let x = Math.floor(cx - hw); x <= Math.ceil(cx + hw); x++) {
+      const e = 1 - Math.abs(x - cx) / hw;
+      if (e > 0 && dith(x, y, 0.25 + e * 0.6)) b.set(x, y, c, a * e * (1 - f * 0.5));
+    }
+  }
+}
+
+/** Light in the air: god rays from the sun (or moon) marched through the scene, bloom on what is bright,
+ *  the colour of the hour, and a soft vignette. Works on the canvas buffer in place. */
+function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w: PWorld, sx: number, sy: number, sunVis: number) {
+  const hw = W >> 1, hh = H >> 1;
+  const night = !w.isDay;
+  const src = night ? { x: 210, y: 54 - YOFF, vis: Math.max(0, 1 - w.cloud / 90) * 0.55 } : { x: sx, y: sy, vis: sunVis };
+  if (src.vis > 0.05) {
+    // what lets light through: open sky (the bright part near the light most), half through the glass
+    const m = new Float32Array(hw * hh);
+    for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
+      let v = 0;
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+        const p = ((y * 2 + j) * W + (x * 2 + i)), q = p * 4;
+        const l = (d[q] * 0.3 + d[q + 1] * 0.59 + d[q + 2] * 0.11) / 255;
+        const ddx = x * 2 + i - src.x, ddy = y * 2 + j - src.y;
+        const near = Math.exp(-(ddx * ddx + ddy * ddy) / (2 * 9 * 9));       // the light and its glow
+        if (d[q] === sky[q] && d[q + 1] === sky[q + 1] && d[q + 2] === sky[q + 2]) v += near * 0.55 * l + Math.max(0, l - 0.95) * 1.5;
+        else if (glass[p]) v += near * 0.5;
+      }
+      m[y * hw + x] = v / 4;
+    }
+    const rays = new Float32Array(hw * hh), N = 30, lx = src.x / 2, ly = src.y / 2;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
+      const dx = (lx - x) / N * 0.92, dy = (ly - y) / N * 0.92;
+      let px = x, py = y, wgt = 1, acc = 0;
+      for (let n = 0; n < N; n++) {
+        px += dx; py += dy;
+        const ix = px | 0, iy = py | 0;
+        if (ix >= 0 && iy >= 0 && ix < hw && iy < hh) acc += m[iy * hw + ix] * wgt;
+        wgt *= 0.955;
+      }
+      rays[y * hw + x] = acc / N;
+    }
+    const col: RGB = night ? [150, 170, 230] : (w.hour < 8.5 || w.hour > 15.3 ? [255, 176, 96] : [255, 232, 180]);
+    const exposure = (night ? 0.9 : 1.05) * src.vis;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const r = rays[(y >> 1) * hw + (x >> 1)] * exposure, q = (y * W + x) * 4;
+      d[q] += col[0] * r; d[q + 1] += col[1] * r; d[q + 2] += col[2] * r;
+    }
+  }
+  // bloom: what is bright glows into what is around it
+  const bw = new Float32Array(hw * hh * 3);
+  for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
+    const q = ((y * 2) * W + x * 2) * 4, l = (d[q] * 0.3 + d[q + 1] * 0.59 + d[q + 2] * 0.11) / 255;
+    const k = Math.max(0, l - 0.86) / 0.14;
+    bw[(y * hw + x) * 3] = d[q] * k; bw[(y * hw + x) * 3 + 1] = d[q + 1] * k; bw[(y * hw + x) * 3 + 2] = d[q + 2] * k;
+  }
+  const blur = (a: Float32Array, horiz: boolean) => {
+    const o = new Float32Array(a.length), R = 3;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) for (let c = 0; c < 3; c++) {
+      let sum = 0, n = 0;
+      for (let k = -R; k <= R; k++) {
+        const xx = horiz ? x + k : x, yy = horiz ? y : y + k;
+        if (xx < 0 || yy < 0 || xx >= hw || yy >= hh) continue;
+        sum += a[(yy * hw + xx) * 3 + c]; n++;
+      }
+      o[(y * hw + x) * 3 + c] = sum / n;
+    }
+    return o;
+  };
+  const bl = blur(blur(bw, true), false);
+  const grade: RGB | null = night ? [70, 90, 160] : (w.hour < 8.5 || w.hour > 15.3) ? [255, 170, 100] : null;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const q = (y * W + x) * 4, bq = ((y >> 1) * hw + (x >> 1)) * 3;
+    let r = d[q] + bl[bq] * 0.55, g = d[q + 1] + bl[bq + 1] * 0.55, bb = d[q + 2] + bl[bq + 2] * 0.55;
+    if (grade) { const a = night ? 0.1 : 0.08; r += (grade[0] - r) * a; g += (grade[1] - g) * a; bb += (grade[2] - bb) * a; }
+    const vx = (x / W - 0.5) * 2, vy = (y / H - 0.5) * 2, v = 1 - 0.2 * Math.min(1, (vx * vx * 0.6 + vy * vy * 0.9));
+    d[q] = r * v; d[q + 1] = g * v; d[q + 2] = bb * v;
+  }
+}
+
 // ── the whole frame ────────────────────────────────────────────────────────
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
   sky(b, w, t);
+  const skyCopy = b.d.slice();
+  const glass = new Uint8Array(W * H);
   const snowing = w.snow > 0, raining = w.rain > 0, frosty = w.temp < 0, cold = w.temp < 6;
   const night = !w.isDay;
   // the field to the foothills, then the ground
@@ -440,6 +559,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     else if (cold) c = dith(x, y, 0.35 + (frosty ? 0.2 : 0)) ? (frosty ? [196, 204, 196] : [138, 128, 82]) : [118, 110, 70];
     else c = dith(x, y, 0.4) ? [101, 140, 54] : [77, 124, 15];
     if (y >= 156) c = mix(c, [74, 54, 36], 0.45);
+    if (night) c = mix(c, [24, 30, 52], 0.55);          // moonlight, not daylight
     b.set(x, y, c);
   }
   // a pine, about 3.5 m
@@ -449,6 +569,10 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (snowing && j % 7 === 0) for (let i = -half; i <= half; i++) b.set(250 + i, 110 + j, [241, 245, 249]);
   }
   b.rect(249, 154, 3, 4, [87, 60, 36]);
+  // a rain barrel by the greenhouse, and a lamp post on the path
+  for (let j = 0; j < 9; j++) for (let i = 0; i < 6; i++) b.set(170 + i, 148 + j, j === 2 || j === 6 ? [68, 64, 60] : i === 0 || i === 5 ? [96, 60, 28] : [139, 90, 43]);
+  b.rect(170, 147, 6, 1, [61, 50, 40]);
+  b.rect(258 - 84, 127, 1, 30, [55, 55, 60]); b.rect(257 - 84, 125, 3, 3, night ? [253, 230, 138] : [120, 120, 125]); b.rect(256 - 84, 124, 5, 1, [55, 55, 60]);
   // fence, about 1.1 m
   for (let x = 178; x < 246; x += 8) { b.rect(x, 143, 2, 14, [120, 113, 108]); b.set(x, 142, [150, 143, 138]); }
   b.rect(178, 146, 68, 1, [120, 113, 108]); b.rect(178, 151, 68, 1, [120, 113, 108]);
@@ -474,6 +598,11 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (snowing) { b.set(x, Math.floor(top) - 1, [248, 250, 252]); b.set(x, Math.floor(top), [241, 245, 249]); }
   }
   b.rect(58, 92, 6, 10, [87, 83, 78]); b.rect(57, 91, 8, 2, [68, 64, 60]);       // chimney
+  for (let k = 0; k < 8; k++) {                                                   // and its smoke, drifting
+    const age = ((t * 0.18 + k / 8) % 1), r = 1 + age * 3.2;
+    const px = 61 + age * 18 + Math.sin(t * 0.9 + k * 2) * 1.5, py = 89 - age * 30;
+    for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) b.set(px + xx, py + yy, night ? [70, 75, 90] : [226, 232, 240], (1 - age) * 0.32);
+  }
   b.rect(0, ceil, hx1, 2, [74, 50, 34]);                                          // ceiling beam
   b.rect(hx1, ceil, 2, floor - ceil, [41, 30, 24]);
   for (let x = 33; x < 68; x++) { b.set(x, 117, [231, 229, 228]); }
@@ -511,17 +640,47 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (post || edge || y === eaveY || y === 140) b.set(x, y, night ? [148, 163, 184] : [241, 245, 249], post || edge ? 1 : 0.8);
     else {
       b.set(x, y, [186, 230, 253], 0.1);
+      const gy = y - YOFF; if (gy >= 0 && gy < H) glass[gy * W + x] = 1;
       if ((x + y) % 19 === 0 || (x + y + 1) % 19 === 0) b.set(x, y, [255, 255, 255], 0.22);
     }
   }
   if (snowing) for (let x = gx0; x <= gx1; x++) { const top = roofAt(x); b.set(x, top - 1, [248, 250, 252]); b.set(x, top - 2, [241, 245, 249], 0.7); }
   b.rect(gcx, peakY + 1, 1, 6, [87, 83, 78]); b.rect(gcx - 1, peakY + 7, 3, 2, night ? [253, 230, 138] : [168, 162, 158]);
+  // light through the house window: shafts onto the floor, with dust turning in them
+  const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
+  const sunX = 60 + st * 180, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
+  const warm: RGB = w.hour < 8.5 || w.hour > 15.3 ? [255, 190, 120] : [255, 236, 190];
+  if (sunVis > 0.15) {
+    const skew = Math.max(-14, Math.min(-3, -(sunX - 50) / 12));
+    for (let y = 135; y < 151; y++) {
+      const f = (y - 135) / 16;
+      const xl = 35 + skew * f, xr = 66 + skew * f;
+      for (let x = Math.floor(xl); x <= Math.ceil(xr); x++) {
+        const edge = Math.min(x - xl, xr - x) / 4;
+        if (dith(x, y, Math.min(1, edge) * 0.8)) b.set(x, y, warm, 0.13 * sunVis * (1 - f * 0.4));
+      }
+    }
+    for (let y = 118; y < 135; y++) for (let x = 34; x < 67; x++) b.set(x, y, warm, 0.06 * sunVis);
+    for (let k = 0; k < 16; k++) {                                   // dust in the light
+      const f = (hash(k + 3) + t * 0.02 * (1 + hash(k))) % 1;
+      const dx = 35 + hash(k) * 31 + skew * f + Math.sin(t * 0.6 + k) * 1.5, dy = 135 + f * 15;
+      b.set(dx, dy, [255, 248, 220], (0.35 + 0.35 * Math.sin(t * 2 + k)) * sunVis);
+    }
+  }
   if (w.cat?.here) cat(b, w.cat, t);
   if (night) {
     for (let y = 0; y < WH; y++) for (let x = 0; x < W; x++) if (y >= 108 || (x < 84 && y >= 90 + Math.abs(x - 39) * 0.42)) b.set(x, y, [6, 8, 24], 0.42);
     b.glow(gcx, peakY + 9, 20, [253, 224, 138], 0.3);
     b.glow(40, 132, 34, [251, 191, 36], 0.13);
     if (lightOn) b.glow(16, 130, 18, [232, 121, 249], 0.24);
+    cone(b, gcx, peakY + 9, 153, 22, [253, 224, 138], 0.16);            // the lantern's light down through the greenhouse
+    b.glow(174, 126, 16, [253, 224, 138], 0.35);
+    cone(b, 174, 128, 157, 14, [253, 224, 138], 0.14);                 // the lamp post on the path
+    if (w.temp > 14) for (let k = 0; k < 9; k++) {                     // fireflies, on a warm night
+      const fx = 180 + hash(k) * 70 + Math.sin(t * 0.7 + k * 3) * 4, fy = 130 + hash(k + 4) * 22 + Math.cos(t * 0.5 + k) * 3;
+      const on = Math.sin(t * 1.7 + k * 2.3);
+      if (on > 0.2) { b.set(fx, fy, [254, 240, 138], on); b.glow(fx, fy, 3, [254, 240, 138], 0.25 * on); }
+    }
   } else if (w.hour < 8 || w.hour > 16) {
     for (let y = 108; y < WH; y++) for (let x = 0; x < W; x++) b.set(x, y, [251, 146, 60], 0.06);
   }
@@ -537,5 +696,6 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
       else { b.set(x, y, [147, 197, 253], 0.55); b.set(x - 0.5, y + 1, [147, 197, 253], 0.45); b.set(x - 1, y + 2, [147, 197, 253], 0.3); }
     }
   }
+  post(b.d, skyCopy, glass, w, sunX, sunY - YOFF, sunVis);
   ctx.putImageData(new ImageData(b.d, W, H), 0, 0);
 }
