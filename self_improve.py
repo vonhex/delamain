@@ -865,6 +865,46 @@ def reject(pid: str) -> dict:
     return meta
 
 
+# Proposals nothing depends on any more. Applied ones are kept: their backup is what rolls them back.
+DELETABLE = ("failed", "stale", "rejected", "superseded", "retried", "rolled_back", "auto_rolled_back")
+
+
+def _deletable(d: Path, meta: dict) -> bool:
+    status = meta.get("status")
+    try:
+        status = json.loads((d / "result.json").read_text()).get("status", status) if status in ("applying", "rolling_back") else status
+    except (OSError, ValueError):
+        pass
+    return status in DELETABLE or (status == "sent_to_claude" and bool(meta.get("fixed_by")))
+
+
+def delete(pid: str) -> dict:
+    """Remove a failed, rejected or otherwise finished-with proposal and its files for good."""
+    d, meta = _meta(pid)
+    if not _deletable(d, meta):
+        raise ValueError(f"proposal is {meta.get('status')}; only failed, out-of-date, rejected or rolled-back ones can be deleted")
+    if d.resolve().parent != PROPOSALS.resolve():
+        raise KeyError(pid)
+    shutil.rmtree(d)
+    _log(f"proposal {pid} deleted")
+    return {"id": pid, "deleted": True}
+
+
+def delete_finished() -> dict:
+    """Delete every proposal nothing depends on any more."""
+    gone = []
+    for d in sorted(PROPOSALS.iterdir()) if PROPOSALS.is_dir() else []:
+        try:
+            if _deletable(d, json.loads((d / "meta.json").read_text())):
+                shutil.rmtree(d)
+                gone.append(d.name)
+        except (OSError, ValueError):
+            continue
+    if gone:
+        _log(f"deleted {len(gone)} finished proposal(s)")
+    return {"deleted": gone}
+
+
 CLAUDE_FIXABLE = ("failed", "stale", "pending", "auto_rolled_back", "rollback_unhealthy")
 CLAUDE_TIMEOUT = 1800
 

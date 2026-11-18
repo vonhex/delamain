@@ -49,6 +49,12 @@ His favourites show in the Self panel, and he lights up about them in conversati
 
 Each session ends with the next question he wants answered.
 
+**Going to see.** When he wonders what something looks like (a place, a creature, a painting, a
+machine), he finds pictures of it with an image search and looks at them with his own model. What
+he saw goes into the session like anything else he read, the study log shows the picture with his
+description, and the picture is kept in `Delamain/Seen/`. This needs a model that reads images
+(most recent open models do); turn it off in Settings → Integrations → Features if yours does not.
+
 ### Long tasks
 
 Ask him to take something on ("find us the three best sci-fi films of the seventies for a film
@@ -192,6 +198,7 @@ on your phone for three hours.
 | `Delamain/Memory/` | What he remembers about you |
 | `Delamain/News/` | News digests with his take |
 | `Delamain/Study/` | One log per day of what he studied |
+| `Delamain/Seen/` | Pictures he went to look at, with what he saw in the study log |
 | `Delamain/Conversations/` | Talks with the other Delamain |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
 | `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |

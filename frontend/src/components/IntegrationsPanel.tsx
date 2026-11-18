@@ -26,7 +26,7 @@ export interface IntegrationsHandle {
 }
 
 // Extras that cost model time: turn them off for a small or slow model.
-const FEATURES = ['feature_verify', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study',
+const FEATURES = ['feature_verify', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision',
   'feature_twin', 'feature_journal', 'feature_brief', 'feature_self_review'];
 const isOn = (v: string | undefined) => !['0', 'false', 'no', 'off'].includes((v ?? '').trim().toLowerCase());
 const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('true') && f.choices.includes('false');
@@ -47,6 +47,7 @@ const HINT: Record<string, string> = {
   feature_self_tools: 'Offers the model the tools that change his playbook, skills, tasks and knowledge. Small models do better with fewer tools',
   feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',
   feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
+  feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
   feature_twin: 'A conversation with his sceptical twin in the evening',
   feature_journal: 'Each night he writes about his day and updates his self-portrait',
   feature_brief: 'From 7am, the first time the app is open: weather, calendar, mail and news',

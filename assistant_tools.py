@@ -60,6 +60,26 @@ def web_search(query: str, max_results: int = 6) -> str:
     return "\n".join(lines) or "No results found."
 
 
+def image_search(query: str, max_results: int = 8) -> list[dict]:
+    """Pictures of something, from SearXNG's image search: [{"src", "title", "page"}], photos and art only."""
+    try:
+        resp = requests.get(config.get("searxng_url"), params={"q": query, "format": "json", "categories": "images"},
+                            timeout=15)
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+    except Exception:
+        return []
+    out = []
+    for r in results:
+        src = (r.get("img_src") or "").strip()
+        if not src.startswith(("http://", "https://")) or re.search(r"\.(svg|gif)(\?|$)", src, re.I):
+            continue
+        out.append({"src": src, "title": (r.get("title") or "").strip()[:160], "page": r.get("url") or src})
+        if len(out) >= max_results:
+            break
+    return out
+
+
 NEWS_LOCALE = {"hl": "en-US", "gl": "US", "ceid": "US:en"}
 NEWS_SECTIONS = {"world", "nation", "business", "technology", "entertainment", "sports", "science", "health"}
 

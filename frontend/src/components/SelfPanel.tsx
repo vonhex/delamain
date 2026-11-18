@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Check, Ban, Undo2, Loader2, RefreshCw, ChevronDown, ChevronRight, RotateCw, Wrench } from 'lucide-react';
+import { X, Check, Ban, Undo2, Loader2, RefreshCw, ChevronDown, ChevronRight, RotateCw, Wrench, Trash2 } from 'lucide-react';
 
 /* What Delamain has learned about himself, and the changes to his own code
    he has drafted. Code changes go live only from the Approve button here (self_improve.py). */
@@ -39,6 +39,9 @@ const STATUS: Record<string, string> = {
   failed: 'Could not be drafted', stale: 'Out of date', rolling_back: 'Rolling back…', rolled_back: 'Rolled back', retried: 'Retried', sent_to_claude: 'Fixed by Claude', superseded: 'Replaced by Claude\'s fix',
   auto_rolled_back: 'Rolled back automatically', rollback_unhealthy: 'Rollback did not come back healthy',
 };
+// Finished with: nothing depends on them (applied ones keep the backup that rolls them back).
+const DELETABLE = ['failed', 'stale', 'rejected', 'superseded', 'retried', 'rolled_back', 'auto_rolled_back'];
+const deletable = (p: { status: string; fixed_by?: string }) => DELETABLE.includes(p.status) || (p.status === 'sent_to_claude' && !!p.fixed_by);
 const when = (t: number) => new Date(t * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: number; onClose: () => void }) {
@@ -70,7 +73,8 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
     return () => clearInterval(id);
   }, [working, load]);
 
-  const act = async (p: Proposal, action: 'approve' | 'reject' | 'rollback' | 'retry' | 'claude') => {
+  const act = async (p: Proposal, action: 'approve' | 'reject' | 'rollback' | 'retry' | 'claude' | 'delete') => {
+    if (action === 'delete' && !window.confirm(`Delete this proposal and its files for good?\n\n${p.summary || p.goal}`)) return;
     if (action === 'approve' && !window.confirm(`Apply this change to Delamain's code and restart him?\n\n${p.summary || p.goal}`)) return;
     if (action === 'rollback' && !window.confirm('Undo this change and restart him?')) return;
     if (action === 'claude' && !window.confirm(`Send this to Claude Code to fix and implement?\n\n${p.summary || p.goal}\n\nClaude edits a private copy (file tools only). The result comes back here for your approval; nothing goes live on its own.`)) return;
@@ -79,6 +83,14 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
     if (r && !r.ok) setError((await r.json().catch(() => ({}))).detail || `Failed (${r.status})`);
     else if (action === 'claude' || action === 'retry') setOpen(null);   // handed off: close its details
     setBusy(null);
+    load();
+  };
+  const clearFinished = async () => {
+    if (!window.confirm('Delete every failed, out-of-date, rejected and rolled-back proposal for good? Applied changes and ones waiting for you are kept.')) return;
+    setBusy('clear'); setError(null);
+    const r = await fetch('/api/self/proposals/clear', { method: 'POST', headers: auth }).catch(() => null);
+    if (r && !r.ok) setError('Could not delete them.');
+    setOpen(null); setBusy(null);
     load();
   };
   const reviewNow = async () => {
@@ -173,7 +185,14 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
           )}
 
           <section className="space-y-2">
-            <h3 className="font-mono text-[10px] tracking-widest text-cyber-blue">CODE CHANGES</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="flex-1 font-mono text-[10px] tracking-widest text-cyber-blue">CODE CHANGES</h3>
+              {snap.proposals.some(deletable) && (
+                <button disabled={!!busy} onClick={() => void clearFinished()} className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-300 disabled:opacity-50">
+                  {busy === 'clear' ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />} Clear failed and old
+                </button>
+              )}
+            </div>
             {snap.busy && <p className="flex items-center gap-2 text-cyber-blue text-xs"><Loader2 size={12} className="animate-spin" /> {snap.busy.stage === 'Claude' ? 'Claude Code is fixing' : snap.busy.stage ?? 'Drafting'}: {snap.busy.goal}</p>}
             {snap.can_apply && <p className="text-amber-300/80 text-xs">Changes can be drafted and read here, but not applied: {snap.can_apply}.</p>}
             {snap.proposals.length === 0 && !snap.busy && <p className="text-gray-500 text-xs">None yet. Ask him for a new ability or a fix, or wait for his nightly review.</p>}
@@ -205,6 +224,9 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
                   )}
                   {['failed', 'stale'].includes(p.status) && (
                     <button disabled={!!busy} onClick={() => void act(p, 'retry')} className="flex items-center gap-1 text-gray-400 hover:text-cyber-blue disabled:opacity-50"><RotateCw size={12} /> Retry</button>
+                  )}
+                  {deletable(p) && (
+                    <button disabled={!!busy} onClick={() => void act(p, 'delete')} title="Delete this proposal and its files" className="flex items-center gap-1 text-gray-500 hover:text-red-300 disabled:opacity-50"><Trash2 size={12} /> Delete</button>
                   )}
                   {['applied', 'rollback_unhealthy'].includes(p.status) && (
                     <button disabled={!!busy} onClick={() => void act(p, 'rollback')} className="flex items-center gap-1 text-gray-400 hover:text-amber-300 disabled:opacity-50"><Undo2 size={12} /> Roll back</button>

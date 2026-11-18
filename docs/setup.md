@@ -64,7 +64,7 @@ His mind and self-improvement switch themselves on; give them two things:
 
 **Running a small model?** Settings → Integrations → **Features** has a switch for each extra that
 uses the model: the check before speaking, feelings, his self tools, news reading, study and long
-tasks, the other Delamain, the journal, the morning brief and the nightly self-review. **All off**
+tasks, looking at pictures, the other Delamain, the journal, the morning brief and the nightly self-review. **All off**
 leaves a plain, quick assistant with his voice, memory and everyday tools; turn things back on one
 at a time as your hardware allows. Changes take effect at once, without a restart.
 
@@ -161,6 +161,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_SELF_TOOLS` ⚙ | `true` | Offer the model the tools that change his playbook, skills, tasks and knowledge |
 | `DELAMAIN_NEWS_READING` ⚙ | `true` | Reading the news through the day |
 | `DELAMAIN_STUDY` ⚙ | `true` | Free-time study and long tasks |
+| `DELAMAIN_VISION` ⚙ | `true` | Looking at pictures in his free time (needs a model that reads images) |
 | `DELAMAIN_TWIN` ⚙ | `true` | Evening talks with the other Delamain |
 | `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |
 | `DELAMAIN_BRIEF` ⚙ | `true` | The morning brief |

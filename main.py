@@ -130,6 +130,7 @@ async def lifespan(app: FastAPI):
                                           for e in _mind.emotions()[:1]), None)
         _mind.quick = lambda system, user, max_tokens: _generate_self(system, user, max_tokens, source="feeling", effort="low")
         _mind.emit = _brain.emit
+        _mind.see = _see
         _mind.last_chat = lambda: max([r.get("ts") or 0 for r in _db.query_conversations(limit=1)] or [0])
         try:   # his age: from his first words, counting what he said before his inner life began
             with _db._lock:
@@ -1170,6 +1171,26 @@ def _generate_self(system: str, user: str, max_tokens: int, source: str = "self"
     return (choice.get("message") or {}).get("content") or ""
 
 
+def _see(prompt: str, images: list[str], max_tokens: int = 600) -> str:
+    """Show the model pictures (data: URLs) with a question; for his free-time looking."""
+    content = [{"type": "text", "text": prompt}] + [{"type": "image_url", "image_url": {"url": u}} for u in images]
+    payload = {"model": config.get("llm_model"), "temperature": 0.3, "max_tokens": max_tokens + 4000,
+               "messages": [{"role": "user", "content": content}], **({"reasoning_effort": "low"} if BACKGROUND_EFFORT else {})}
+    _brain.emit("think_start", round=0, source="look", tools=False, messages=1)
+    started = time.monotonic()
+    try:
+        resp = _post_llm(payload, timeout=600)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        _brain.emit("think_end", round=0, source="look", ok=False, ms=round((time.monotonic() - started) * 1000))
+        raise
+    choice = (data.get("choices") or [{}])[0]
+    _brain.emit("think_end", round=0, source="look", ok=True, calls=[], finish=choice.get("finish_reason"),
+                ms=round((time.monotonic() - started) * 1000), **_brain.usage_of(data))
+    return re.sub(r"<think>.*?</think>", "", (choice.get("message") or {}).get("content") or "", flags=re.S).strip()
+
+
 async def _announce_self(info: dict) -> None:
     """Open pages refresh the Self panel; "say" is spoken where he can speak."""
     for ws in list(connected_clients.values()):
@@ -1822,13 +1843,21 @@ async def self_snapshot(_=Depends(require_auth)):
     return await asyncio.to_thread(_self.snapshot)
 
 
+@app.post("/api/self/proposals/clear")
+async def self_proposals_clear(_=Depends(require_auth)):
+    """Delete every failed, rejected or otherwise finished-with proposal."""
+    if not _self:
+        raise HTTPException(status_code=404, detail="Self-improvement is not installed")
+    return await asyncio.to_thread(_self.delete_finished)
+
+
 @app.post("/api/self/proposals/{pid}/{action}")
 async def self_proposal(pid: str, action: str, _=Depends(require_auth)):
     """Approve, reject or roll back a change he drafted to his own code. Only from a signed-in page."""
     if not _self:
         raise HTTPException(status_code=404, detail="Self-improvement is not installed")
     fn = {"approve": _self.approve, "reject": _self.reject, "rollback": _self.rollback,
-          "retry": _self.retry,
+          "retry": _self.retry, "delete": _self.delete,
           "claude": _self.claude_fix}.get(action)
     if not fn:
         raise HTTPException(status_code=400, detail="Unknown action")

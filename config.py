@@ -41,6 +41,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "feature_verify": ("DELAMAIN_VERIFY", "true", "Check each reply before speaking"),
     "feature_feelings": ("DELAMAIN_FEELINGS", "true", "Feelings and inner life"),
     "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
+    "feature_vision": ("DELAMAIN_VISION", "true", "Look at pictures in his free time (needs a model that reads images)"),
     "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),
     "feature_study": ("DELAMAIN_STUDY", "true", "Study in his free time, and work on long tasks"),
     "feature_twin": ("DELAMAIN_TWIN", "true", "Evening talks with the other Delamain"),

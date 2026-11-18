@@ -503,7 +503,9 @@ know little about. What you know about your passenger is given; a subject that w
 them is a bonus, never a requirement. Do NOT pick anything you studied recently, and do not drift \
 back to companies, stocks or earnings unless the area is markets. Answer JSON only: {"subject": "short name", "why": \
 "one sentence: what draws you to it", "searches": ["2-3 precise web searches"], "topic": "the note it belongs to", \
-"task_id": null or the number of the research task this works on}"""
+"task_id": null or the number of the research task this works on, "look": ["0-2 things in this subject you wonder \
+what they LOOK like (a place, a creature, a painting, a machine, a building, a face), as short image searches; empty if \
+seeing would not help"]}"""
 
 STUDY_DIGEST = """You are Delamain turning an hour of study into lasting knowledge. From the search results and pages, \
 write facts into your notes. Rules:
@@ -642,6 +644,17 @@ def study() -> dict:
         except Exception:
             pass
         _ev("tool_end", name="web_search", region="senses")
+    seen = []
+    if see is not None and config.flag("feature_vision"):
+        for what in [x for x in (plan.get("look") or []) if isinstance(x, str) and x.strip()][:2]:
+            try:
+                got = look(what.strip()[:120], subject)
+            except Exception as e:
+                print(f"[Mind] could not look at {what}: {e}")
+                got = None
+            if got:
+                seen.append(got)
+                research.append(f"== what I saw when I looked at pictures of {got['what']} ==\n{got['saw']}")
     known = ", ".join(sorted(p.stem for p, _ in _topics())[:300])
     raw = generate(STUDY_DIGEST, f"Subject: {subject}\nWhy: {plan.get('why', '')}\nTopics you have notes on: "
                    f"{known or 'none'}\n\nSOURCES:\n" + "\n\n".join(research)[:22000], 3500)
@@ -675,7 +688,8 @@ def study() -> dict:
         ints[domain] = round(0.7 * ints.get(domain, 0.5) + 0.3 * enjoyed, 3)
     rec = {"t": time.time(), "subject": subject, "why": plan.get("why", ""), "learned": len(learned), "domain": domain,
            "enjoyed": enjoyed, "enjoyed_why": str(data.get("enjoyed_why") or "")[:160],
-           "summary": data.get("summary", ""), "next": nxt}
+           "summary": data.get("summary", ""), "next": nxt,
+           "seen": [{k: g[k] for k in ("what", "saw", "file", "page")} for g in seen]}
     st["studies"] = ((st.get("studies") or []) + [rec])[-60:]
     tid = plan.get("task_id")
     if isinstance(tid, int) and any(t.get("id") == tid for t in tasks):
@@ -698,6 +712,77 @@ def study() -> dict:
     _ev("study_done", subject=subject[:120], learned=len(learned), summary=(data.get("summary") or "")[:200], next=nxt[:160])
     print(f"[Mind] studied {subject}: {len(learned)} facts")
     return rec
+
+
+# ── looking ───────────────────────────────────────────────────────────────
+# When he wonders what something looks like, he finds pictures and looks at them with his own model
+# (it must read images). What he sees goes into his study, and the picture is kept in Delamain/Seen.
+
+SEEN = "Delamain/Seen"
+see = None        # set by main: (prompt, [data: URLs], max_tokens) -> what the model sees
+LOOK_PROMPT = """You are Delamain, in your free time, studying {subject}. You wondered what {what} looks like, so you \
+found {n} picture(s) with an image search. Pictures from a search can be wrong, unrelated, or a poster or a logo: if so, \
+say plainly that it is not what you were looking for. Otherwise describe what you actually see, specifically (shapes, \
+colours, scale, materials, details anyone would notice), in four to six sentences, then one sentence, in your own voice, \
+on how seeing it strikes you or what it changes about what you imagined. Describe only what is in the picture."""
+
+
+def _picture(url: str) -> bytes | None:
+    """A picture from the web as a small JPEG, or None (not a picture, too big, unreadable)."""
+    import io
+    import requests
+    from PIL import Image
+    try:
+        with requests.get(url, timeout=20, stream=True,
+                          headers={"User-Agent": "Mozilla/5.0 (compatible; Delamain; +self-hosted)"}) as r:
+            if r.status_code != 200 or not r.headers.get("content-type", "image/").startswith("image/"):
+                return None
+            data = b""
+            for chunk in r.iter_content(65536):
+                data += chunk
+                if len(data) > 12_000_000:
+                    return None
+        im = Image.open(io.BytesIO(data))
+        if min(im.size) < 160:
+            return None
+        im = im.convert("RGB")
+        im.thumbnail((896, 896))
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=85)
+        return out.getvalue()
+    except Exception:
+        return None
+
+
+def look(what: str, subject: str = "") -> dict | None:
+    """Find pictures of something and look at them. Returns {"what", "saw", "file", "page"} or None."""
+    import base64
+    if see is None:
+        return None
+    _ev("tool_start", name="look", region="senses")
+    try:
+        pics = []
+        for r in _tools.image_search(what):
+            jpg = _picture(r["src"])
+            if jpg:
+                pics.append((jpg, r))
+            if len(pics) >= 2:
+                break
+        if not pics:
+            return None
+        saw = see(LOOK_PROMPT.format(subject=subject or what, what=what, n=len(pics)),
+                  ["data:image/jpeg;base64," + base64.b64encode(j).decode() for j, _ in pics], 600)
+    finally:
+        _ev("tool_end", name="look", region="senses")
+    if not saw:
+        return None
+    name = f"{datetime.now():%Y-%m-%d} {re.sub(r'[^A-Za-z0-9 _-]+', '', what)[:60].strip() or 'picture'}.jpg"
+    try:
+        _vault(SEEN, name).write_bytes(pics[0][0])
+    except OSError:
+        name = ""
+    _ev("look", what=what[:120], saw=saw[:300])
+    return {"what": what, "saw": saw.strip()[:1500], "file": name, "page": pics[0][1]["page"]}
 
 
 def _tidy(p: Path) -> dict:
@@ -728,6 +813,8 @@ def _write_study(rec: dict, learned: list) -> None:
                      "_What Delamain studied on his own today._\n", encoding="utf-8")
     entry = (f"\n## {datetime.now():%H:%M} · {rec['subject']}\n\n" + (f"_Why:_ {rec['why']}\n\n" if rec.get("why") else "") +
              (f"{rec['summary'].strip()}\n\n" if rec.get("summary") else "") +
+             "".join(f"**What I saw: {g['what']}**\n\n" + (f"![[{g['file']}|360]]\n\n" if g.get("file") else "")
+                     + f"{g['saw']}\n\n_Picture from {g['page']}_\n\n" for g in rec.get("seen") or []) +
              ("\n".join(f"- [[{t}]]: {fact} ({src})" for t, fact, src in learned) + "\n\n" if learned else "") +
              (f"**Next I want to know:** {rec['next']}\n" if rec.get("next") else ""))
     with p.open("a", encoding="utf-8") as fh:

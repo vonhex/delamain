@@ -49,6 +49,10 @@ is installed, each failed or pending proposal also gets a **Fix with Claude** bu
 to the `claude` CLI (file tools only: no shell, no web) to finish; the result is a new proposal that
 still needs your approval. Claude runs only when you press that button; Delamain has no tool for it.
 
+Proposals you are done with (failed, out of date, rejected, replaced or rolled back) can be
+**deleted**, one at a time or all at once with **Clear failed and old**. Applied changes are kept,
+because their backup is what rolls them back.
+
 ### Requirements for applying
 
 Applying restarts him, which needs Delamain to run as a **systemd user service** on Linux:
