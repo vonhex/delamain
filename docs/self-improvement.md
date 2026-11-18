@@ -73,6 +73,7 @@ cannot apply them there.
 
 | Variable | Default | |
 |---|---|---|
+| `DELAMAIN_SELF_REVIEW` ⚙ | `true` | The nightly review and code proposals (Settings → Integrations → Features) |
 | `DELAMAIN_SERVICE` | `delamain.service` | The systemd user unit he runs as (for applying changes) |
 | `DELAMAIN_REVIEWER` | `agy` on the PATH | The `agy` CLI used for the second-opinion review |
 | `DELAMAIN_REVIEW_MODEL` | the CLI's default | The model it reviews with |

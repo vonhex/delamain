@@ -781,7 +781,8 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
             try:
                 latest = next((m["content"] for m in reversed(history) if m.get("role") == "user"
                                and isinstance(m.get("content"), str)), "")
-                system += _mind.inner_context() + _mind.knowledge_context(latest)
+                system += ((_mind.inner_context() if config.flag("feature_feelings") else "")
+                           + _mind.knowledge_context(latest))
             except Exception as e:
                 print(f"[Mind] context not added: {e}")
     # Dungeon Master mode: the adventure, what has happened in it and the dice go in
@@ -1006,7 +1007,6 @@ def _text_tool_calls(text: str) -> tuple[list[dict], str]:
 # and a draft that claims undone work or invents facts is rewritten once. It runs on the same
 # messages (and tools) as the draft, so the server reuses the cached prompt and only reads the
 # draft and the question.
-VERIFY_REPLIES = os.environ.get("DELAMAIN_VERIFY", "1") not in ("0", "false", "off")
 VERIFY_PROMPT = (
     "[SYSTEM CHECK — not from the passenger, and never mention it. Your last message is a DRAFT that has not been spoken. "
     "Audit it strictly against what is actually above: the system context (long-term memory and notes), the "
@@ -1199,25 +1199,26 @@ async def _mind_loop() -> None:
     await asyncio.sleep(120)
     while True:
         try:
-            _mind.tick()
-            _mind.sample_mood()
-            if _mind.news_due():
+            if config.flag("feature_feelings"):
+                _mind.tick()
+                _mind.sample_mood()
+            if config.flag("feature_news") and _mind.news_due():
                 await loop.run_in_executor(None, _mind.ingest_news)
-            elif _mind.twin_due():    # evening: a conversation with the other Delamain
+            elif config.flag("feature_twin") and _mind.twin_due():    # evening: a conversation with the other Delamain
                 try:
                     await loop.run_in_executor(None, lambda: _mind.talk_to_twin(started_by="Delamain"))
                 except Exception as e:
                     print(f"[Mind] talk with the other Delamain failed: {e}")
                     tw = _mind._twin(); tw["last"] = {"date": time.strftime("%Y-%m-%d"), "error": str(e)[:200]}
                     _mind._twin_save(tw)
-            elif _mind.study_due():   # free time: study something on his own
+            elif config.flag("feature_study") and _mind.study_due():   # free time: study something on his own
                 try:
                     await loop.run_in_executor(None, _mind.study)
                 except Exception as e:
                     print(f"[Mind] study failed: {e}")
                     st = _mind._state(); st["last_study"] = {"t": time.time(), "subject": "(failed)", "error": str(e)[:200]}
                     _mind._save(st)
-            if _mind.journal_due():
+            if config.flag("feature_journal") and _mind.journal_due():
                 rows = await loop.run_in_executor(None, lambda: _db.query_conversations(since=time.time() - 86400, limit=300))
                 await loop.run_in_executor(None, _mind.write_journal, rows, "")
             await asyncio.sleep(600)
@@ -1257,6 +1258,8 @@ def _appraise_quietly(user_text: str, reply: str, recent: str) -> None:
         _mind.note_reply(reply)     # task news he passed on, follow-ups he raised
     except Exception as e:
         print(f"[Mind] task bookkeeping skipped: {e}")
+    if not config.flag("feature_feelings"):
+        return
     try:
         _mind.appraise(user_text, reply, recent)
     except Exception as e:
@@ -1270,7 +1273,7 @@ async def _brief_loop() -> None:
     await asyncio.sleep(90)
     while True:
         try:
-            if _mind.brief_due() and any(c in _ready_clients for c in list(connected_clients)):
+            if config.flag("feature_brief") and _mind.brief_due() and any(c in _ready_clients for c in list(connected_clients)):
                 _brain.emit("brief", stage="start")
                 home = config.get("home_address").strip()
                 rec = await loop.run_in_executor(None, lambda: _mind.compose_brief(home, ""))
@@ -1294,7 +1297,7 @@ async def _self_review_loop() -> None:
     while True:
         try:
             await asyncio.sleep(300)
-            if _self.review_due():
+            if config.flag("feature_self_review") and _self.review_due():
                 rows = await loop.run_in_executor(None, lambda: _db.query_conversations(since=time.time() - 86400, limit=400))
                 await loop.run_in_executor(None, _self.run_review, rows)
         except asyncio.CancelledError:
@@ -1338,8 +1341,8 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
         if not last_round:
             choice = ({"type": "function", "function": {"name": "get_news"}}
                       if wants_news and round_no == 0 else "auto")
-            body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas() + (_self.TOOL_SCHEMAS if _self else [])
-                        + (_mind.TOOL_SCHEMAS if _mind else []),
+            body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas() + (_self.TOOL_SCHEMAS if _self and config.flag("feature_self_tools") else [])
+                        + (_mind.TOOL_SCHEMAS if _mind and config.flag("feature_self_tools") else []),
                         tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
         response = await _think(body, round_no)
@@ -1422,7 +1425,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                       f"speaking the draft instead")
                 content, rewritten_from = rewritten_from, ""
             # Last, the check before speaking: one rewrite if the draft claims or invents things.
-            if VERIFY_REPLIES and not verified and not last_round and len(content) > 40:
+            if config.flag("feature_verify") and not verified and not last_round and len(content) > 40:
                 verified = True
                 problems = await _verify_reply(body, messages, content)
                 if problems:
@@ -1997,7 +2000,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 persona_now = "delamain" if campaign else _persona(client_id)
                 if _self:
                     _self.record_user(user_text)
-                if _mind:
+                if _mind and config.flag("feature_feelings"):
                     _mind.hear(user_text)
                 _brain.emit("heard", text=user_text[:300], chars=len(user_text), persona=persona_now,
                             dungeon=campaign.title if campaign else None)

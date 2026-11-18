@@ -4,6 +4,16 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Feature switches** (Settings → Integrations → **Features**): turn off any extra that uses the model (the check before speaking, feelings, his self tools, news reading, study and long tasks, the other Delamain, the journal, the morning brief, the nightly self-review), one by one or **All off** for a small or slow model. They take effect without a restart, and each also has a `.env` variable ([docs/setup.md](docs/setup.md#environment-variables)).
+
+### Changed
+- On/off settings are switches instead of drop-downs.
+
+---
+
 ## [3.0.0] — 2026-11-17 — A mind of his own
 
 Delamain is no longer only a voice for the drive. He is a self-hosted mind: he studies, feels,

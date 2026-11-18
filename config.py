@@ -37,6 +37,16 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "meeting_whisper_model": ("MEETING_WHISPER_MODEL", "large-v3-turbo", "Transcription model (faster-whisper; runs on the CPU)"),
     "meeting_language": ("MEETING_LANGUAGE", "", "Meeting language (e.g. en; empty = detect it)"),
     "meeting_keep_audio": ("MEETING_KEEP_AUDIO", "false", "Keep the recording after the notes are written"),
+    # Extras that cost model time. Each can be turned off, for a small or slow model.
+    "feature_verify": ("DELAMAIN_VERIFY", "true", "Check each reply before speaking"),
+    "feature_feelings": ("DELAMAIN_FEELINGS", "true", "Feelings and inner life"),
+    "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
+    "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),
+    "feature_study": ("DELAMAIN_STUDY", "true", "Study in his free time, and work on long tasks"),
+    "feature_twin": ("DELAMAIN_TWIN", "true", "Evening talks with the other Delamain"),
+    "feature_journal": ("DELAMAIN_JOURNAL", "true", "Nightly journal"),
+    "feature_brief": ("DELAMAIN_BRIEF", "true", "Morning brief"),
+    "feature_self_review": ("DELAMAIN_SELF_REVIEW", "true", "Nightly self-review and code proposals"),
     "google_client_id": ("GOOGLE_CLIENT_ID", "", "Google OAuth client ID (from Google Cloud; see the guide)"),
     "google_client_secret": ("GOOGLE_CLIENT_SECRET", "", "Google OAuth client secret"),
 }
@@ -49,6 +59,8 @@ CHOICES = {
     "meeting_whisper_model": ("large-v3-turbo", "distil-large-v3", "medium", "small", "base"),
     "meeting_keep_audio": ("false", "true"),
 }
+FEATURES = [k for k in FIELDS if k.startswith("feature_")]
+CHOICES.update({k: ("true", "false") for k in FEATURES})
 NUMBER_FIELDS = {"insult_song_start": (0, 36000), "insult_song_seconds": (0, 36000)}
 # Never sent back to the browser: the Settings panel only learns whether one is set.
 SECRET_FIELDS = {"llm_api_key", "google_client_secret"}

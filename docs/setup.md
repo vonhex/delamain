@@ -62,6 +62,12 @@ His mind and self-improvement switch themselves on; give them two things:
   and writes his journal on the same model when nobody is using it. A reasoning model does this
   best; if your server rejects the `reasoning_effort` field, set `DELAMAIN_BACKGROUND_EFFORT=` (empty).
 
+**Running a small model?** Settings → Integrations → **Features** has a switch for each extra that
+uses the model: the check before speaking, feelings, his self tools, news reading, study and long
+tasks, the other Delamain, the journal, the morning brief and the nightly self-review. **All off**
+leaves a plain, quick assistant with his voice, memory and everyday tools; turn things back on one
+at a time as your hardware allows. Changes take effect at once, without a restart.
+
 To let him **apply** the code changes you approve, run him as a service: `./install.sh --service`
 (Linux). Optional helpers: the `agy` CLI for a second-opinion review of every change, and
 [Claude Code](https://claude.com/claude-code) for the *Fix with Claude* button. See
@@ -150,7 +156,15 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_ALLOWED_HOSTS` | *(unset)* | Only for the frontend's Vite dev or preview server (`npm run dev`, `npm run preview`) behind your own tunnel: its domain, e.g. `delamain.example.com` (comma-separated). Vite refuses other hostnames. A normal install serves the page on `:8888` and does not need it |
 | `TTS_NFE_STEPS` | `32` | F5-TTS steps: fewer is faster, more is clearer |
 | `DELAMAIN_PRONUNCIATIONS` | `pronunciations.local.txt` | Your own "Word = respelling" list for words the voice gets wrong (on top of `pronunciations.txt`) |
-| `DELAMAIN_VERIFY` | `1` | The check before speaking ([mind.md](mind.md#honesty)); `0` turns it off |
+| `DELAMAIN_VERIFY` ⚙ | `true` | The check before speaking ([mind.md](mind.md#honesty)); `false` turns it off |
+| `DELAMAIN_FEELINGS` ⚙ | `true` | Feelings and inner life: the appraisal after each reply, and his mood in every prompt |
+| `DELAMAIN_SELF_TOOLS` ⚙ | `true` | Offer the model the tools that change his playbook, skills, tasks and knowledge |
+| `DELAMAIN_NEWS_READING` ⚙ | `true` | Reading the news through the day |
+| `DELAMAIN_STUDY` ⚙ | `true` | Free-time study and long tasks |
+| `DELAMAIN_TWIN` ⚙ | `true` | Evening talks with the other Delamain |
+| `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |
+| `DELAMAIN_BRIEF` ⚙ | `true` | The morning brief |
+| `DELAMAIN_SELF_REVIEW` ⚙ | `true` | The nightly self-review and code proposals |
 | `DELAMAIN_BACKGROUND_EFFORT` | `high` | `reasoning_effort` for background work (study, journal, reviews, reports); empty for a server that rejects the field |
 | `DELAMAIN_SELF_DIR` | `<repo>/self` | His working state: mood, feelings, interests, tasks, proposals ([mind.md](mind.md), [self-improvement.md](self-improvement.md)) |
 | `DELAMAIN_SERVICE` | `delamain.service` | The systemd user unit he runs as, so approved code changes can restart him |
