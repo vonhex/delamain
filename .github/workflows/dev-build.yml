@@ -34,7 +34,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          # Docker (not OCI) media types: Unraid's update check asks for a Docker v2 manifest, and the
+          # registry answers 404 for an image published as OCI, so updates never show.
+          outputs: type=image,push=true,oci-mediatypes=false
           tags: ghcr.io/${{ env.IMAGE_NAME }}:dev   # latest moves only with a release
           cache-from: type=gha
           cache-to: type=gha,mode=max
