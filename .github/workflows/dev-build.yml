@@ -35,6 +35,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.IMAGE_NAME }}:latest
+          tags: ghcr.io/${{ env.IMAGE_NAME }}:dev   # latest moves only with a release
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false

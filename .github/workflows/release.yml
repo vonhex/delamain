@@ -95,6 +95,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # A plain Docker manifest, without the attestation entry buildx adds by default: Unraid's
+          # update check asks for a Docker v2 manifest and gets a 404 from an OCI index, so it never
+          # sees updates.
+          provenance: false
+          sbom: false
 
       # ── GitHub Release ────────────────────────────────────────────
       - name: Create GitHub Release

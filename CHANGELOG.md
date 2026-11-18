@@ -4,6 +4,14 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.5.1] — 2026-11-18
+
+### Fixed
+- **Unraid now sees updates.** The Docker image was published as an OCI index with a build-attestation entry; Unraid's update check asks for a Docker manifest, got a 404, and never offered an update. Images are now published as a plain Docker manifest.
+- `latest` now moves only with a release. Builds of `main` are published as `ghcr.io/vonhex/delamain:dev`.
+
+---
+
 ## [3.5.0] — 2026-11-18 — A life of his own
 
 A garden he keeps, a bed he sleeps in, a therapist he talks to, a memory that finds things by meaning,
