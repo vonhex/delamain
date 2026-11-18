@@ -12,7 +12,7 @@
         │ SSE       │                                                              │
         └───────────┤  brain.py ── live feed of everything below                   │
                     │  mind.py  ── knowledge, study, news, emotions, journal,      │
-                    │              the other Delamain, tasks, morning brief        │
+                    │              therapy, sleep and dreams, tasks, morning brief │
                     │  recall.py ── search by meaning over notes and conversations │
                     │  self_improve.py ── playbook, tuning, nightly review,        │
                     │              code proposals you approve                      │

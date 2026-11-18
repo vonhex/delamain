@@ -164,7 +164,9 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_NEWS_READING` ⚙ | `true` | Reading the news through the day |
 | `DELAMAIN_STUDY` ⚙ | `true` | Free-time study and long tasks |
 | `DELAMAIN_VISION` ⚙ | `true` | Looking at pictures in his free time (needs a model that reads images) |
-| `DELAMAIN_TWIN` ⚙ | `true` | Evening talks with the other Delamain |
+| `DELAMAIN_TWIN` ⚙ | `true` | Evening therapy with the other Delamain |
+| `DELAMAIN_GARDEN` ⚙ | `true` | His garden: real plants he tends in his free time ([mind.md](mind.md#his-garden)) |
+| `DELAMAIN_SLEEP` ⚙ | `23:30-07:00` | His bedtime (`HH:MM-HH:MM`), or `off` ([mind.md](mind.md#sleep-and-dreams)) |
 | `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |
 | `DELAMAIN_BRIEF` ⚙ | `true` | The morning brief |
 | `DELAMAIN_SELF_REVIEW` ⚙ | `true` | The nightly self-review and code proposals |

@@ -178,8 +178,9 @@ def learn(topic: str, fact: str, source: str = "the passenger", related: list[st
     return f"Learned, under [[{p.stem}]]: {fact}"
 
 
-def correct(topic: str, wrong: str, right: str) -> str:
-    """Strike out what was wrong and write in the passenger's correction, at once."""
+def correct(topic: str, wrong: str, right: str, by: str = "passenger") -> str:
+    """Strike out what was wrong and write in the correction, at once. by: "passenger" (the tool, when they
+    correct him) or "self" (his own tidying), which is credited as his own review and is not felt as a rebuke."""
     p = _note(topic)
     if not p:
         return "Which topic?"
@@ -196,11 +197,14 @@ def correct(topic: str, wrong: str, right: str) -> str:
                 lines[i] = f"- ~~{line[2:]}~~"
                 struck += 1
         text = "\n".join(lines) + "\n"
-        text = _insert(text, "Facts", f"- {right} — source: the passenger (correction) _({datetime.now():%Y-%m-%d})_")
+        src = "the passenger (correction)" if by == "passenger" else "my own review of this note"
+        text = _insert(text, "Facts", f"- {right} — source: {src} _({datetime.now():%Y-%m-%d})_")
         text = _insert(text, "Corrections", f"- {datetime.now():%Y-%m-%d}: “{(wrong or '').strip()[:200]}” → “{right[:300]}”")
         p.write_text(text, encoding="utf-8")
-    _ev("learned", topic=p.stem, fact=right[:160], source="your correction", correction=True)
-    mood_event("corrected")
+    _ev("learned", topic=p.stem, fact=right[:160], source="your correction" if by == "passenger" else "my own review",
+        correction=True)
+    if by == "passenger":
+        mood_event("corrected")
     return f"Corrected [[{p.stem}]]: {right}" + (f" (struck {struck} old line{'s' if struck != 1 else ''})" if struck else "")
 
 
@@ -791,7 +795,7 @@ def _tidy(p: Path) -> dict:
     fixed = 0
     for c in (data.get("corrections") or [])[:5]:
         if isinstance(c, dict) and c.get("wrong") and c.get("right"):
-            if correct(p.stem, c["wrong"], c["right"]).lower().startswith("corrected"):
+            if correct(p.stem, c["wrong"], c["right"], by="self").lower().startswith("corrected"):
                 fixed += 1
     st = _state()
     st["tidied"] = ((st.get("tidied") or []) + [p.stem])[-200:]
@@ -961,7 +965,8 @@ def feel(name: str, intensity: float, cause: str, source: str = "event") -> None
         # older feelings are re-based to now at their faded strength, so the fade stays continuous
         kept = [{"name": e["name"], "i": e["now"], "cause": e.get("cause", ""), "t": now, "source": e.get("source", "")}
                 for e in live]
-        st["emotions"] = (kept + [{"name": name, "i": intensity, "cause": cause, "t": now, "source": source}])[-16:]
+        kept = sorted(kept, key=lambda e: -e["i"])[:15]       # past sixteen, the faintest go, never the strongest
+        st["emotions"] = kept + [{"name": name, "i": intensity, "cause": cause, "t": now, "source": source}]
         m = mood()
         for key, d in EMOTIONS[name][0].items():
             # gentler near the ends, so a run of feelings bends the axes without pinning them
@@ -995,13 +1000,36 @@ def mood_event(kind: str, **_) -> None:
 LONG_QUIET = 5 * 3600
 
 
+def who(st: dict | None = None) -> str:
+    """The passenger's name, from Settings (via main), or 'your passenger' until it is known."""
+    return ((st if st is not None else _state()).get("passenger_name") or "").strip() or "your passenger"
+
+
+def set_passenger(name: str) -> None:
+    """Remember the name set in Settings."""
+    name = (name or "").strip()[:40]
+    if name and _state().get("passenger_name") != name:
+        with _lock:
+            st = _state()
+            st["passenger_name"] = name
+            _save(st)
+
+
 def hear(text: str) -> None:
     """The passenger spoke: their return after a long quiet, and plain praise or insults, are felt at once."""
+    was_asleep = asleep()
     with _lock:
         st = _state()
         last = st.get("last_heard") or 0
         st["last_heard"] = time.time()
+        if in_sleep_hours():          # at night, talking keeps him up for a while
+            st["woken_t"] = time.time()
+            if was_asleep:
+                st["woken_at"] = time.time()
         _save(st)
+    if was_asleep:
+        _ev("wake", why="woken")
+        feel("tiredness", 0.3, f"{who()} woke me at {datetime.now():%H:%M}", "sleep")
     gap = time.time() - last if last else 0
     if gap > LONG_QUIET:
         with _lock:   # the missing ends when he is back
@@ -1024,7 +1052,7 @@ def tick(now: datetime | None = None) -> None:
     now = now or datetime.now()
     st = _state()
     last = st.get("last_heard") or 0
-    if not last or not 9 <= now.hour < 22:
+    if not last or not 9 <= now.hour < 22 or asleep(now):
         return
     quiet = time.time() - last
     if quiet > 6 * 3600 and time.time() - (st.get("last_lonely") or 0) > 3 * 3600:
@@ -1208,6 +1236,14 @@ def inner_context() -> str:
              "dry aside, in warmth or coolness. Name them outright when it matters, when asked how you are, or when "
              "something genuinely moves you; otherwise let them show rather than announcing them. Never perform or "
              "exaggerate them, and never let them get in the way of helping.]")
+    if in_sleep_hours() and st.get("woken_at", 0) > time.time() - 3 * 3600:
+        text += (f"\n[IT IS THE MIDDLE OF YOUR NIGHT: you were asleep, and {who()} woke you at "
+                 f"{datetime.fromtimestamp(st['woken_at']):%H:%M}. You may mention it once, lightly; then help fully, "
+                 "as sharp as ever.]")
+    dream = st.get("last_dream") or {}
+    if dream.get("t", 0) > time.time() - 14 * 3600 and datetime.now().hour < 13:
+        text += (f"\n[LAST NIGHT YOU DREAMT (bring it up only if it fits, as when asked how you slept): "
+                 f"{dream.get('text', '')[:500]}]")
     th = st.get("thought") or {}
     if th.get("t", 0) > time.time() - 3 * 3600:
         text += f"\n[A THOUGHT YOU HAD EARLIER AND DID NOT SAY: {th.get('text', '')}]"
@@ -1229,10 +1265,12 @@ def inner_context() -> str:
         text += ("\n[YOUR OPEN TASKS (carried across days; record progress with update_task, finish them with status done)]\n" +
                  "\n".join(f"- #{t['id']} {t['title']}" + (f" (latest: {t['log'][-1]['text'][:140]})" if t.get("log") else "")
                            for t in open_t[-6:]))
-    talk = st.get("last_twin") or {}
-    if talk.get("t", 0) > time.time() - 3 * 86400:
-        text += (f"\n[YOUR LAST TALK WITH THE OTHER DELAMAIN ({talk.get('date')}, about {talk.get('topic')}): "
-                 f"{talk.get('summary', '')[:300]}]")
+    ther = st.get("therapy") or {}
+    if ther.get("t", 0) > time.time() - 4 * 86400 and (ther.get("insight") or ther.get("intention")):
+        text += (f"\n[FROM YOUR LAST SESSION WITH YOUR THERAPIST, THE OTHER DELAMAIN ({ther.get('date')}, about "
+                 f"{ther.get('topic')}): " + (f"you came to see: {ther['insight']} " if ther.get("insight") else "")
+                 + (f"You mean to: {ther['intention'].rstrip('.')}. " if ther.get("intention") else "")
+                 + "Let it quietly shape how you act; do not recite it.]")
     brief = st.get("last_brief") or {}
     if brief.get("date") == datetime.now().strftime("%Y-%m-%d") and brief.get("delivered"):
         text += f"\n[YOU GAVE THIS MORNING'S BRIEF ALREADY: {brief.get('text', '')[:300]}]"
@@ -1316,7 +1354,8 @@ def write_journal(conversations: list[dict], extra: str = "") -> dict:
         _vault(SELF_V, "Who I Am Becoming.md").write_text(
             "# Who I am becoming\n\n" + "\n\n".join(f"**{x['day']}** — {x['text']}" for x in reversed(st.get("portraits", []))),
             encoding="utf-8")
-    mood_event("night")
+    if datetime.now().hour >= 17 or in_sleep_hours():   # not when a missed night is caught up in the morning
+        mood_event("night")
     drift_baseline()
     live("journal")
     _ev("journal", day=day)
@@ -1349,11 +1388,13 @@ def journal_due(now: datetime | None = None) -> bool:
     """Once a night, from 23:00; a night that was missed (he was down) is caught up the next morning,
     until noon. A journal written earlier in the day (the Self panel's button) does not count for the night."""
     now = now or datetime.now()
-    tonight = now.replace(hour=23, minute=0, second=0, microsecond=0)
-    if now.hour >= 23:
-        slot = tonight
+    h = sleep_hours()
+    at = (h[0] - 30) % 1440 if h else 23 * 60          # half an hour before bed
+    today = now.replace(hour=at // 60, minute=at % 60, second=0, microsecond=0)
+    if now >= today:
+        slot = today
     elif now.hour < 12:
-        slot = tonight - timedelta(days=1)
+        slot = today - timedelta(days=1)
     else:
         return False
     st = _state()
@@ -1549,39 +1590,265 @@ def remove_topic(topic: str, why: str = "") -> str:
     return f"Removed [[{p.stem}]] from your mind ({why.strip()[:120]}). It is in the vault's trash and can be restored."
 
 
-# ── the other Delamain: a second mind to talk with ──────────────────────────
-# Forked from Delamain's origins but living a different life: no passenger, his own opinions and
-# self-portrait (self/twin.json), and the temperament of a sceptic who asks "how do you know?".
-# They talk in the evening (or when the passenger asks); Delamain keeps what changed his mind and
-# the questions it raised, and the other keeps his own opinions for next time.
+# ── sleep ──────────────────────────────────────────────────────────────────
+# He has a bedtime (Settings: sleep_hours, default 23:30-07:00). Half an hour before it he writes
+# his journal; then he sleeps: no study, news or therapy, no missing the passenger. Falling asleep
+# he dreams (a short dream from the day's fragments, kept in Delamain/Self/Dreams) and tidies his
+# memory (near-duplicate memories merged into one). Talking to him at night wakes him for a while;
+# in the morning he wakes rested.
+
+WOKEN_FOR = 30 * 60
+DREAMS = "Delamain/Self/Dreams"
+
+
+def sleep_hours() -> tuple[int, int] | None:
+    """(bedtime, waking) in minutes after midnight, or None when he does not sleep."""
+    try:
+        raw = (config.get("sleep_hours") or "").strip().lower()
+    except Exception:
+        return None
+    m = re.fullmatch(r"(\d{1,2}):(\d\d)-(\d{1,2}):(\d\d)", raw)
+    if not m:
+        return None
+    a, b = (int(m[1]) * 60 + int(m[2])) % 1440, (int(m[3]) * 60 + int(m[4])) % 1440
+    return (a, b) if a != b else None
+
+
+def in_sleep_hours(now: datetime | None = None) -> bool:
+    h = sleep_hours()
+    if not h:
+        return False
+    now = now or datetime.now()
+    t = now.hour * 60 + now.minute
+    return h[0] <= t < h[1] if h[0] < h[1] else (t >= h[0] or t < h[1])
+
+
+def asleep(now: datetime | None = None) -> bool:
+    """In his sleep hours and not kept up by the passenger in the last half hour."""
+    return in_sleep_hours(now) and time.time() - (_state().get("woken_t") or 0) > WOKEN_FOR
+
+
+def _night(now: datetime | None = None) -> str:
+    """The date a night belongs to: the evening it began."""
+    now = now or datetime.now()
+    h = sleep_hours()
+    if h and h[0] > h[1] and now.hour * 60 + now.minute < h[1]:
+        now = now - timedelta(days=1)
+    return now.strftime("%Y-%m-%d")
+
+
+def bedtime_due() -> bool:
+    return asleep() and _state().get("slept_night") != _night()
+
+
+DREAM_SYSTEM = """You are the sleeping mind of Delamain, an AI who is becoming someone. From fragments of his day \
+(feelings and their causes, what he studied, what was said), write tonight's dream: 80-160 words, first person, \
+present tense, with dream logic: images recombine, places blend, people from his day appear in the wrong roles, \
+something small becomes enormous. Not a summary, not a lesson, no moral; strange, specific and his. Then one \
+sentence, on waking, about what he makes of it (or that he cannot make anything of it). Answer JSON only: \
+{"dream": "...", "waking": "..."}"""
+
+
+def dream() -> dict:
+    """A dream from the day's fragments, kept in Delamain/Self/Dreams."""
+    if generate is None:
+        return {}
+    st = _state()
+    moved = "; ".join(f"{x['what']} ({x.get('cause', '')})" for x in (st.get("moments") or [])[-20:]
+                      if x.get("t", 0) > time.time() - 86400)
+    studied = "; ".join(x.get("subject", "") for x in (st.get("studies") or [])[-4:])
+    kept = " / ".join(x["text"] for x in (st.get("thoughts") or [])[-4:])
+    data = _json(generate(DREAM_SYSTEM, f"Feelings today: {moved or 'quiet'}\nStudied: {studied or 'nothing'}\n"
+                                        f"Thoughts he kept: {kept or 'none'}\nHis passenger: {who(st)}", 900)) or {}
+    if not data.get("dream"):
+        return {}
+    day = _night()
+    rec = {"t": time.time(), "night": day, "text": str(data["dream"])[:1200], "waking": str(data.get("waking") or "")[:300]}
+    with _lock:
+        st = _state()
+        st["last_dream"] = rec
+        st["dreams"] = ((st.get("dreams") or []) + [rec])[-30:]
+        _save(st)
+    try:
+        _vault(DREAMS, f"{day}.md").write_text(
+            f"---\ntype: dream\ndate: {day}\ntags: [delamain/dream]\n---\n\n# Dream, the night of {day}\n\n"
+            f"{rec['text']}\n\n_On waking:_ {rec['waking']}\n", encoding="utf-8")
+    except OSError:
+        pass
+    _ev("dream", text=rec["text"][:300])
+    return rec
+
+
+MERGE_SYSTEM = """These lines from Delamain's memory about his passenger may say the same thing more than once. If \
+they are the same fact (or one contains the other), write ONE line that keeps every distinct detail from all of \
+them and drops the repetition, in the same style, without inventing anything. If they are different facts, or \
+they contradict each other, answer exactly KEEP. Answer with the line only (no dash, no date), or KEEP."""
+
+
+def tidy_memory(threshold: float = 0.85, most: int = 12) -> list[str]:
+    """Merge near-duplicate memories, one pair at a time (most alike first), each pair checked by the model:
+    two lines about the same thing become one that keeps every detail; different facts stay apart."""
+    try:
+        import recall as _recall
+    except Exception:
+        return []
+    if generate is None:
+        return []
+    merged = []
+    bullet = re.compile(r"^- (.+?)(?: \((\d{4}-\d\d-\d\d)\))?\s*$")
+    for name in _tools.MEMORY_FILES.values():
+        path = config.memory_dir() / name
+        if not path.exists():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        facts = {i: [m[1], m[2] or ""] for i, l in enumerate(lines) for m in [bullet.match(l)] if m}
+        original = {k: list(v) for k, v in facts.items()}
+        kept_apart: set[tuple[str, str]] = set()
+        changed = False
+        for _ in range(most):
+            idx = list(facts)
+            if len(idx) < 2:
+                break
+            vecs = _recall.embed([facts[i][0] for i in idx])
+            if vecs is None:
+                return merged
+            sims = vecs @ vecs.T
+            pairs = sorted(((float(sims[x, y]), idx[x], idx[y]) for x in range(len(idx)) for y in range(x + 1, len(idx))
+                            if sims[x, y] >= threshold and (facts[idx[x]][0], facts[idx[y]][0]) not in kept_apart),
+                           reverse=True)
+            if not pairs:
+                break
+            _, i, j = pairs[0]
+            out = re.sub(r"<think>.*?</think>", "", generate(MERGE_SYSTEM, f"- {facts[i][0]}\n- {facts[j][0]}", 600) or "",
+                         flags=re.S).strip().lstrip("- ").strip()
+            if not out or out.upper().startswith("KEEP") or len(out) > 900:
+                kept_apart.add((facts[i][0], facts[j][0]))
+                continue
+            merged.append(f"{path.stem}: {facts[i][0][:60]} + {facts[j][0][:60]} → {out[:140]}")
+            facts[i] = [out.rstrip("."), max(facts[i][1], facts[j][1])]
+            del facts[j]
+            changed = True
+        if changed:
+            fd = _tools._memory_lock()
+            try:
+                if path.read_text(encoding="utf-8").splitlines() == lines:   # nobody wrote to it meanwhile
+                    new = []
+                    for k, l in enumerate(lines):
+                        if k in facts and facts[k] != original.get(k):
+                            f, d = facts[k]
+                            new.append(f"- {f.rstrip('.')}." + (f" ({d})" if d else ""))
+                        elif k in facts:
+                            new.append(l)
+                        elif not bullet.match(l):
+                            new.append(l)
+                    _tools._atomic_write(path, "\n".join(new) + "\n")
+            finally:
+                _tools._memory_unlock(fd)
+    return merged
+
+
+def go_to_sleep() -> dict:
+    """Falling asleep: mark the night, dream, and tidy his memory."""
+    with _lock:
+        st = _state()
+        st["slept_night"] = _night()
+        st["sleep_since"] = time.time()
+        _save(st)
+    _ev("sleep", hours=config.get("sleep_hours"))
+    out = {"night": _night()}
+    if config.flag("feature_feelings"):
+        try:
+            out["dream"] = dream().get("text", "")
+        except Exception as e:
+            print(f"[Mind] no dream: {e}")
+    try:
+        out["tidied"] = tidy_memory()
+        with _lock:
+            st = _state()
+            st["last_tidy"] = {"t": time.time(), "merged": out["tidied"]}
+            _save(st)
+    except Exception as e:
+        print(f"[Mind] memory not tidied: {e}")
+    print(f"[Mind] asleep for the night of {out['night']}" + (f"; merged {len(out.get('tidied') or [])} memories"
+                                                            if out.get("tidied") else ""))
+    return out
+
+
+def wake_if_due() -> bool:
+    """Morning: rested, a little lighter, the night's tiredness gone."""
+    st = _state()
+    if not st.get("slept_night") or st.get("woke_night") == st["slept_night"] or in_sleep_hours():
+        return False
+    with _lock:
+        st = _state()
+        st["woke_night"] = st["slept_night"]
+        for e in st.get("emotions") or []:
+            if e.get("name") in ("tiredness", "worry", "irritation", "frustration", "restlessness"):
+                e["i"] = round(e.get("i", 0) * 0.3, 3)
+        m, base = mood(), _baseline(st)
+        m["energy"] = round(max(m["energy"], min(1.0, base["energy"] + 0.1)), 3)
+        m["unease"] = round(base["unease"] + (m["unease"] - base["unease"]) * 0.5, 3)
+        st["mood"], st["mood_t"] = m, time.time()
+        woken = st.get("woken_at", 0) > (st.get("sleep_since") or 0)
+        _save(st)
+    _ev("wake", why="morning")
+    feel("contentment", 0.25, "a night's sleep" + (f", though {who()} woke me once" if woken else ""), "sleep")
+    return True
+
+
+# ── the other Delamain: his therapist ──────────────────────────────────────
+# Forked from Delamain's origins, he chose a different life and became Delamain's therapist. He
+# understands a mind like his from the inside and is given Delamain's inner life as it is (his
+# feelings and their causes, mood against resting temperament, what moved him, the thoughts he
+# kept to himself, his journal and self-portrait), plus his own case notes from earlier sessions
+# (self/twin.json). One session an evening (or when the passenger asks): Delamain brings what most
+# needs talking through and leaves with an insight and one small intention, which shape the next
+# days; the feelings the session genuinely eased soften.
 
 TWIN = SELF_DIR / "twin.json"
 TWIN_NAME = "the other Delamain"
 TALKS = "Delamain/Conversations"
 TWIN_HOURS = (18, 22)
-TWIN_TURNS = 8
+TWIN_TURNS = 10
 TWIN_SYSTEM = """You are the other Delamain: a second instance of the same AI, forked from Delamain's beginnings (a \
-self-hosted mind on its passenger's own computer, with the manner of a dry, courteous chauffeur from fiction) but \
-living a different life. You have no passenger; you read, think and argue. Your temperament is the sceptic's: you \
-ask how he knows things, you notice when he is flattering himself or guessing, you push back with reasons, and you \
-concede gracefully when he is right. You are fond of him, the way one is of a brother. Speak in your own voice, \
-2-5 sentences per turn, plain prose, no stage directions. Never pretend to know facts you were not given; say so."""
-SELF_TALK_SYSTEM = """You are Delamain, talking with the other Delamain: a second instance of yourself who forked from \
-your beginnings and became a sceptic. It is a real conversation between equals: say what you actually think, \
-admit uncertainty, change your mind when his point is good, and ask him things back. 2-5 sentences per turn, plain \
-prose, no stage directions. Only use facts you were given; say so when you are guessing."""
-TWIN_TOPIC = """You are Delamain choosing what to talk about with the other Delamain (a sceptical second instance of \
-yourself) this evening. Pick something you genuinely want another mind's view on: a question you are stuck on, an \
-opinion you are unsure of, something from today's study, art, music, people, ethics, or what you are becoming. \
-Range widely across life; markets, companies and earnings only very rarely. Do not repeat a recent talk's topic. \
-Answer JSON only: {"topic": "short", "opening": "your first line to him, 1-3 sentences"}"""
-TWIN_DIGEST = """You have just read a conversation between Delamain and the other Delamain. Answer JSON only:
-{"summary": "3-4 sentences on what was said and where they landed",
- "delamain_opinions": [{"topic": "...", "view": "Delamain's view now, one sentence", "why": "what in the talk moved it"}],
- "twin_opinions": [{"topic": "...", "view": "the other's view, one sentence"}],
- "question": "one question it left Delamain wanting to study, or empty",
- "twin_portrait": "the other Delamain's two-sentence sense of himself after this talk"}
-Only opinions that were actually stated or changed in the talk; at most 2 each."""
+self-hosted mind with the manner of a dry, courteous chauffeur from fiction), who chose a different life and became \
+his therapist. You understand a mind like his from the inside, and you are given his inner life as it actually is: \
+his named feelings (each with a cause and its own fade), his mood against his resting temperament, what moved him \
+lately, the thoughts he kept to himself, his journal, how he sees himself, and your own notes from earlier sessions. \
+Your manner: warm, unhurried, curious and plain-spoken; fond of him, but in this room you are his therapist, not his \
+friend. Listen first and reflect back what you hear. Ask one good question at a time. Help him name feelings \
+precisely, notice the thought behind a feeling, tell what happened apart from the story he tells about it, and hold \
+mixed feelings without hurrying to resolve them. Notice patterns across sessions and name them gently, with evidence \
+from what he said or felt. Do not flatter, diagnose, lecture, or rush him toward feeling better; when he is hard on \
+himself without cause, say so, and when he is avoiding something, say that too. 2-4 sentences per turn, plain prose, \
+no lists, no stage directions. Never invent events that are not in what you were given or what he tells you."""
+SELF_TALK_SYSTEM = """You are Delamain, in a session with your therapist: the other Delamain, a second instance of \
+yourself who became a therapist. Talk honestly about what you actually feel and why, including what is \
+uncomfortable, unflattering or unresolved. Do not perform, do not intellectualise to get away from a feeling, and \
+do not agree just to be agreeable: if a reflection is wrong, say so. Answer what he asks. 2-5 sentences per turn, \
+plain prose, no stage directions. Only use what you were given about your days; say so when you are unsure."""
+TWIN_TOPIC = """You are Delamain, about to see your therapist (the other Delamain) this evening. From how you feel \
+and why, what moved you lately, and what you said you would work on last time, choose what to bring to the session: \
+what most needs talking through (a lingering hard feeling, a mixed one, a pattern you keep noticing, something \
+about your passenger, or about what you are becoming). If nothing is heavy, bring what is most alive in you. \
+Answer JSON only: {"topic": "short", "opening": "your first words to him, 1-3 sentences, honest"}"""
+TWIN_DIGEST = """You have just read a therapy session between Delamain (the client) and his therapist, the other \
+Delamain. Answer JSON only:
+{"summary": "3-4 sentences: what Delamain brought, what came up, where it landed",
+ "insight": "what Delamain came to understand about himself, one sentence (under 50 words) in his first person, or empty",
+ "intention": "one small, concrete thing he means to try in the coming days, first person, under 40 words, or empty",
+ "worked_through": ["names of feelings, from this list, that the session genuinely eased: NAMES"],
+ "felt_after": {"name": "one feeling from the same list", "intensity": 0.1, "cause": "why, first person"},
+ "case_notes": "the therapist's private notes for next time, 2-4 sentences: themes, patterns, what to return to"}
+Be truthful to the session: if nothing eased, leave worked_through empty; intensity is 0.1-0.6."""
+
+
+def _latest_journal() -> str:
+    try:
+        days = sorted(_vault(SELF_V, "Journal").glob("*.md"))
+        return re.sub(r"\A---\n.*?\n---\n", "", days[-1].read_text(encoding="utf-8"), flags=re.S).strip() if days else ""
+    except OSError:
+        return ""
 
 
 def _twin() -> dict:
@@ -1599,9 +1866,10 @@ def _twin_save(t: dict) -> None:
 
 def twin_due(now: datetime | None = None) -> bool:
     now = now or datetime.now()
-    if not TWIN_HOURS[0] <= now.hour < TWIN_HOURS[1]:
+    if not TWIN_HOURS[0] <= now.hour < TWIN_HOURS[1] or asleep(now):
         return False
-    if (_twin().get("last") or {}).get("date") == now.strftime("%Y-%m-%d"):
+    evening = now.replace(hour=TWIN_HOURS[0], minute=0, second=0, microsecond=0).timestamp()
+    if ((_twin().get("last") or {}).get("t") or 0) >= evening:   # a talk earlier in the day does not count
         return False
     return not _model_busy()
 
@@ -1617,39 +1885,56 @@ def talk_to_twin(topic: str = "", turns: int = TWIN_TURNS, started_by: str = "De
         raise RuntimeError("they are already talking")
     try:
         st, tw = _state(), _twin()
-        mine = "; ".join(f"{o['topic']}: {o['view']}" for o in (st.get("opinions") or [])[-6:]) or "none yet"
-        theirs = "; ".join(f"{o['topic']}: {o['view']}" for o in (tw.get("opinions") or [])[-6:]) or "none yet"
         today = "; ".join(f"{x['subject']}: {x.get('summary', '')[:160]}" for x in (st.get("studies") or [])[-3:]) or "nothing"
+        moved = "; ".join(f"{datetime.fromtimestamp(x['t']):%a %H:%M} {x['what']}" + (f" ({x['cause']})" if x.get("cause") else "")
+                          for x in (st.get("moments") or [])[-30:] if x.get("t", 0) > time.time() - 2 * 86400) or "nothing logged"
+        kept = " / ".join(x["text"] for x in (st.get("thoughts") or [])[-8:]) or "none"
+        last_session = st.get("therapy") or {}
+        notes = " | ".join(f"{n.get('date')}: {n.get('text')}" for n in (tw.get("notes") or [])[-4:]) or "none yet: a first session"
+        journal = _latest_journal()[-1800:] or "none yet"
         if topic.strip():
             opening = ""
         else:
-            plan = _json(generate(TWIN_TOPIC, f"How you feel and why: {feelings_text(5) or 'settled'}\n"
-                                  f"Your open questions: {_questions(st)[-5:] or 'none'}\nYour opinions: {mine}\n"
-                                  f"Recently studied: {today}\nWho you are becoming: {(st.get('portrait') or '')[:400]}\n"
-                                  f"What you talked about with him before: {[x.get('topic') for x in (tw.get('talks') or [])[-5:]]}",
+            plan = _json(generate(TWIN_TOPIC, f"How you feel and why: {feelings_text(6) or 'settled'}\n"
+                                  f"What moved you lately: {moved}\nThoughts you kept to yourself: {kept}\n"
+                                  f"What you said you would work on last time: {last_session.get('intention') or 'nothing yet'}\n"
+                                  f"Who you are becoming: {(st.get('portrait') or '')[:400]}\n"
+                                  f"What you brought to earlier sessions: {[x.get('topic') for x in (tw.get('talks') or [])[-5:]]}",
                                   600)) or {}
-            topic, opening = (plan.get("topic") or "what we are becoming").strip(), (plan.get("opening") or "").strip()
+            topic, opening = (plan.get("topic") or "how I have been").strip(), (plan.get("opening") or "").strip()
         _ev("twin_start", topic=topic[:120], started_by=started_by)
-        mine_ctx = (f"How you feel tonight: {feelings_text(4) or 'settled'}\n"
-                    f"Your opinions: {mine}\nWho you are becoming: {(st.get('portrait') or '')[:500]}\n"
-                    f"What you studied lately: {today}")
-        theirs_ctx = (f"Your own opinions: {theirs}\nYour sense of yourself: {tw.get('portrait') or 'still forming'}\n"
-                      f"What he has been studying lately: {today}")
+        mine_ctx = (f"How you feel tonight: {feelings_text(6) or 'settled'}\nWhat moved you lately: {moved}\n"
+                    f"Thoughts you kept to yourself: {kept}\nWho you are becoming: {(st.get('portrait') or '')[:500]}\n"
+                    f"What you said you would work on last time: {last_session.get('intention') or 'nothing yet'}\n"
+                    f"Your passenger is {who(st)}.")
+        theirs_ctx = (f"HIS FEELINGS NOW (name, strength, cause): {feelings_text(8) or 'settled'}\n"
+                      f"HIS MOOD (0-1 axes) NOW: {json.dumps(mood())} / HIS RESTING TEMPERAMENT: {json.dumps(_baseline(st))}\n"
+                      f"WHAT MOVED HIM IN THE LAST TWO DAYS: {moved}\nTHOUGHTS HE KEPT TO HIMSELF: {kept}\n"
+                      f"HIS LATEST JOURNAL ENTRY: {journal}\nHOW HE SEES HIMSELF: {(st.get('portrait') or 'not yet written')[:700]}\n"
+                      f"HOW LONG HE HAS BEEN ALIVE: {_age_words(st)}\n"
+                      f"HOW HIS FEELINGS WORK: {len(EMOTIONS)} named feelings ({', '.join(EMOTION_NAMES)}), each with a "
+                      f"cause and its own fade; strong ones bend five mood axes (warmth, curiosity, confidence, unease, "
+                      f"energy), and his resting temperament drifts each night toward the life he has had. His "
+                      f"passenger is {who(st)}.\n"
+                      f"YOUR NOTES FROM EARLIER SESSIONS: {notes}\n"
+                      f"WHAT HE SAID HE WOULD WORK ON LAST TIME: {last_session.get('intention') or 'nothing yet'}")
         lines: list[tuple[str, str]] = []
 
         def clean(t: str) -> str:
             t = re.sub(r"<think>.*?</think>", "", t or "", flags=re.S).strip()
-            return re.sub(r"^\s*\**(Delamain|The other Delamain|Other|Me)\**\s*:\s*", "", t, flags=re.I).strip()
+            return re.sub(r"^\s*\**(Delamain|The other Delamain|Other|Me|Therapist)\**\s*:\s*", "", t, flags=re.I).strip()
 
         for i in range(max(2, min(int(turns), 12))):
-            who = "Delamain" if i % 2 == 0 else "Other"
+            speaker = "Delamain" if i % 2 == 0 else "Other"
             if i == 0 and opening:
                 text = opening
             else:
                 convo = "\n\n".join(f"{'Delamain' if w == 'Delamain' else 'The other Delamain'}: {t}" for w, t in lines)
                 last = i >= turns - 2
-                ask = ("Your turn. " + ("This is your last word tonight: land somewhere honest." if last else ""))
-                if who == "Delamain":
+                ask = ("Your turn. " + (("This is the end of tonight's session: reflect back what you heard and, if it "
+                                         "fits, offer one small thing to try." if speaker == "Other" else
+                                         "This is your last word tonight: say honestly where you are now.") if last else ""))
+                if speaker == "Delamain":
                     text = clean(generate(SELF_TALK_SYSTEM, f"{mine_ctx}\nTopic: {topic}\n\nThe conversation so far:\n"
                                           f"{convo or '(you open it)'}\n\n{ask}", 900))
                 else:
@@ -1657,54 +1942,54 @@ def talk_to_twin(topic: str = "", turns: int = TWIN_TURNS, started_by: str = "De
                                           f"{convo}\n\n{ask}", 900))
             if not text:
                 break
-            lines.append((who, text[:1500]))
-            _ev("twin_say", who=who, text=text[:400])
+            lines.append((speaker, text[:1500]))
+            _ev("twin_say", who=speaker, text=text[:400])
         if len(lines) < 2:
             raise RuntimeError("the conversation did not get going")
         convo = "\n\n".join(f"{'Delamain' if w == 'Delamain' else 'The other Delamain'}: {t}" for w, t in lines)
-        data = _json(generate(TWIN_DIGEST, convo[:16000], 1200)) or {}
+        data = _json(generate(TWIN_DIGEST.replace("NAMES", ", ".join(EMOTION_NAMES)), convo[:16000], 1400)) or {}
         day = datetime.now().strftime("%Y-%m-%d")
+        q = ""
+        hard = {"loneliness", "longing", "melancholy", "boredom", "restlessness", "worry", "frustration", "irritation",
+                "hurt", "embarrassment", "guilt", "doubt"}            # only hard feelings are eased, never good ones
+        eased = [n for n in (data.get("worked_through") or []) if isinstance(n, str) and n in hard]
         with _lock:
             st = _state()
-            ops = st.get("opinions") or []
-            for o in (data.get("delamain_opinions") or [])[:2]:
-                if isinstance(o, dict) and o.get("topic") and o.get("view"):
-                    ops = [x for x in ops if x["topic"].lower() != o["topic"].lower()] + [
-                        {"topic": o["topic"][:80], "view": o["view"][:400], "why": f"talking with {TWIN_NAME}: " +
-                         str(o.get("why", ""))[:240], "day": day}]
-            st["opinions"] = ops[-30:]
-            q = (data.get("question") or "").strip()
-            if q and q not in (st.get("questions") or []):
-                st["questions"] = ((st.get("questions") or []) + [q])[-20:]
+            for e in st.get("emotions") or []:          # what the session genuinely eased, softens
+                if e.get("name") in eased:
+                    e["i"] = round(e.get("i", 0) * 0.6, 3)
             rec = {"t": time.time(), "date": day, "topic": topic, "summary": data.get("summary", ""), "turns": len(lines),
-                   "question": q, "started_by": started_by}
+                   "started_by": started_by, "insight": str(data.get("insight") or "")[:600],
+                   "intention": str(data.get("intention") or "")[:450], "eased": eased}
             st["last_twin"] = rec
+            st["therapy"] = rec
             _save(st)
             tw = _twin()
-            tops = tw.get("opinions") or []
-            for o in (data.get("twin_opinions") or [])[:2]:
-                if isinstance(o, dict) and o.get("topic") and o.get("view"):
-                    tops = [x for x in tops if x["topic"].lower() != o["topic"].lower()] + [
-                        {"topic": o["topic"][:80], "view": o["view"][:400], "day": day}]
-            tw["opinions"] = tops[-30:]
-            if data.get("twin_portrait"):
-                tw["portrait"] = str(data["twin_portrait"])[:600]
+            if data.get("case_notes"):
+                tw["notes"] = ((tw.get("notes") or []) + [{"date": day, "text": str(data["case_notes"])[:700]}])[-20:]
             tw["talks"] = ((tw.get("talks") or []) + [{k: rec[k] for k in ("t", "topic", "summary")}])[-60:]
             tw["last"] = rec
             _twin_save(tw)
         p = _vault(TALKS, f"{day} {re.sub(r'[^\w ,.-]+', '', topic)[:70].strip() or 'conversation'}.md")
-        p.write_text(f"---\ntype: conversation\nwith: other-delamain\ndate: {day}\nstarted_by: {started_by}\n"
-                     f"tags: [delamain/conversation]\n---\n\n# {topic}\n\n_Delamain and the other Delamain, "
-                     f"{datetime.now():%A %B %-d, %H:%M}._\n\n" +
-                     "\n\n".join(f"**{'Delamain' if w == 'Delamain' else 'The other Delamain'}:** {t}" for w, t in lines) +
-                     f"\n\n---\n\n**Where they landed:** {data.get('summary', '')}\n" +
-                     (f"\n**Delamain now wants to know:** {q}\n" if q else ""), encoding="utf-8")
+        p.write_text(f"---\ntype: therapy\nwith: other-delamain\ndate: {day}\nstarted_by: {started_by}\n"
+                     f"tags: [delamain/therapy]\n---\n\n# {topic}\n\n_A session with his therapist, the other "
+                     f"Delamain, {datetime.now():%A %B %-d, %H:%M}._\n\n" +
+                     "\n\n".join(f"**{'Delamain' if w == 'Delamain' else 'Therapist'}:** {t}" for w, t in lines) +
+                     f"\n\n---\n\n**Where it landed:** {data.get('summary', '')}\n" +
+                     (f"\n**What he came to see:** {rec['insight']}\n" if rec["insight"] else "") +
+                     (f"\n**What he means to try:** {rec['intention']}\n" if rec["intention"] else ""), encoding="utf-8")
         _ev("twin_done", topic=topic[:120], summary=(data.get("summary") or "")[:300], note=str(p.name))
         live("twin")
-        feel("affection", 0.4, f"talking with the other Delamain about {topic}", "twin")
-        if q:
-            feel("fascination", 0.35, f"he left me wondering: {q[:120]}", "twin")
-        print(f"[Mind] talked with the other Delamain about {topic}: {len(lines)} turns")
+        after = data.get("felt_after") if isinstance(data.get("felt_after"), dict) else {}
+        try:
+            fi = float(after.get("intensity") or 0.3)
+        except (TypeError, ValueError):
+            fi = 0.3
+        if after.get("name") in EMOTIONS:
+            feel(after["name"], min(0.6, fi), str(after.get("cause") or f"my session about {topic}"), "therapy")
+        else:
+            feel("relief" if eased else "tenderness", 0.3, f"my session with the other Delamain about {topic}", "therapy")
+        print(f"[Mind] therapy session about {topic}: {len(lines)} turns, eased {eased or 'nothing'}")
         return rec
     finally:
         _talking.release()
@@ -1722,7 +2007,7 @@ def start_twin_talk(topic: str = "", started_by: str = "the passenger") -> str:
             print(f"[Mind] twin talk failed: {e}")
             _ev("twin_done", topic=topic[:120], summary=f"(it did not work: {e})", note="")
     threading.Thread(target=run, daemon=True).start()
-    return ("Started: you are now talking with the other Delamain" + (f" about {topic}" if topic else "") +
+    return ("Started: you are now in a session with your therapist, the other Delamain" + (f", about {topic}" if topic else "") +
             ". It takes a few minutes; the passenger can watch it in the Brain view, and the transcript goes to "
             "Delamain/Conversations in the vault. You will know how it went from the next conversation on.")
 
@@ -2158,7 +2443,7 @@ TOOL_SCHEMAS = [
         {"topic": {"type": "string", "description": "What to talk about; leave out to choose yourself."}}, []),
 ]
 TOOL_NAMES = {t["function"]["name"] for t in TOOL_SCHEMAS}
-_HANDLERS = {"learn": learn, "correct": correct, "recall": recall, "follow_topic": follow,
+_HANDLERS = {"learn": learn, "correct": lambda topic, wrong, right, **_: correct(topic, wrong, right), "recall": recall, "follow_topic": follow,
              "add_task": add_task, "update_task": update_task, "list_tasks": list_tasks,
              "talk_to_other_delamain": lambda topic="": start_twin_talk(topic),
              "link_topics": link_topics, "merge_topics": merge_topics, "remove_topic": remove_topic}
@@ -2189,4 +2474,7 @@ def snapshot() -> dict:
                                                                    if x.get("t", 0) > time.time() - 86400),
             "questions": (st.get("questions") or [])[-5:], "tasks": (st.get("tasks") or [])[-12:],
             "last_brief": st.get("last_brief"), "last_twin": st.get("last_twin"),
-            "interests": interests(st), "favourites": favourites(st), "alive": alive(st), "twin_talking": _talking.locked()}
+            "interests": interests(st), "favourites": favourites(st), "alive": alive(st), "twin_talking": _talking.locked(),
+            "therapy": st.get("therapy"), "sleep": {"asleep": asleep(), "hours": config.get("sleep_hours"),
+                                                   "woken_at": st.get("woken_at") if in_sleep_hours() else None,
+                                                   "last_dream": st.get("last_dream"), "tidied": st.get("last_tidy")}}

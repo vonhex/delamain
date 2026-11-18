@@ -38,14 +38,16 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "meeting_language": ("MEETING_LANGUAGE", "", "Meeting language (e.g. en; empty = detect it)"),
     "meeting_keep_audio": ("MEETING_KEEP_AUDIO", "false", "Keep the recording after the notes are written"),
     # Extras that cost model time. Each can be turned off, for a small or slow model.
+    "sleep_hours": ("DELAMAIN_SLEEP", "23:30-07:00", "Bedtime: when he sleeps (e.g. 23:30-07:00, or off)"),
     "feature_verify": ("DELAMAIN_VERIFY", "true", "Check each reply before speaking"),
     "feature_feelings": ("DELAMAIN_FEELINGS", "true", "Feelings and inner life"),
     "feature_recall": ("DELAMAIN_RECALL", "true", "Recall by meaning (a small embedding model on the CPU)"),
     "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
     "feature_vision": ("DELAMAIN_VISION", "true", "Look at pictures in his free time (needs a model that reads images)"),
+    "feature_garden": ("DELAMAIN_GARDEN", "true", "His garden: a small greenhouse world he tends in his free time"),
     "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),
     "feature_study": ("DELAMAIN_STUDY", "true", "Study in his free time, and work on long tasks"),
-    "feature_twin": ("DELAMAIN_TWIN", "true", "Evening talks with the other Delamain"),
+    "feature_twin": ("DELAMAIN_TWIN", "true", "Evening therapy with the other Delamain"),
     "feature_journal": ("DELAMAIN_JOURNAL", "true", "Nightly journal"),
     "feature_brief": ("DELAMAIN_BRIEF", "true", "Morning brief"),
     "feature_self_review": ("DELAMAIN_SELF_REVIEW", "true", "Nightly self-review and code proposals"),
@@ -157,6 +159,10 @@ def llm_headers() -> dict:
 
 def _check(key: str, value: str) -> str:
     value = value.strip()
+    if key == "sleep_hours":
+        if not re.fullmatch(r"(?i)off|([01]?\d|2[0-3]):[0-5]\d\s*-\s*([01]?\d|2[0-3]):[0-5]\d", value):
+            raise ValueError("Bedtime: write it as 23:30-07:00, or off")
+        return value.lower() if value.lower() == "off" else re.sub(r"\s+", "", value)
     if key in URL_FIELDS:
         u = urlparse(value)
         if u.scheme not in ("http", "https") or not u.netloc:

@@ -9,6 +9,7 @@ import { BrainView } from './components/BrainView';
 import { MeetingPanel, type Meeting } from './components/MeetingPanel';
 import { SelfPanel } from './components/SelfPanel';
 import { EmotionsPanel, EmotionIcon, useTopFeeling } from './components/EmotionsPanel';
+import { GardenPanel, GardenIcon } from './components/GardenPanel';
 import { useMeetingRecorder, fmtClock } from './components/meetingRecorder';
 import type { SpeechClock } from './components/brain/brainRenderer';
 import { LoginPage } from './components/LoginPage';
@@ -133,6 +134,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   const [isSelfOpen, setIsSelfOpen] = useState(false);
   const topFeeling = useTopFeeling(token);
   const [isEmotionsOpen, setIsEmotionsOpen] = useState(false);
+  const [isGardenOpen, setIsGardenOpen] = useState(false);
   // The browser would not play his voice (no tap on this page yet): the line waits for one.
   const [needsTap, setNeedsTap] = useState(false);
   const [selfTick, setSelfTick] = useState(0);
@@ -800,6 +802,13 @@ function MainApp({ token, onLogout }: MainAppProps) {
           <EmotionIcon size={24} color={topFeeling?.color} />
         </button>
         <button
+          onClick={() => setIsGardenOpen(o => !o)}
+          className={`p-2 rounded-lg transition-colors ${isGardenOpen ? 'bg-emerald-400/20 text-emerald-300' : 'text-gray-500 hover:text-emerald-300 hover:bg-cyber-gray'}`}
+          title="His garden: a small greenhouse world he tends in his free time"
+        >
+          <GardenIcon size={24} />
+        </button>
+        <button
           onClick={() => setSettings(s => ({ ...s, driveMode: !s.driveMode }))}
           className={`p-2 rounded-lg transition-colors ${settings.driveMode ? 'bg-cyber-blue/20 text-cyber-blue' : 'text-gray-500 hover:text-cyber-blue hover:bg-cyber-gray'}`}
           title={settings.driveMode ? 'Drive mode is on: short, eyes-free replies for the car. Tap for assistant mode.' : 'Assistant mode. Tap for Drive mode (short, eyes-free replies for the car).'}
@@ -1077,6 +1086,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
         {isEmotionsOpen && (
           <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[480px]">
             <EmotionsPanel token={token} onClose={() => setIsEmotionsOpen(false)} />
+          </div>
+        )}
+
+        {isGardenOpen && (
+          <div className="flex flex-col bg-cyber-gray/30 backdrop-blur-xs overflow-hidden w-full md:w-[520px]">
+            <GardenPanel token={token} onClose={() => setIsGardenOpen(false)} />
           </div>
         )}
 

@@ -35,7 +35,7 @@ TOOL_REGION = {
     "delete_calendar_event": "plans",
     "get_email": "senses", "read_email": "senses", "draft_email": "memory", "draft_reply": "memory",
     "list_adventures": "imagination", "start_adventure": "imagination", "pause_adventure": "imagination",
-    "end_adventure": "imagination", "note_fact": "imagination",
+    "end_adventure": "imagination", "note_fact": "imagination", "go_to_garden": "imagination",
     # self-improvement, reports, and his mind
     "learn_rule": "conscience", "forget_rule": "conscience", "save_skill": "conscience", "use_skill": "conscience",
     "tune_setting": "conscience", "propose_improvement": "conscience", "self_status": "conscience",
