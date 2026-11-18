@@ -7,7 +7,7 @@ import { X, Check, Ban, Undo2, Loader2, RefreshCw, ChevronDown, ChevronRight, Ro
 type Proposal = {
   id: string; goal: string; origin: string; created: number; status: string; summary?: string; checks?: string;
   diff?: string; error?: string; files?: Record<string, string>; result?: { status: string; why?: string };
-  warning?: string | null; fixes?: string; fixed_by?: string; claude?: { started: number };
+  warning?: string | null; reason?: string; fixes?: string; fixed_by?: string; claude?: { started: number };
   review?: { model: string; rounds: { round: number; verdict: string; issues: string[]; summary: string }[] };
 };
 type Mind = {
@@ -73,13 +73,19 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
     return () => clearInterval(id);
   }, [working, load]);
 
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
   const act = async (p: Proposal, action: 'approve' | 'reject' | 'rollback' | 'retry' | 'claude' | 'delete') => {
     if (action === 'delete' && !window.confirm(`Delete this proposal and its files for good?\n\n${p.summary || p.goal}`)) return;
     if (action === 'approve' && !window.confirm(`Apply this change to Delamain's code and restart him?\n\n${p.summary || p.goal}`)) return;
     if (action === 'rollback' && !window.confirm('Undo this change and restart him?')) return;
     if (action === 'claude' && !window.confirm(`Send this to Claude Code to fix and implement?\n\n${p.summary || p.goal}\n\nClaude edits a private copy (file tools only). The result comes back here for your approval; nothing goes live on its own.`)) return;
     setBusy(p.id); setError(null);
-    const r = await fetch(`/api/self/proposals/${encodeURIComponent(p.id)}/${action}`, { method: 'POST', headers: auth }).catch(() => null);
+    const r = await fetch(`/api/self/proposals/${encodeURIComponent(p.id)}/${action}`, {
+      method: 'POST', headers: action === 'reject' ? { ...auth, 'Content-Type': 'application/json' } : auth,
+      body: action === 'reject' ? JSON.stringify({ reason: reason.trim() }) : undefined,
+    }).catch(() => null);
+    if (action === 'reject' && r?.ok) { setRejecting(null); setReason(''); }
     if (r && !r.ok) setError((await r.json().catch(() => ({}))).detail || `Failed (${r.status})`);
     else if (action === 'claude' || action === 'retry') setOpen(null);   // handed off: close its details
     setBusy(null);
@@ -217,7 +223,7 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
                   {busy === p.id && <Loader2 size={12} className="animate-spin text-cyber-blue" />}
                   {p.status === 'pending' && <>
                     <button disabled={!!busy || !!snap.busy || !!snap.can_apply} title={snap.can_apply ? snap.can_apply : snap.busy ? 'Wait until the current draft finishes: approving restarts him' : undefined} onClick={() => void act(p, 'approve')} className="flex items-center gap-1 text-green-300 hover:underline disabled:opacity-50"><Check size={12} /> Approve</button>
-                    <button disabled={!!busy} onClick={() => void act(p, 'reject')} className="flex items-center gap-1 text-gray-400 hover:text-red-300 disabled:opacity-50"><Ban size={12} /> Reject</button>
+                    <button disabled={!!busy} onClick={() => { setRejecting(rejecting === p.id ? null : p.id); setReason(''); }} className="flex items-center gap-1 text-gray-400 hover:text-red-300 disabled:opacity-50"><Ban size={12} /> Reject</button>
                   </>}
                   {snap.claude && ['failed', 'stale', 'pending', 'auto_rolled_back', 'rollback_unhealthy'].includes(p.status) && (
                     <button disabled={!!busy || !!snap.busy} onClick={() => void act(p, 'claude')} title="Send this idea to Claude Code to fix and implement" className="flex items-center gap-1 text-gray-400 hover:text-orange-300 disabled:opacity-50"><Wrench size={12} /> Fix with Claude</button>
@@ -232,6 +238,18 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
                     <button disabled={!!busy} onClick={() => void act(p, 'rollback')} className="flex items-center gap-1 text-gray-400 hover:text-amber-300 disabled:opacity-50"><Undo2 size={12} /> Roll back</button>
                   )}
                 </div>
+                {rejecting === p.id && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={2}
+                      placeholder="Why not? He remembers this and won't propose the same change again (optional)"
+                      className="w-full bg-cyber-gray/50 border border-cyber-blue/15 rounded-sm p-2 text-xs focus:outline-hidden focus:border-red-300/50" />
+                    <div className="flex gap-3 justify-end text-xs">
+                      <button onClick={() => { setRejecting(null); setReason(''); }} className="text-gray-500 hover:text-gray-300">Cancel</button>
+                      <button disabled={!!busy} onClick={() => void act(p, 'reject')} className="flex items-center gap-1 text-red-300 hover:underline disabled:opacity-50"><Ban size={12} /> Reject</button>
+                    </div>
+                  </div>
+                )}
+                {p.status === 'rejected' && p.reason && <p className="mt-1 text-xs text-gray-400"><span className="text-gray-500">Your reason:</span> {p.reason}</p>}
                 {open === p.id && (
                   <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5 text-xs">
                     <div className="text-gray-400"><span className="text-gray-500">Goal:</span> {p.goal}</div>

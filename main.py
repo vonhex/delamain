@@ -1852,7 +1852,7 @@ async def self_proposals_clear(_=Depends(require_auth)):
 
 
 @app.post("/api/self/proposals/{pid}/{action}")
-async def self_proposal(pid: str, action: str, _=Depends(require_auth)):
+async def self_proposal(pid: str, action: str, request: Request, _=Depends(require_auth)):
     """Approve, reject or roll back a change he drafted to his own code. Only from a signed-in page."""
     if not _self:
         raise HTTPException(status_code=404, detail="Self-improvement is not installed")
@@ -1862,6 +1862,9 @@ async def self_proposal(pid: str, action: str, _=Depends(require_auth)):
     if not fn:
         raise HTTPException(status_code=400, detail="Unknown action")
     try:
+        if action == "reject":   # with the passenger's reason, which he remembers
+            body = await request.json() if int(request.headers.get("content-length") or 0) else {}
+            return await asyncio.to_thread(fn, pid, str((body or {}).get("reason") or ""))
         return await asyncio.to_thread(fn, pid)
     except (KeyError, FileNotFoundError):
         raise HTTPException(status_code=404, detail="No such proposal")

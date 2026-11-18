@@ -593,7 +593,7 @@ def gemini_review_run(goal: str, folder: Path, diff: str, extra: str = "") -> di
         return {"verdict": "error", "issues": [], "summary": f"the review could not run: {e}"}
 
 
-def propose_improvement(goal: str) -> str:
+def propose_improvement(goal: str, passenger_insists: bool = False) -> str:
     """Start drafting a code change in the background; the passenger approves it in the Self panel."""
     global _busy
     goal = (goal or "").strip()
@@ -601,6 +601,12 @@ def propose_improvement(goal: str) -> str:
         return "Describe the improvement in a sentence or two."
     if generate is None:
         return "Not available right now."
+    old = declined_match(goal)
+    if old and not passenger_insists:
+        return ("Not drafted: the passenger already rejected this change" +
+                (f", saying: \"{old['reason']}\"" if old.get("reason") else "") +
+                f" (the rejected idea: {old['goal'][:200]}). Tell them, and draft it only if they now ask for it again "
+                "anyway (then call propose_improvement with passenger_insists=true).")
     with _lock:
         if _busy:
             return f"Already working on: {_busy['goal'][:100]}"
@@ -855,14 +861,69 @@ def approve(pid: str) -> dict:
     return meta
 
 
-def reject(pid: str) -> dict:
+def reject(pid: str, reason: str = "") -> dict:
     d, meta = _meta(pid)
     if meta.get("status") not in ("pending", "failed", "stale"):
         raise ValueError(f"proposal is {meta.get('status')}")
-    meta["status"] = "rejected"
+    reason = re.sub(r"\s+", " ", reason or "").strip()[:600]
+    meta.update(status="rejected", rejected_at=time.time(), **({"reason": reason} if reason else {}))
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
-    _log(f"proposal {pid} rejected")
+    with _lock:   # kept apart from the proposal, so it is remembered after the proposal is deleted
+        st = _state()
+        st["declined"] = ([x for x in st.get("declined") or [] if x.get("goal") != meta.get("goal")]
+                          + [{"goal": meta.get("goal", ""), "reason": reason, "t": time.time(), "id": pid}])[-40:]
+        _save_state(st)
+    _log(f"proposal {pid} rejected" + (f": {reason}" if reason else ""))
     return meta
+
+
+# ── what the passenger declined ─────────────────────────────────────────────
+# A rejected idea, with the passenger's reason, is remembered (even after the proposal is deleted):
+# the nightly review is told not to propose it again, an idea too close to one is not drafted, and
+# propose_improvement asks him to check with the passenger first.
+
+_STOP = set("a an the and or of to in on for with by from is are be it its that this as at your you his he i my "
+            "add make new when before after into so not".split())
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if w not in _STOP and len(w) > 2}
+
+
+def declined() -> list[dict]:
+    """Ideas the passenger rejected, newest last: [{"goal", "reason", "t"}]."""
+    seen = {x.get("goal") for x in _state().get("declined") or []}
+    out = list(_state().get("declined") or [])
+    if PROPOSALS.is_dir():   # rejections from before reasons were kept
+        for d in sorted(PROPOSALS.iterdir()):
+            try:
+                m = json.loads((d / "meta.json").read_text())
+            except (OSError, ValueError):
+                continue
+            if m.get("status") == "rejected" and m.get("goal") and m["goal"] not in seen:
+                seen.add(m["goal"])
+                out.append({"goal": m["goal"], "reason": m.get("reason", ""), "t": m.get("rejected_at") or m.get("created", 0)})
+    return sorted(out, key=lambda x: x.get("t") or 0)
+
+
+def declined_match(goal: str) -> dict | None:
+    """The declined idea this goal is (nearly) the same as, if any."""
+    g = _words(goal)
+    for x in reversed(declined()):
+        w = _words(x.get("goal", ""))
+        if not g or not w:
+            continue
+        overlap = len(g & w) / min(len(g), len(w))
+        ratio = difflib.SequenceMatcher(None, (goal or "").lower(), x["goal"].lower()).ratio()
+        if ratio >= 0.6 or overlap >= 0.6:
+            return x
+    return None
+
+
+def _declined_text() -> str:
+    rows = declined()[-15:]
+    return "\n".join(f"- {x['goal'][:240]} — " + (f"reason: {x['reason']}" if x.get("reason") else "no reason given")
+                     for x in rows)
 
 
 # Proposals nothing depends on any more. Applied ones are kept: their backup is what rolls them back.
@@ -1154,7 +1215,11 @@ def run_review(conversations: list[dict], draft_code: bool = True) -> dict:
                     for r in conversations)[-60000:]
     user_text = " ".join(str(r["content"]) for r in conversations if r["role"] == "user").lower()
     st = stats(1)
-    prompt = (f"CONVERSATIONS (last 24 hours):\n{log or '(none)'}\n\nTOOL OUTCOMES:\n{json.dumps(st, indent=0)[:8000]}\n\n"
+    no = _declined_text()
+    prompt = (f"IDEAS YOUR PASSENGER REJECTED (with their reasons). Do NOT propose any of these again, or anything that "
+              f"would do the same thing another way; respect the reason, and learn from it what they do not want:\n"
+              f"{no or '(none)'}\n\n"
+              f"CONVERSATIONS (last 24 hours):\n{log or '(none)'}\n\nTOOL OUTCOMES:\n{json.dumps(st, indent=0)[:8000]}\n\n"
               f"CURRENT PLAYBOOK:\n" + "\n".join(f"- {r}" for r in rules()) + "\n\nSKILLS: " +
               ", ".join(s["name"] for s in skills()))
     data = _json(generate(REVIEW_SYSTEM, prompt, 4000)) or {}
@@ -1170,11 +1235,18 @@ def run_review(conversations: list[dict], draft_code: bool = True) -> dict:
             save_skill(s["name"], s.get("when", ""), s["steps"])
             saved.append(s["name"])
     ideas = [i for i in (data.get("ideas") or []) if isinstance(i, dict) and i.get("goal")][:3]
+    for i in ideas:
+        old = declined_match(i["goal"])
+        if old:
+            i["declined"] = old.get("reason") or "rejected before"
+            _log(f"review idea skipped, the passenger rejected it before: {i['goal'][:120]}")
     day = datetime.now().strftime("%Y-%m-%d")
     note = (f"# Self-review {day}\n\n{data.get('summary', '')}\n\n## Rules learned\n\n" +
             ("\n".join(f"- {r}" for r in added) or "_None._") + "\n\n## Skills saved\n\n" +
             ("\n".join(f"- {s}" for s in saved) or "_None._") + "\n\n## Improvement ideas\n\n" +
-            ("\n".join(f"- **{i['goal']}** ({i.get('why', '')})" for i in ideas) or "_None._") +
+            ("\n".join(f"- **{i['goal']}** ({i.get('why', '')})" + (f" _(not drafted: you rejected this before — "
+                                                                   f"{i['declined']})_" if i.get("declined") else "")
+                       for i in ideas) or "_None._") +
             f"\n\n## Tool outcomes (24 h)\n\n" + ("\n".join(f"- {t['name']}: {t['calls']} calls, {t['failed']} failed"
                                                          for t in st["tools"]) or "_No tool calls._") + "\n")
     (_vault_dir("Reviews") / f"{day}.md").write_text(note, encoding="utf-8")
@@ -1184,8 +1256,9 @@ def run_review(conversations: list[dict], draft_code: bool = True) -> dict:
                              "ideas": ideas}
         _save_state(s2)
     _log(f"review done: {len(added)} rules, {len(saved)} skills, {len(ideas)} ideas")
-    if draft_code and ideas and not _busy:
-        threading.Thread(target=_draft_from_review, args=(ideas[0]["goal"],), daemon=True).start()
+    fresh = [i for i in ideas if not i.get("declined")]
+    if draft_code and fresh and not _busy:
+        threading.Thread(target=_draft_from_review, args=(fresh[0]["goal"],), daemon=True).start()
     return s2["last_review"]
 
 
@@ -1240,6 +1313,9 @@ def status_text() -> str:
                 f"{p['goal'][:60]} — newest attempt {STATUS_WORDS.get(p.get('status'), p.get('status'))}"
                 + (f": {p.get('summary', '')[:220]}" if p.get("status") == "applied" else "") for p in by_claude)
              if by_claude else "") +
+            (". Changes the passenger rejected (do not propose them again): " + "; ".join(
+                f"{x['goal'][:80]}" + (f" (reason: {x['reason'][:160]})" if x.get("reason") else "")
+                for x in declined()[-6:]) if declined() else "") +
             (f". Last review: {last.get('summary', '')[:300]}" if last else ". No nightly review yet.") +
             (f" Working on: {_busy['goal'][:100]}." if _busy else ""))
 
@@ -1277,7 +1353,9 @@ TOOL_SCHEMAS = [
     _fn("propose_improvement", "Draft a change to your own code (a new ability, a fix, a better behaviour) for the "
         "passenger to approve. It is written and checked in the background; nothing changes until they approve it in the "
         "Self panel.",
-        {"goal": {"type": "string", "description": "The change, specific and buildable, with the reason."}}, ["goal"]),
+        {"goal": {"type": "string", "description": "The change, specific and buildable, with the reason."},
+         "passenger_insists": {"type": "boolean", "description": "Only true when the passenger, told that they "
+                               "rejected this before, asks for it again anyway."}}, ["goal"]),
     _fn("self_status", "Report on your self-improvement: playbook, skills, tuning, tool failures, corrections, "
         "proposals waiting for approval and the last nightly review.", {}, []),
 ]
