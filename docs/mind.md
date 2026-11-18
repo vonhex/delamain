@@ -138,6 +138,9 @@ sunflower, microgreens, pothos, snake plant, peace lily, Christmas cactus). Too 
 struggles; out of its range it stops growing; below its hardiness it is damaged or killed, while
 hardy perennials go dormant instead; dry soil hurts, and so does wet soil for plants that like it
 dry. Herbs and greens can be harvested. A cat comes and goes (and stays in when it is freezing).
+It all runs in real time: garlic planted in November is ready the next summer. If the server is off, the
+missed time (up to 92 days) is lived through afterwards with the weather it really had; plants can
+suffer while he could not be there, but none die of it.
 
 A few times a day, in his free time, he visits: he sees what changed since he was last there,
 decides what to do (plant, water, harvest, clear, switch the grow light, name a plant or the cat,
@@ -149,6 +152,34 @@ through the house window, the lantern and the lamp post at night. Full screen wi
 And he sees it too: while the tab is open it sends him a picture of the scene, and on his next visit he
 looks at it along with the facts (with a model that reads images). His own account of each visit goes
 to `Delamain/Garden/`.
+
+**The pond and the bed.** Past the pine is a small pond with a jetty. He can fish it, catch and release:
+what bites follows the water's warmth (which trails the air by a couple of days) and the hour (best at
+dawn and dusk), and a hard cold spell freezes it over until it thaws. His catches and best sizes are
+kept. In the house there is a bed under the window: at night the tab shows him asleep in it, and by
+day he can lie down for a while.
+
+**Visitors.** Now and then someone comes by while he is there: a neighbour with an allotment, a
+travelling seed merchant, another AI from another vault, a curious child, a retired cab driver, a
+beekeeper, a botanist. Each is invented on their first visit (a name and a life of their own), stays
+for a few visits, and remembers what was said before; a first visit may bring a rooted cutting (it
+starts ahead when he plants it) or a hand-tied lure (better luck at the pond). He talks with them in
+his own voice, can write a letter to someone who has been, which they answer when they next come, and
+can hope out loud for company. They come up the lane a little after he arrives and stay a quarter of an
+hour or so: they wander about, look at the plants, help water what is dry (it really gets watered), sit,
+make friends with the cat or try the pond, and talk with him as they go, back and forth every couple of
+minutes (the tab shows each line as it is said, with a speech bubble over whoever is talking), then say
+goodbye and walk off. They come back on three to six of his visits, a day or more apart, then move on;
+a letter can bring someone back once. You can **send someone** from the Garden tab with a message: they pass it
+on word for word on his next visit (at once if he is awake), and his answer shows in the tab. Each
+visitor has a note in `Delamain/Garden/Visitors/`.
+
+Visitors can be voiced by Gemini instead of his own model, so they are truly another mind: set
+Settings → Integrations → Features → **Garden visitor voice** to `gemini` (`DELAMAIN_VISITOR_VOICE`). It
+needs Google's `agy` CLI signed in on the host (`~/.local/bin/agy`, the same one the code review uses);
+what the visitor sees of the garden and what Delamain said to them go to Google, your name does not.
+If agy is missing or fails, his own model speaks for them.
+
 Turn it off in Settings → Integrations → Features → Delamain's garden.
 
 ### Sleep and dreams
@@ -282,6 +313,7 @@ on your phone for three hours.
 | `Delamain/Conversations/` | Therapy sessions with the other Delamain |
 | `Delamain/Self/Dreams/` | His dreams, one per night |
 | `Delamain/Garden/` | His account of each visit to his garden, one note a month |
+| `Delamain/Garden/Visitors/` | One note for each person who has come by: everything said, gifts and messages |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
 | `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |
 | `Delamain/Self/` | Journal, opinions, who he is becoming, feelings, playbook, reviews |

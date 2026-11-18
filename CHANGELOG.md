@@ -4,11 +4,22 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [3.5.1] — 2026-11-18
+## [3.6.0] — 2026-11-18 — Company
+
+### Added
+- **Visitors in Delamain's garden** (his own idea, from the Self panel): now and then someone comes by while he is there (a neighbour, a seed merchant, another AI, a child, a retired cab driver, a beekeeper, a botanist), invented on their first visit, staying a few visits and remembering what was said. They may bring a rooted cutting or a lure; he can write letters they answer next time, and hope for company. **Send someone** from the Garden tab with a message: they pass it on word for word and his answer shows in the tab. Notes in `Delamain/Garden/Visitors/`; `POST /api/garden/visitor`.
+- **Visitors do things and talk**: they come up the lane, stay about a quarter of an hour, look at the plants, help water, sit, pet the cat, fish from the far bank, and talk with him back and forth as it happens (speech bubbles in the scene, the conversation line by line in the tab), then say goodbye and walk off. They walk, sit and crouch with the same animation as Delamain.
+- **Visitors voiced by Gemini** (optional): Settings → Features → Garden visitor voice → `gemini` (`DELAMAIN_VISITOR_VOICE`) has Gemini speak for them through the `agy` CLI, so they are truly another mind; falls back to his own model.
+- **A pond and a bed**: a pond with a jetty past the pine where he fishes (catch and release; it follows the water's warmth and the hour, and freezes over in a hard cold spell), and a bed in the house where the tab shows him asleep at night and he can lie down by day.
+- **More animation**: a four-frame walk whose stride follows the ground he covers (no more sliding feet), sitting, crouching to plant, harvest and clear, stroking the cat, gesturing as he talks, tipping the watering can, casting and waiting on a float that bobs and nibbles, blinking. Visitors are drawn by who they are.
 
 ### Fixed
+- His self-improvement drafts (and Claude Code fixes) could not touch `garden.py`, `mind.py`, `recall.py` or `config.py`: they were left out of the files he may edit, so a garden idea was written into `main.py` guessing at the garden's code, and Claude refused it. They are editable now (not `auth.py` or `self_improve.py`).
+- Feelings looked as if they never faded: each new feeling re-based the others to the same moment (the fade itself was right), so the Emotions panel showed every feeling as felt minutes ago. Each now keeps when he actually last felt it. And the same feeling again within a quarter of an hour counts half, so a run of small slips no longer stacks into a crisis.
+- Therapy lines were cut at 400 characters in the Brain view; they are shown whole (the transcript in the vault was always complete).
 - **Unraid now sees updates.** The Docker image was published as an OCI index with a build-attestation entry; Unraid's update check asks for a Docker manifest, got a 404, and never offered an update. Images are now published as a plain Docker manifest.
 - `latest` now moves only with a release. Builds of `main` are published as `ghcr.io/vonhex/delamain:dev`.
+- **Delamain's garden lives through downtime.** After the server has been off, the missed time (up to 92 days, was 48 hours) is lived through hour by hour with the real weather it had, from Open-Meteo's history. Plants can suffer badly while he could not be there, but none die of it: he comes back to a rescue.
 
 ---
 

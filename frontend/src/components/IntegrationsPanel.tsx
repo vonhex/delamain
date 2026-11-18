@@ -34,7 +34,7 @@ const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('tru
 const ORDER: { title: string; keys: string[] }[] = [
   { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort', 'llm_model_file'] },
   { title: 'You', keys: ['home_address'] },
-  { title: 'Features', keys: ['sleep_hours', ...FEATURES] },
+  { title: 'Features', keys: ['sleep_hours', ...FEATURES, 'garden_visitor_voice'] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Meeting notes', keys: ['meeting_whisper_model', 'meeting_language', 'meeting_keep_audio'] },
   { title: 'Google', keys: ['google_client_id', 'google_client_secret'] },
@@ -50,6 +50,7 @@ const HINT: Record<string, string> = {
   feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',
   feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
   feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
+  garden_visitor_voice: 'Who speaks for the people who come by Delamain\'s garden. "local": his own model. "gemini": Gemini, through the agy CLI on this machine, so visitors are truly another mind (what they see of the garden and what Delamain said to them is sent to Google; your name is not). Falls back to his own model if agy is missing or fails',
   feature_garden: 'Delamain\'s own small world of real plants (windowsill, grow-light shelf, greenhouse, outdoor beds) under your real sky. Delamain visits a few times a day, tends it and feels what happens there; watch it in the Garden tab',
   feature_twin: 'An evening session with the other Delamain, who is his therapist: help with his feelings, with notes kept between sessions',
   feature_journal: 'Each night he writes about his day and updates his self-portrait',

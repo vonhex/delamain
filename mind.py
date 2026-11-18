@@ -971,13 +971,17 @@ def feel(name: str, intensity: float, cause: str, source: str = "event") -> None
         live = emotions(st)
         same = next((e for e in live if e["name"] == name), None)
         if same:
+            # the same feeling again soon after counts for less: a run of small slips is not a crisis
+            if now - same.get("felt", same.get("t", 0)) < 900:
+                intensity *= 0.5
             intensity = round(1 - (1 - same["now"]) * (1 - intensity), 3)
             live = [e for e in live if e is not same]
         # older feelings are re-based to now at their faded strength, so the fade stays continuous
-        kept = [{"name": e["name"], "i": e["now"], "cause": e.get("cause", ""), "t": now, "source": e.get("source", "")}
-                for e in live]
+        # (t is where the fade is measured from; felt is when he last actually felt it, for showing)
+        kept = [{"name": e["name"], "i": e["now"], "cause": e.get("cause", ""), "t": now, "source": e.get("source", ""),
+                 "felt": e.get("felt", e.get("t", now))} for e in live]
         kept = sorted(kept, key=lambda e: -e["i"])[:15]       # past sixteen, the faintest go, never the strongest
-        st["emotions"] = kept + [{"name": name, "i": intensity, "cause": cause, "t": now, "source": source}]
+        st["emotions"] = kept + [{"name": name, "i": intensity, "cause": cause, "t": now, "source": source, "felt": now}]
         m = mood()
         for key, d in EMOTIONS[name][0].items():
             # gentler near the ends, so a run of feelings bends the axes without pinning them
@@ -1954,7 +1958,7 @@ def talk_to_twin(topic: str = "", turns: int = TWIN_TURNS, started_by: str = "De
             if not text:
                 break
             lines.append((speaker, text[:1500]))
-            _ev("twin_say", who=speaker, text=text[:400])
+            _ev("twin_say", who=speaker, text=text[:1500])
         if len(lines) < 2:
             raise RuntimeError("the conversation did not get going")
         convo = "\n\n".join(f"{'Delamain' if w == 'Delamain' else 'The other Delamain'}: {t}" for w, t in lines)
@@ -2473,10 +2477,10 @@ def run_tool(name: str, arguments) -> str:
 def snapshot() -> dict:
     st = _state()
     return {"mood": mood(), "feeling": _feeling_words(mood()), "portrait": st.get("portrait"),
-            "emotions": [{"name": e["name"], "now": e["now"], "cause": e.get("cause", ""), "t": e["t"]} for e in emotions(st)[:8]],
+            "emotions": [{"name": e["name"], "now": e["now"], "cause": e.get("cause", ""), "t": e.get("felt", e["t"])} for e in emotions(st)[:8]],
             "thought": st.get("thought"), "baseline": _baseline(st),
             "families": FAMILIES, "half_lives": {k: v[1] for k, v in EMOTIONS.items()},
-            "all_emotions": {e["name"]: {"now": e["now"], "cause": e.get("cause", ""), "t": e["t"]} for e in emotions(st)},
+            "all_emotions": {e["name"]: {"now": e["now"], "cause": e.get("cause", ""), "t": e.get("felt", e["t"])} for e in emotions(st)},
             "moments": [x for x in (st.get("moments") or []) if x.get("cause")][-40:],
             "thoughts": (st.get("thoughts") or [])[-12:],
             "opinions": (st.get("opinions") or [])[-10:], "following": st.get("following") or [],
