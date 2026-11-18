@@ -26,7 +26,7 @@ import config
 
 # Which part of the brain each tool belongs to (see the Brain view's legend).
 TOOL_REGION = {
-    "web_search": "senses", "read_webpage": "senses", "get_news": "senses", "get_weather": "senses",
+    "web_search": "senses", "look": "senses", "read_webpage": "senses", "get_news": "senses", "get_weather": "senses",
     "get_route": "navigation",
     "remember": "memory", "forget": "memory", "write_note": "memory", "append_to_note": "memory",
     "read_note": "memory", "list_notes": "memory", "search_notes": "memory",

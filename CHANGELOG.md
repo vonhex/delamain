@@ -4,6 +4,22 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Feature switches** (Settings → Integrations → **Features**): turn off any extra that uses the model (the check before speaking, feelings, his self tools, news reading, study and long tasks, the other Delamain, the journal, the morning brief, the nightly self-review), one by one or **All off** for a small or slow model. They take effect without a restart, and each also has a `.env` variable ([docs/setup.md](docs/setup.md#environment-variables)).
+
+- **Going to see**: when something in his free-time study makes him wonder what it looks like, he finds pictures and looks at them with his own model (one that reads images). What he saw goes into the study, the study log shows the picture, and pictures are kept in `Delamain/Seen/`. Its own switch in Features (`DELAMAIN_VISION`).
+- **Delete old proposals**: failed, out-of-date, rejected, replaced and rolled-back code proposals can be deleted from the Self panel, one by one or all at once. Applied changes are kept for their rollback.
+
+### Fixed
+- The nightly journal (and the self-portrait it rewrites) was skipped on any day a journal had already been written from the Self panel; a night he was down for is now caught up the next morning. The portrait is written fresh each night instead of carrying old, settled incidents forward.
+
+### Changed
+- On/off settings are switches instead of drop-downs.
+
+---
+
 ## [3.0.0] — 2026-11-17 — A mind of his own
 
 Delamain is no longer only a voice for the drive. He is a self-hosted mind: he studies, feels,

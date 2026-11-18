@@ -25,9 +25,16 @@ export interface IntegrationsHandle {
   save: () => Promise<boolean>;   // false: the server refused a value; the error is shown
 }
 
+// Extras that cost model time: turn them off for a small or slow model.
+const FEATURES = ['feature_verify', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision',
+  'feature_twin', 'feature_journal', 'feature_brief', 'feature_self_review'];
+const isOn = (v: string | undefined) => !['0', 'false', 'no', 'off'].includes((v ?? '').trim().toLowerCase());
+const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('true') && f.choices.includes('false');
+
 const ORDER: { title: string; keys: string[] }[] = [
   { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort', 'llm_model_file'] },
   { title: 'You', keys: ['home_address'] },
+  { title: 'Features', keys: FEATURES },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Meeting notes', keys: ['meeting_whisper_model', 'meeting_language', 'meeting_keep_audio'] },
   { title: 'Google', keys: ['google_client_id', 'google_client_secret'] },
@@ -35,6 +42,16 @@ const ORDER: { title: string; keys: string[] }[] = [
 ];
 
 const HINT: Record<string, string> = {
+  feature_verify: 'Before a reply is spoken, the model reads it again for claims it cannot back up. One extra model call per reply',
+  feature_feelings: 'After each reply, a short call decides what he felt; his feelings and mood go into every reply',
+  feature_self_tools: 'Offers the model the tools that change his playbook, skills, tasks and knowledge. Small models do better with fewer tools',
+  feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',
+  feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
+  feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
+  feature_twin: 'A conversation with his sceptical twin in the evening',
+  feature_journal: 'Each night he writes about his day and updates his self-portrait',
+  feature_brief: 'From 7am, the first time the app is open: weather, calendar, mail and news',
+  feature_self_review: 'After 03:30 he reviews the day and may draft a change to his own code (you approve it)',
   llm_url: 'Ollama, LM Studio, llama.cpp, vLLM or any OpenAI-compatible server with tool calling',
   llm_model: 'As the server lists it at /v1/models; llama.cpp ignores it',
   llm_api_key: 'For hosted or key-protected servers (OpenAI, OpenRouter, llama.cpp --api-key, LiteLLM). Kept on the server, never shown again',
@@ -117,8 +134,36 @@ export const IntegrationsPanel = forwardRef<IntegrationsHandle, { token: string 
           <div className="text-[10px] text-cyber-blue/60 font-bold uppercase tracking-[0.3em] border-b border-cyber-blue/10 pb-1">
             {group.title}
           </div>
+          {group.title === 'Features' && (
+            <div className="flex items-center gap-2 text-[9px] text-gray-500">
+              <span className="flex-1 leading-relaxed">Each one uses the model. A small or slow model does better with them off; his chat, voice and tools keep working.</span>
+              {(['true', 'false'] as const).map(v => (
+                <button key={v} type="button"
+                  onClick={() => setValues(cur => ({ ...cur, ...Object.fromEntries(FEATURES.filter(k => fields[k]).map(k => [k, v])) }))}
+                  className="uppercase tracking-wider px-2 py-1 border border-cyber-blue/20 rounded-sm text-gray-400 hover:text-cyber-blue hover:border-cyber-blue/50">
+                  {v === 'true' ? 'All on' : 'All off'}
+                </button>
+              ))}
+            </div>
+          )}
           {group.keys.filter(k => fields[k]).map(key => {
             const f = fields[key];
+            if (isToggle(f)) {
+              const on = isOn(values[key]);
+              return (
+                <div key={key} className="space-y-1">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <button type="button" role="switch" aria-checked={on}
+                      onClick={() => setValues({ ...values, [key]: on ? 'false' : 'true' })}
+                      className={`relative shrink-0 w-9 h-5 rounded-full border transition-colors ${on ? 'bg-cyber-blue/40 border-cyber-blue/70' : 'bg-cyber-gray/50 border-cyber-blue/15'}`}>
+                      <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all ${on ? 'left-[18px] bg-cyber-blue' : 'left-0.5 bg-gray-500'}`} />
+                    </button>
+                    <span className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">{f.label}</span>
+                  </label>
+                  {HINT[key] && <p className="text-[9px] text-gray-500 leading-relaxed pl-12">{HINT[key]}</p>}
+                </div>
+              );
+            }
             return (
               <div key={key} className="space-y-1">
                 <label className="text-[10px] text-cyber-blue font-bold uppercase tracking-wider">{f.label}</label>

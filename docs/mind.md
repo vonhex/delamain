@@ -49,6 +49,12 @@ His favourites show in the Self panel, and he lights up about them in conversati
 
 Each session ends with the next question he wants answered.
 
+**Going to see.** When he wonders what something looks like (a place, a creature, a painting, a
+machine), he finds pictures of it with an image search and looks at them with his own model. What
+he saw goes into the session like anything else he read, the study log shows the picture with his
+description, and the picture is kept in `Delamain/Seen/`. This needs a model that reads images
+(most recent open models do); turn it off in Settings → Integrations → Features if yours does not.
+
 ### Long tasks
 
 Ask him to take something on ("find us the three best sci-fi films of the seventies for a film
@@ -165,7 +171,7 @@ A language model will happily say "Done!" for something it never did. Delamain c
   his memory, his notes and this turn's tool results, and flags anything claimed as done that no
   tool confirmed, any fact about you that appears nowhere, and anything his memory contradicts. A
   flagged draft is rewritten once. It reuses the cached prompt, so it adds only a second or so.
-  Set `DELAMAIN_VERIFY=0` to turn it off.
+  Turn it off in Settings → Integrations → Features (or `DELAMAIN_VERIFY=false`).
 - **Claims without tools.** "Done", "it's in your reports" or "I checked" with no tool run that
   turn sends him back to actually do it, or to say plainly that he can't.
 - **Tool calls written as text.** Some models write a tool call into their reply instead of making
@@ -192,6 +198,7 @@ on your phone for three hours.
 | `Delamain/Memory/` | What he remembers about you |
 | `Delamain/News/` | News digests with his take |
 | `Delamain/Study/` | One log per day of what he studied |
+| `Delamain/Seen/` | Pictures he went to look at, with what he saw in the study log |
 | `Delamain/Conversations/` | Talks with the other Delamain |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
 | `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |
@@ -224,7 +231,8 @@ cloud service by Delamain, and it is yours to read, correct or delete. Treat it 
 
 | Variable | Default | |
 |---|---|---|
-| `DELAMAIN_VERIFY` | `1` | The check before speaking; `0` turns it off |
+| `DELAMAIN_VERIFY` ⚙ | `true` | The check before speaking; `false` turns it off |
+| `DELAMAIN_FEELINGS`, `DELAMAIN_STUDY`, `DELAMAIN_NEWS_READING`, `DELAMAIN_TWIN`, `DELAMAIN_JOURNAL`, `DELAMAIN_BRIEF`, `DELAMAIN_SELF_TOOLS` ⚙ | `true` | Each part of his mind can be turned off, in Settings → Integrations → Features or here, for a small or slow model |
 | `DELAMAIN_BACKGROUND_EFFORT` | `high` | `reasoning_effort` sent with background work (study, journal, reviews, reports). Empty for a model server that rejects the field |
 | `DELAMAIN_SELF_DIR` | `<repo>/self` | His working state |
 | `DELAMAIN_HOME_ADDRESS` ⚙ | | Weather for the morning brief |

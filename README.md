@@ -182,6 +182,9 @@ on the Android Auto screen. The full guide, Docker volumes and every setting are
   computer's network address, not `localhost`.
 - **He doesn't study, keep a journal or feel anything.** Set an Obsidian vault, and keep **Tools** on
   with a model that supports tool calling. Background work happens when nobody is talking to him.
+  Check that those parts are switched on in Settings → Integrations → **Features**.
+- **He is slow or confused on a small model.** Settings → Integrations → **Features** → **All off**
+  leaves a plain assistant without the extras that use the model; turn them back on one at a time.
 - **Background work fails with an error about `reasoning_effort`.** Your model server does not take
   that field: set `DELAMAIN_BACKGROUND_EFFORT=` (empty) in `.env`.
 - **Approve says changes cannot be applied here.** Applying restarts him, which needs the systemd
