@@ -15,6 +15,7 @@ All notable changes to Delamain are documented here.
 
 ### Fixed
 - His self-improvement drafts (and Claude Code fixes) could not touch `garden.py`, `mind.py`, `recall.py` or `config.py`: they were left out of the files he may edit, so a garden idea was written into `main.py` guessing at the garden's code, and Claude refused it. They are editable now (not `auth.py` or `self_improve.py`).
+- Feelings looked as if they never faded: each new feeling re-based the others to the same moment (the fade itself was right), so the Emotions panel showed every feeling as felt minutes ago. Each now keeps when he actually last felt it. And the same feeling again within a quarter of an hour counts half, so a run of small slips no longer stacks into a crisis.
 - Therapy lines were cut at 400 characters in the Brain view; they are shown whole (the transcript in the vault was always complete).
 - **Unraid now sees updates.** The Docker image was published as an OCI index with a build-attestation entry; Unraid's update check asks for a Docker manifest, got a 404, and never offered an update. Images are now published as a plain Docker manifest.
 - `latest` now moves only with a release. Builds of `main` are published as `ghcr.io/vonhex/delamain:dev`.
