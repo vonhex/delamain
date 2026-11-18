@@ -43,6 +43,7 @@ ENV PYTHONUNBUFFERED=1 \
     DELAMAIN_AUDIO_DIR=/app/data/audio_output \
     DELAMAIN_LINES_DIR=/app/data/line_clips \
     DELAMAIN_SELF_DIR=/app/data/self \
+    HF_HOME=/app/data/huggingface \
     FRONTEND_DIST=/app/frontend_dist \
     OBSIDIAN_VAULT_PATH=/vault
 

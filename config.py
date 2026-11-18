@@ -40,6 +40,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     # Extras that cost model time. Each can be turned off, for a small or slow model.
     "feature_verify": ("DELAMAIN_VERIFY", "true", "Check each reply before speaking"),
     "feature_feelings": ("DELAMAIN_FEELINGS", "true", "Feelings and inner life"),
+    "feature_recall": ("DELAMAIN_RECALL", "true", "Recall by meaning (a small embedding model on the CPU)"),
     "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
     "feature_vision": ("DELAMAIN_VISION", "true", "Look at pictures in his free time (needs a model that reads images)"),
     "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),

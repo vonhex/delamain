@@ -158,6 +158,8 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_PRONUNCIATIONS` | `pronunciations.local.txt` | Your own "Word = respelling" list for words the voice gets wrong (on top of `pronunciations.txt`) |
 | `DELAMAIN_VERIFY` ⚙ | `true` | The check before speaking ([mind.md](mind.md#honesty)); `false` turns it off |
 | `DELAMAIN_FEELINGS` ⚙ | `true` | Feelings and inner life: the appraisal after each reply, and his mood in every prompt |
+| `DELAMAIN_RECALL` ⚙ | `true` | Recall by meaning: a small embedding model on the CPU over his notes and your conversations ([mind.md](mind.md#recall)); `false` searches by words only |
+| `DELAMAIN_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | The embedding model (a Hugging Face repo with `onnx/model.onnx`) |
 | `DELAMAIN_SELF_TOOLS` ⚙ | `true` | Offer the model the tools that change his playbook, skills, tasks and knowledge |
 | `DELAMAIN_NEWS_READING` ⚙ | `true` | Reading the news through the day |
 | `DELAMAIN_STUDY` ⚙ | `true` | Free-time study and long tasks |

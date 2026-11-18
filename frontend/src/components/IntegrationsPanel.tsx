@@ -26,7 +26,7 @@ export interface IntegrationsHandle {
 }
 
 // Extras that cost model time: turn them off for a small or slow model.
-const FEATURES = ['feature_verify', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision',
+const FEATURES = ['feature_verify', 'feature_recall', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision',
   'feature_twin', 'feature_journal', 'feature_brief', 'feature_self_review'];
 const isOn = (v: string | undefined) => !['0', 'false', 'no', 'off'].includes((v ?? '').trim().toLowerCase());
 const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('true') && f.choices.includes('false');
@@ -43,6 +43,7 @@ const ORDER: { title: string; keys: string[] }[] = [
 
 const HINT: Record<string, string> = {
   feature_verify: 'Before a reply is spoken, the model reads it again for claims it cannot back up. One extra model call per reply',
+  feature_recall: 'Finds what he knows by meaning, not only by name, in his notes and your past conversations. A 130 MB model on the CPU; off, he searches by words only',
   feature_feelings: 'After each reply, a short call decides what he felt; his feelings and mood go into every reply',
   feature_self_tools: 'Offers the model the tools that change his playbook, skills, tasks and knowledge. Small models do better with fewer tools',
   feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',

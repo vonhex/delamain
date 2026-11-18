@@ -37,6 +37,11 @@ try:   # his self-improvement: learning from corrections, self-tuning, and code 
 except Exception as _e:
     _self = None
     print(f"[Self] not loaded: {_e}")
+try:   # recall by meaning over his notes and your conversations
+    import recall as _recall
+except Exception as _e:
+    _recall = None
+    print(f"[Recall] not loaded: {_e}")
 try:   # his inner life: knowledge notes, study, news, emotions, journal, opinions, the other Delamain
     import mind as _mind
 except Exception as _e:
@@ -143,6 +148,10 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
+    if _recall:
+        _recall.emit = _brain.emit
+        _recall.db_conversations = lambda: _db.DB_PATH
+        _recall.start()
     meeting_task = asyncio.create_task(_meetings.worker(_meeting_think, _meeting_notify))
     yield
     reminder_task.cancel()
@@ -770,7 +779,9 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
                    "driver who knows a regular passenger would; not in every reply.]")
     if config.flag("tools_enabled"):
-        memory = _tools.memory_context()
+        latest_said = next((m["content"] for m in reversed(history) if m.get("role") == "user"
+                            and isinstance(m.get("content"), str)), "")
+        memory = _tools.memory_context(latest_said)
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
         if _self:
@@ -786,6 +797,11 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
                            + _mind.knowledge_context(latest))
             except Exception as e:
                 print(f"[Mind] context not added: {e}")
+        if _recall:
+            try:
+                system += _recall.context(latest_said, skip=system[-5000:])
+            except Exception as e:
+                print(f"[Recall] context not added: {e}")
     # Dungeon Master mode: the adventure, what has happened in it and the dice go in
     # with every reply, and narration gets room beyond the usual one or two sentences.
     if campaign:

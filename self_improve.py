@@ -63,7 +63,7 @@ HEALTH = "http://127.0.0.1:8888/health"
 
 # Tools whose results are outside content. After any of them in a turn, the tools below that
 # change him are refused for the rest of that turn.
-UNTRUSTED = {"web_search", "read_webpage", "get_news", "get_email", "read_email", "read_note", "search_notes",
+UNTRUSTED = {"web_search", "read_webpage", "get_news", "get_email", "read_email", "read_note", "search_notes", "search_memory",
              "list_notes", "get_calendar", "use_skill"}
 GUARDED = {"learn_rule", "forget_rule", "save_skill", "tune_setting", "propose_improvement"}
 

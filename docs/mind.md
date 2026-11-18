@@ -24,6 +24,27 @@ idea or story. Each fact is dated and carries its source, and notes link to each
 **Memory about you** is separate: `<vault>/Delamain/Memory/`, the things you have told him about
 yourself, the people and the places in your life.
 
+### Recall
+
+He finds what he knows by meaning, not only by name. Every note he writes and every conversation
+you have had with him is cut into passages and indexed two ways: by its words and by what it
+means (a small embedding model, about 130 MB, that runs on the CPU and never touches your language
+model). So "how did that GPU company do?" finds his Nvidia note, and "what did I say about the car?"
+finds the day you told him.
+
+- **With every reply**, the few passages from his notes that clearly bear on your message come
+  with it, dated. Old conversations and morning briefs come up by themselves only when you reach
+  back in time ("remember…", "last week", "did I tell you…"), so last week's weather never passes
+  for today's.
+- **Memories about you** all go in while they fit. Once there are too many, the ones that bear on
+  what you just said go first, instead of the oldest simply falling off.
+- **`search_memory`**: he can look back through his notes and your conversations on purpose, by
+  meaning and words, optionally over the last few days.
+
+The vault stays the truth; the index (`self/recall.sqlite`) is rebuilt from it, so a note you edit
+or delete in Obsidian is recalled that way within minutes. Turn recall by meaning off in Settings →
+Integrations → Features to search by words only.
+
 ## What he does on his own
 
 | When | What | Where it goes |
@@ -205,7 +226,8 @@ on your phone for three hours.
 | `Delamain/Self/` | Journal, opinions, who he is becoming, feelings, playbook, reviews |
 
 His working state (mood, feelings, interests, tasks, the other Delamain's opinions) is in `self/`
-next to the code (`DELAMAIN_SELF_DIR`; `data/self` in Docker).
+next to the code (`DELAMAIN_SELF_DIR`; `data/self` in Docker). His recall index, `self/recall.sqlite`, is rebuilt from the vault
+and the conversation log; delete it any time.
 
 ## Privacy
 

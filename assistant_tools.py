@@ -563,15 +563,35 @@ def forget(text: str) -> str:
     return ("Forgot: " + " | ".join(removed)) if removed else f"Nothing remembered matches '{text}'."
 
 
-def memory_context() -> str:
-    """Remembered facts for the system prompt, grouped by topic, newest kept if over budget."""
+def memory_context(latest: str = "") -> str:
+    """Remembered facts for the system prompt, grouped by topic. All of them while they fit; past the
+    budget, the ones that bear on the latest message come first, then the newest (not simply the newest)."""
     sections = []
     for category, name in MEMORY_FILES.items():
         facts = _facts(config.memory_dir() / name)
         if facts:
             sections.append((Path(name).stem, facts))
-    text = "\n\n".join(f"{title}:\n" + "\n".join(f"• {f}" for f in facts) for title, facts in sections)
-    return text if len(text) <= MEMORY_CONTEXT_CHARS else "…" + text[-MEMORY_CONTEXT_CHARS:]
+    render = lambda secs: "\n\n".join(f"{title}:\n" + "\n".join(f"• {f}" for f in facts) for title, facts in secs if facts)
+    text = render(sections)
+    if len(text) <= MEMORY_CONTEXT_CHARS:
+        return text
+    flat = [(si, fi, f) for si, (_, facts) in enumerate(sections) for fi, f in enumerate(facts)]
+    try:
+        import recall as _recall
+        rel = _recall.rank_facts([f for _, _, f in flat], latest)
+    except Exception:
+        rel = [0.0] * len(flat)
+    n = len(flat)
+    order = sorted(range(n), key=lambda i: -(rel[i] + 0.15 * i / max(1, n - 1)))   # relevance, then newer
+    keep, used = set(), 0
+    for i in order:
+        cost = len(flat[i][2]) + 3
+        if used + cost > MEMORY_CONTEXT_CHARS - 200:
+            continue
+        keep.add(i)
+        used += cost
+    kept = [(title, [f for i, (si, _, f) in enumerate(flat) if si == s and i in keep]) for s, (title, _) in enumerate(sections)]
+    return render(kept) + f"\n\n(Some older memories were left out; search_memory finds them.)"
 
 
 # ── registry ─────────────────────────────────────────────────────────────────
@@ -614,6 +634,12 @@ TOOL_SCHEMAS = [
         {"folder": {"type": "string", "description": "Optional vault-relative folder, e.g. 'Delamain'."}}, []),
     _fn("read_note", "Read a note from the vault.",
         {"path": {"type": "string", "description": "Vault-relative path, e.g. 'Delamain/Shopping list.md'."}}, ["path"]),
+    _fn("search_memory", "Look back through your own notes (knowledge, studies, news, journal, meetings, tasks) and "
+        "your past conversations with the passenger, by meaning as well as words. Use it when they refer to something "
+        "earlier ('remember when…', 'what did I say about…', 'last week'), or before answering about the past from memory.",
+        {"query": {"type": "string", "description": "What to look for, in plain words."},
+         "where": {"type": "string", "enum": ["all", "notes", "conversations"]},
+         "days_back": {"type": "integer", "description": "Optional: only the last N days."}}, ["query"]),
     _fn("search_notes", "Search note names and contents in the vault.",
         {"query": {"type": "string"}}, ["query"]),
     _fn("write_note", "Create a new note in the vault (or replace one with overwrite=true).",
@@ -711,6 +737,7 @@ _HANDLERS = {
     "set_reminder": set_reminder, "list_reminders": list_reminders, "cancel_reminder": cancel_reminder,
     "read_webpage": read_webpage, "list_notes": list_notes,
     "read_note": read_note, "search_notes": search_notes, "write_note": write_note,
+    "search_memory": lambda query, where="all", days_back=0: __import__("recall").search_memory(query, where, days_back),
     "append_to_note": append_to_note, "remember": remember, "forget": forget,
     "write_report": _reports.write_report, "remake_report_pdf": _reports.remake_report_pdf,
     "correct_report": _reports.correct_report, "note_to_report": _reports.note_to_report,
