@@ -15,9 +15,9 @@ export type PWorld = {
   hour: number; isDay: boolean; cloud: number; rain: number; snow: number; temp: number;
   growLight: boolean; spots: PSpot[];
   cat: { here: boolean; where?: string; doing?: string } | null;
-  delamain: { x: number; y: number; walking: boolean; doing: string; facing: number; lying?: boolean; stride?: number } | null;
+  delamain: { x: number; y: number; walking: boolean; doing: string; facing: number; lying?: boolean; stride?: number; speaking?: boolean } | null;
   pond: { ice: number; waterT: number };
-  guest: { name: string; kind: string; talking: boolean } | null;
+  guest: (NonNullable<PWorld['delamain']> & { name: string; kind: string }) | null;
 };
 type RGB = [number, number, number];
 
@@ -86,6 +86,7 @@ export const BENCH_STAND: Record<string, { x: number; y: number }> = {
 // where he goes for the other things he does (x + 7 is where he stands, as for the spots)
 export const BED_STAND = { x: 40, y: 157 }, POND_STAND = { x: 271, y: 147 }, TALK_STAND = { x: 172, y: 160 };
 export const GUEST_AT = { x: 192, y: 160 };
+export const GUEST_POND = { x: 313, y: 158 };   // the far bank, casting back across the water
 const BED = { x0: 36, x1: 63, top: 146 };
 const MOON = { x: 236, y: 54 };
 
@@ -414,84 +415,93 @@ const DEL_IDLE = [
   '....ll.ll....',
   '....bb.bb....',
 ];
-// His poses, built from the upper body over different legs. Facing right; mirrored to face left.
-// l = the near leg, L = the far leg (darker), so a stride reads as one leg passing the other.
-const UPPER = DEL_IDLE.slice(0, 15);
-const LEGS: Record<string, string[]> = {
-  stand:   DEL_IDLE.slice(15),
+// Figures: an upper body over legs for each pose, facing right, mirrored to face left. l/p = the near
+// leg, L/P = the far one (darker), so a stride reads as one leg passing the other. Delamain and his
+// visitors are drawn the same way, so they walk, sit and crouch alike.
+type Legs = { stand: string[]; contact: string[]; pass: string[]; seat: string[]; crouch: string[] };
+type Spec = { upper: string[]; legs: Legs; w: number; col: Record<string, RGB>; hand: { ch: string; row: number; col: number };
+  glow?: RGB; pack?: RGB; veil?: boolean };
+type Fig = NonNullable<PWorld['delamain']>;
+const swapLegs = (rows: string[]) => rows.map(r => r.replace(/[lLbBpP]/g, c => ({ l: 'L', L: 'l', b: 'B', B: 'b', p: 'P', P: 'p' } as Record<string, string>)[c]));
+const DEL_LEGS: Legs = {
+  stand: DEL_IDLE.slice(15),
   contact: ['....kkkkk....', '....kk.kk....', '...LL...ll...', '...LL...ll...', '..LL.....ll..', '..LL.....ll..', '.BB.......bbb'],
-  pass:    ['....kkkkk....', '....kk.kk....', '....ll.LL....', '....ll.LL....', '....ll.LL....', '....ll..LL...', '....bb...BB..'],
+  pass: ['....kkkkk....', '....kk.kk....', '....ll.LL....', '....ll.LL....', '....ll.LL....', '....ll..LL...', '....bb...BB..'],
+  seat: ['....kkkkkllbb'],
+  crouch: ['....kkkkkkk..', '....kk...ll..', '....LL...ll..', '...BBB...bbb.'],
 };
-const swapLegs = (rows: string[]) => rows.map(r => r.replace(/[lLbB]/g, c => ({ l: 'L', L: 'l', b: 'B', B: 'b' } as Record<string, string>)[c]));
-const WALK = [LEGS.contact, LEGS.pass, swapLegs(LEGS.contact), swapLegs(LEGS.pass)];
-const SEAT = ['....kkkkkllbb'];                                       // sitting on the ground, legs out in front
-const CROUCH = ['....kkkkkkk..', '....kk...ll..', '....LL...ll..', '...BBB...bbb.'];   // down on his heels to tend something
 
-function delamain(b: Buf, d: NonNullable<PWorld['delamain']>, t: number) {
+function figure(b: Buf, d: Fig, t: number, S: Spec) {
+  const total = S.upper.length + S.legs.stand.length;
   const pose = d.walking ? 'walk' : d.doing === 'sit' || d.doing === 'sit_with_cat' ? 'sit'
-    : d.doing === 'plant' || d.doing === 'harvest' || d.doing === 'clear' ? 'crouch' : 'stand';
-  // the frame: the stride follows the distance walked, so his feet do not slide
-  const phase = Math.floor((d.stride ?? t * 8) / 3.2) % 4;
-  const rows: string[][] = Array.from({ length: 22 }, () => [...'.............']);
-  const put = (src: string[], at: number) => src.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.' && at + j >= 0 && at + j < 22) rows[at + j][i] = ch; }));
+    : ['plant', 'harvest', 'clear', 'pet_cat'].includes(d.doing) ? 'crouch' : 'stand';
+  const phase = Math.floor((d.stride ?? t * 8) / 3.2) % 4;        // the stride follows the ground covered
+  const rows: string[][] = Array.from({ length: total }, () => [...'.'.repeat(S.w)]);
+  const put = (src: string[], at: number) => src.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.' && at + j >= 0 && at + j < total && i < S.w) rows[at + j][i] = ch; }));
   let upperAt = 0;
-  if (pose === 'walk') { put(WALK[phase], 15); upperAt = phase % 2 === 0 ? 1 : 0; }
-  else if (pose === 'sit') { put(SEAT, 21); upperAt = 6; }
-  else if (pose === 'crouch') { put(CROUCH, 18); upperAt = 3; }
-  else put(LEGS.stand, 15);
-  put(UPPER, upperAt);
-  // hands: where his near hand is depends on what he is doing
-  const H = (x: number, y: number) => { if (y >= 0 && y < 22) rows[y][x] = 's'; };
-  const clearHand = () => { const y = upperAt + 12; if (y < 22) rows[y][11] = rows[y][11] === 's' ? '.' : rows[y][11]; };
-  if (pose === 'walk') {                                    // arms swing against the legs
-    clearHand(); const y = upperAt + 12;
-    H(phase === 0 ? 12 : phase === 2 ? 10 : 11, y - (phase === 0 ? 1 : 0));
-  } else if (d.doing === 'talk' && Math.floor(t * 0.8) % 3 === 0) {   // a gesture now and then as he talks
-    clearHand(); H(12, upperAt + 9); H(11, upperAt + 10);
-  } else if (pose === 'crouch') {                           // working the soil
-    clearHand(); H(12, upperAt + 13 + (Math.floor(t * 3) % 2));
-  } else if (d.doing === 'sit_with_cat') {                  // a hand on the cat, stroking
-    clearHand(); H(12 + (Math.floor(t * 1.2) % 2), upperAt + 13);
-  }
-  if (Math.floor(t * 0.45) % 7 === 0 && (t * 0.45) % 1 < 0.08) rows[2] = rows[2].map(c => (c === 'v' ? 'h' : c));   // he blinks
-  const x0 = Math.round(d.x) - 6, y0 = Math.round(d.y) - 22;
-  const pulse = 0.75 + 0.25 * Math.sin(t * 3);
-  b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, [34, 211, 238], 0.15 * pulse);
-  const col: Record<string, RGB> = {
-    h: [15, 23, 42], v: mix([34, 211, 238], [207, 250, 254], pulse - 0.5), k: [21, 94, 117], t: [34, 211, 238],
-    n: [30, 41, 59], s: [14, 116, 144], l: [12, 74, 110], L: [8, 50, 76], b: [2, 6, 23], B: [2, 4, 14],
-  };
-  b.rect(x0 + 3, y0 + 22, pose === 'sit' ? 10 : 7, 1, [0, 0, 0], 0.35);
-  const fx = (x: number) => x0 + (d.facing < 0 ? 12 - x : x);
-  rows.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') b.set(fx(x), y0 + y, col[ch]); }));
-  const dir = d.facing < 0 ? -1 : 1;
-  const hand = { x: fx(11), y: y0 + upperAt + 12 };
-  if (d.doing === 'water') {                                // the can tips forward and back as he pours
-    const tip = Math.sin(t * 2) > 0 ? 1 : 0, cx = hand.x + (dir < 0 ? -4 : 1);
+  if (pose === 'walk') { const L = [S.legs.contact, S.legs.pass, swapLegs(S.legs.contact), swapLegs(S.legs.pass)][phase]; put(L, S.upper.length); upperAt = phase % 2 === 0 ? 1 : 0; }
+  else if (pose === 'sit') { upperAt = total - S.legs.seat.length - S.upper.length; put(S.legs.seat, total - S.legs.seat.length); }
+  else if (pose === 'crouch') { upperAt = total - S.legs.crouch.length - S.upper.length; put(S.legs.crouch, total - S.legs.crouch.length); }
+  else put(S.legs.stand, S.upper.length);
+  put(S.upper, upperAt);
+  const hr = S.hand.row + upperAt, hc = S.hand.col;
+  const H = (x: number, y: number) => { if (y >= 0 && y < total && x < S.w + 1) { while (rows[y].length <= x) rows[y].push('.'); rows[y][x] = S.hand.ch; } };
+  const clearHand = () => { if (rows[hr]?.[hc] === S.hand.ch) rows[hr][hc] = '.'; };
+  if (pose === 'walk') { clearHand(); H(phase === 0 ? hc + 1 : phase === 2 ? hc - 1 : hc, hr - (phase === 0 ? 1 : 0)); }   // arms swing
+  else if (d.doing === 'talk' && d.speaking && Math.floor(t * 0.8 + d.x) % 3 === 0) { clearHand(); H(hc + 1, hr - 3); H(hc, hr - 2); }   // a gesture
+  else if (pose === 'crouch') { clearHand(); H(hc + 1, hr + 1 + (Math.floor(t * 3) % 2)); }                         // working the soil, stroking the cat
+  else if (d.doing === 'sit_with_cat') { clearHand(); H(hc + 1 + (Math.floor(t * 1.2) % 2), hr + 1); }
+  if ((t * 0.45 + d.x * 0.01) % 7 < 0.06) rows.forEach(r => r.forEach((c, i) => { if (c === 'v') r[i] = 'h'; if (c === 'e') r[i] = 'f'; }));   // a blink
+  const x0 = Math.round(d.x) - (S.w >> 1), y0 = Math.round(d.y) - total;
+  if (S.glow) b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, S.glow, 0.15 * (0.75 + 0.25 * Math.sin(t * 3)));
+  b.rect(x0 + 3, y0 + total, pose === 'sit' ? 10 : 7, 1, [0, 0, 0], 0.35);
+  const fx = (x: number) => x0 + (d.facing < 0 ? S.w - 1 - x : x);
+  if (S.pack && pose !== 'sit') b.rect(Math.min(fx(1), fx(4)) - (d.facing < 0 ? -1 : 0), y0 + upperAt + 6, 3, 6, S.pack);
+  rows.forEach((row, y) => row.forEach((ch, x) => { const c = S.col[ch]; if (ch !== '.' && c) b.set(fx(x), y0 + y, c); }));
+  if (S.veil) for (let i = 3; i < 8; i++) b.set(fx(i), y0 + upperAt + 2, [120, 113, 108], 0.6);
+  const dir = d.facing < 0 ? -1 : 1, hand = { x: fx(hc), y: y0 + hr };
+  if (d.doing === 'water') {                                // the can tips forward and back as they pour
+    const tip = Math.sin(t * 2 + d.x) > 0 ? 1 : 0, cx = hand.x + (dir < 0 ? -4 : 1);
     b.rect(cx, hand.y - 1, 4, 3, [100, 116, 139]); b.set(cx + (dir < 0 ? -1 : 4), hand.y - 2 + tip, [100, 116, 139]); b.set(cx + (dir < 0 ? -2 : 5), hand.y - 3 + tip * 2, [100, 116, 139]);
     if (tip) for (let k = 0; k < 4; k++) b.set(cx + (dir < 0 ? -2 : 5) + (k % 2) * dir, hand.y + ((t * 18 + k * 3) % 9), [125, 211, 252]);
   }
   if (d.doing === 'harvest') { b.rect(hand.x - (dir < 0 ? 4 : -1), hand.y + 2, 4, 3, [161, 98, 7]); b.set(hand.x + dir, hand.y + 1, [74, 222, 128]); b.set(hand.x + dir * 2, hand.y + 1, [74, 222, 128]); }
   if (d.doing === 'plant') { b.set(hand.x + dir, hand.y + 3, [120, 90, 60]); if (Math.floor(t * 3) % 2) b.set(hand.x + dir * 2, hand.y + 2, [120, 90, 60]); }
   if (d.doing === 'fish') {
-    // every so often he reels in and casts again; between casts the float bobs, and now and then something nibbles
-    const cyc = t % 16, R = 11;
+    // now and then a fresh cast; between casts the float bobs, and something nibbles
+    const cyc = (t + d.x * 0.37) % 16, R = 11;
     let ang = 0.95, flying = -1;
     if (cyc < 0.5) ang = 0.95 + (2.1 - 0.95) * (cyc / 0.5);
-    else if (cyc < 0.85) { ang = 2.1 - (2.1 - 0.45) * ((cyc - 0.5) / 0.35); }
+    else if (cyc < 0.85) ang = 2.1 - (2.1 - 0.45) * ((cyc - 0.5) / 0.35);
     else if (cyc < 1.6) { ang = 0.45 + (0.95 - 0.45) * ((cyc - 0.85) / 0.75); flying = (cyc - 0.85) / 0.75; }
     const tipX = hand.x + dir * Math.cos(ang) * R, tipY = hand.y - Math.sin(ang) * R;
     b.line(hand.x, hand.y, tipX, tipY, [120, 84, 50]);
-    const restX = tipX + dir * 7, restY = POND.cy - 1;
-    if (cyc < 0.85) return;                                  // the line is in the air, too fine to see
-    const nibble = Math.sin(t * 0.37) > 0.93 ? 1 : 0;
-    const fxp = flying >= 0 ? tipX + (restX - tipX) * flying : restX;
-    const fyp = flying >= 0 ? tipY + (restY - tipY) * flying - Math.sin(flying * Math.PI) * 6 : restY + Math.round(Math.sin(t * 2.2) * 0.5) + nibble;
-    b.line(tipX, tipY, fxp, fyp - 1, [226, 232, 240], 0.45);
-    b.set(fxp, fyp - 1, [239, 68, 68]); b.set(fxp, fyp, [248, 250, 252]);
-    if (nibble && flying < 0) for (let a = 0; a < 8; a++) b.set(fxp + Math.cos(a / 8 * Math.PI * 2) * 3, fyp + 1 + Math.sin(a / 8 * Math.PI * 2), [255, 255, 255], 0.3);
+    if (cyc >= 0.85) {
+      const restX = tipX + dir * 7, restY = POND.cy - 1, nibble = Math.sin(t * 0.37 + d.x) > 0.93 ? 1 : 0;
+      const fxp = flying >= 0 ? tipX + (restX - tipX) * flying : restX;
+      const fyp = flying >= 0 ? tipY + (restY - tipY) * flying - Math.sin(flying * Math.PI) * 6 : restY + Math.round(Math.sin(t * 2.2) * 0.5) + nibble;
+      b.line(tipX, tipY, fxp, fyp - 1, [226, 232, 240], 0.45);
+      b.set(fxp, fyp - 1, [239, 68, 68]); b.set(fxp, fyp, [248, 250, 252]);
+      if (nibble && flying < 0) for (let a = 0; a < 8; a++) b.set(fxp + Math.cos(a / 8 * Math.PI * 2) * 3, fyp + 1 + Math.sin(a / 8 * Math.PI * 2), [255, 255, 255], 0.3);
+    }
+  }
+  if (d.speaking) {                                         // a speech bubble while they talk
+    const bx = Math.round(d.x) + dir * 4, by = y0 + upperAt - 8;
+    for (let j = 0; j < 5; j++) for (let i = -4; i <= 4; i++) if (!((j === 0 || j === 4) && Math.abs(i) === 4)) b.set(bx + i, by + j, [248, 250, 252], 0.92);
+    b.set(bx - dir * 2, by + 5, [248, 250, 252], 0.92); b.set(bx - dir * 3, by + 6, [248, 250, 252], 0.8);
+    for (let k = 0; k < 3; k++) b.set(bx - 2 + k * 2, by + 2 - (Math.floor(t * 4) % 3 === k ? 1 : 0), [71, 85, 105]);
   }
 }
+
+function delamainSpec(t: number, magenta = false): Spec {
+  const pulse = 0.75 + 0.25 * Math.sin(t * (magenta ? 2.6 : 3) + (magenta ? 1 : 0));
+  const col: Record<string, RGB> = magenta
+    ? { h: [30, 16, 40], v: mix([232, 121, 249], [253, 230, 255], pulse - 0.5), k: [88, 28, 135], t: [232, 121, 249], n: [40, 20, 50], s: [107, 33, 168], l: [59, 7, 100], L: [40, 4, 70], b: [20, 4, 30], B: [12, 2, 20] }
+    : { h: [15, 23, 42], v: mix([34, 211, 238], [207, 250, 254], pulse - 0.5), k: [21, 94, 117], t: [34, 211, 238], n: [30, 41, 59], s: [14, 116, 144], l: [12, 74, 110], L: [8, 50, 76], b: [2, 6, 23], B: [2, 4, 14] };
+  return { upper: DEL_IDLE.slice(0, 15), legs: DEL_LEGS, w: 13, col, hand: { ch: 's', row: 12, col: 11 }, glow: magenta ? [232, 121, 249] : [34, 211, 238] };
+}
+
+function delamain(b: Buf, d: Fig, t: number) { figure(b, d, t, delamainSpec(t)); }
 
 function cat(b: Buf, c: NonNullable<PWorld['cat']>, t: number) {
   // a cat about 35 cm high sitting: five pixels, as it should be next to him
@@ -694,35 +704,29 @@ const KIND: Record<string, { a?: string; A?: string; c: string; p: string; b?: s
 };
 const SKIN = ['#f1c27d', '#c68642', '#8d5524', '#e0ac69', '#ffdbac', '#a86b3c'];
 
+const PERSON_LEGS: Legs = {
+  stand: PERSON.slice(12),
+  contact: ['...ppppp...', '...pp.pp...', '..PP...pp..', '..PP...pp..', '.PP.....pp.', '.PP.....pp.', '.BB.....bbb'],
+  pass: ['...ppppp...', '...pp.pp...', '...pp.PP...', '...pp.PP...', '...pp.PP...', '...pp..PP..', '...bb...BB.'],
+  seat: ['...pppppbb.'],
+  crouch: ['...ppppppp.', '...pp...pp.', '...PP...pp.', '..BBB...bbb'],
+};
+const short = (rows: string[]) => [rows[0], rows[1], rows[rows.length - 3], rows[rows.length - 2], rows[rows.length - 1]];
+
 function guest(b: Buf, g: NonNullable<PWorld['guest']>, t: number) {
-  const x = GUEST_AT.x, y = GUEST_AT.y;
   let seed = 0;
   for (const ch of g.name) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
-  if (g.kind === 'ai') {         // another of his kind: his own shape, another colour
-    const frame = DEL_IDLE, x0 = x - 6, y0 = y - frame.length, pulse = 0.75 + 0.25 * Math.sin(t * 2.6 + 1);
-    b.glow(x, y0 + 10, 14, [232, 121, 249], 0.14 * pulse);
-    const col: Record<string, RGB> = { h: [30, 16, 40], v: mix([232, 121, 249], [253, 230, 255], pulse - 0.5), k: [88, 28, 135], t: [232, 121, 249], n: [40, 20, 50], s: [107, 33, 168], l: [59, 7, 100], b: [20, 4, 30] };
-    b.rect(x0 + 3, y0 + frame.length, 7, 1, [0, 0, 0], 0.35);
-    frame.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') b.set(x0 + 12 - i, y0 + j, col[ch]); }));
-    return;
-  }
+  if (g.kind === 'ai') { figure(b, g, t, delamainSpec(t, true)); return; }     // another of his kind: his shape, another colour
   const k = KIND[g.kind] || KIND.gardener;
-  const rows = k.small ? [PERSON[0], ...PERSON.slice(2, 6), ...PERSON.slice(6, 12), ...PERSON.slice(12, 16), PERSON[18]] : PERSON;
-  const x0 = x - 5, y0 = y - rows.length + Math.round(Math.sin(t * 1.1 + seed) * 0.3);
-  const skin = hex(SKIN[seed % SKIN.length]);
-  const col: Record<string, RGB | null> = {
-    a: hex(k.a || SKIN[(seed + 3) % SKIN.length]), A: k.A ? hex(k.A) : null, f: skin, e: [30, 27, 24], c: hex(k.c), p: hex(k.p), b: hex(k.b || '#1c1917'),
+  const dark = (h: string) => mix(hex(h), [0, 0, 0], 0.35);
+  const col: Record<string, RGB> = {
+    a: hex(k.a || SKIN[(seed + 3) % SKIN.length]), f: hex(SKIN[seed % SKIN.length]), e: [30, 27, 24], c: hex(k.c),
+    p: hex(k.p), P: dark(k.p), b: hex(k.b || '#1c1917'), B: dark(k.b || '#1c1917'),
   };
-  if (k.pack) b.rect(x0 + 8, y0 + 6, 4, 6, hex(k.pack));
-  b.rect(x0 + 2, y, 7, 1, [0, 0, 0], 0.35);
-  const wave = g.talking && Math.floor(t * 1.5) % 4 === 0;
-  rows.forEach((row, j) => [...row].forEach((ch, i) => {
-    const c = col[ch];
-    if (ch === '.' || !c) return;
-    if (wave && ch === 'f' && i === 1 && j > 6) { b.set(x0 + i, y0 + j - 3, c); return; }      // a hand up as they talk
-    b.set(x0 + i, y0 + j, c);
-  }));
-  if (g.kind === 'beekeeper') for (let i = 3; i < 8; i++) b.set(x0 + i, y0 + 2, [120, 113, 108], 0.6);   // the veil
+  if (k.A) col.A = hex(k.A);
+  const upper = k.small ? [PERSON[0], ...PERSON.slice(2, 6), ...PERSON.slice(6, 12)] : PERSON.slice(0, 12);
+  const legs: Legs = k.small ? { ...PERSON_LEGS, stand: short(PERSON_LEGS.stand), contact: short(PERSON_LEGS.contact), pass: short(PERSON_LEGS.pass) } : PERSON_LEGS;
+  figure(b, g, t, { upper, legs, w: 11, col, hand: { ch: 'f', row: upper.length - 1, col: 9 }, pack: k.pack ? hex(k.pack) : undefined, veil: g.kind === 'beekeeper' });
 }
 
 // ── the whole frame ────────────────────────────────────────────────────────

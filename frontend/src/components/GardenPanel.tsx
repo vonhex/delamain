@@ -4,7 +4,7 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, type PWorld } from './gardenPixels';
+import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, type PWorld } from './gardenPixels';
 import { X, Sprout, Maximize2, Minimize2, Send } from 'lucide-react';
 
 type Spot = {
@@ -22,7 +22,8 @@ type Garden = {
   here: boolean; visit: { since: number; until: number; steps: Step[]; noticed?: string } | null;
   last_visit: number; log: { t: number; who: string; text: string }[]; hour: number;
   asleep?: boolean;
-  guest?: { name: string; kind: string; about: string; says: string; gift?: string | null; message?: string | null; reply?: string } | null;
+  guest?: { name: string; kind: string; about: string; says: string; gift?: string | null; message?: string | null; reply?: string;
+    since?: number; until?: number; steps?: { do: string; spot: number; at: number }[]; talk?: { who: string; text: string; t: number }[] } | null;
   pond?: { ice: number; water_t: number; lure: boolean; caught: { t: number; species: string; cm: number }[]; best: Record<string, number>; total: number };
   visitors?: { name: string; kind: string; about: string; visits: number; left: boolean; last: number; letter: boolean; talk: { date: string; says: string; reply?: string }[] }[];
   sent?: { t: number; text: string; by?: string; delivered?: number | null; visitor?: string | null; reply?: string | null }[];
@@ -48,19 +49,32 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
   const gRef = useRef(g);
   gRef.current = g;
   const pos = useRef<{ x: number; y: number; facing: number; dist: number } | null>(null);
+  const gpos = useRef<{ x: number; y: number; facing: number; dist: number; name: string } | null>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
     let raf = 0, last = 0;
     const t0 = performance.now();
+    // one step of walking toward a target; returns whether still walking
+    const walk = (p: { x: number; y: number; facing: number; dist: number }, tx: number, ty: number, speed: number) => {
+      const dx = tx - p.x, dy = ty - p.y;
+      if (Math.abs(dx) <= 0.6 && Math.abs(dy) <= 0.6) return false;
+      const d = Math.hypot(dx, dy), step = Math.min(d, speed);
+      p.x += (dx / d) * step; p.y += (dy / d) * step; p.dist += step;
+      if (Math.abs(dx) > 0.6) p.facing = dx > 0 ? 1 : -1;
+      return true;
+    };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (now - last < 90) return;          // about ten frames a second, like the pixel art it is
       last = now;
-      const gg = gRef.current;
+      const gg = gRef.current, nowS = Date.now() / 1000;
+      const gs = gg.here ? gg.guest : null;
+      const said = (gs?.talk || []).filter(l => l.t <= nowS).pop();
+      const speaker = said && nowS - said.t < 9 ? said.who : '';
       let del: PWorld['delamain'] = null;
       if (gg.here && gg.visit) {
-        const st = (gg.visit.steps || []).filter(s => s.at <= Date.now() / 1000).pop();
+        const st = (gg.visit.steps || []).filter(s => s.at <= nowS).pop();
         let target = { x: 170, y: 152 }, doing = 'look';
         let face = 0;
         if (st) {
@@ -72,25 +86,48 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         }
         if (!pos.current) pos.current = { x: 170, y: 152, facing: -1, dist: 0 };     // he comes in by the greenhouse door
         const p = pos.current;
-        const tx = target.x + 7, dx = tx - p.x, dy = target.y - p.y;
-        const walking = Math.abs(dx) > 0.6 || Math.abs(dy) > 0.6;
-        if (walking) {
-          const d = Math.hypot(dx, dy), step = Math.min(d, 1.4);
-          p.x += (dx / d) * step; p.y += (dy / d) * step; p.dist += step;
-          if (Math.abs(dx) > 0.6) p.facing = dx > 0 ? 1 : -1;
-        } else p.facing = face || (SPOTS.some(s => Math.abs(s.stand.x + 7 - p.x) < 1) ? -1 : p.facing);   // turn to the plant, the water, the visitor
-        del = { x: p.x, y: p.y, walking, doing: walking ? 'look' : doing, facing: p.facing, lying: !walking && doing === 'rest', stride: p.dist };
+        const walking = walk(p, target.x + 7, target.y, 1.4);
+        if (!walking) {
+          const g2 = gpos.current;                                                   // turn to whoever he is talking with
+          p.facing = speaker && g2 && Math.abs(g2.x - p.x) < 30 ? (g2.x > p.x ? 1 : -1)
+            : face || (SPOTS.some(s => Math.abs(s.stand.x + 7 - p.x) < 1) ? -1 : p.facing);
+        }
+        del = { x: p.x, y: p.y, walking, doing: walking ? 'look' : speaker === 'Delamain' && doing === 'look' ? 'talk' : doing, facing: p.facing,
+          lying: !walking && doing === 'rest', stride: p.dist, speaking: speaker === 'Delamain' };
       } else {
         pos.current = null;
         if (gg.asleep) del = { x: 0, y: 0, walking: false, doing: 'sleep', facing: 1, lying: true };   // asleep in his bed
       }
-      const talking = !!(gg.here && gg.visit && (gg.visit.steps || []).filter(s => s.at <= Date.now() / 1000).pop()?.do === 'talk');
+      // a visitor: walks in from the lane past the pond, goes about what they are doing, and walks off again
+      let guest: PWorld['guest'] = null;
+      if (gs && gs.since && nowS >= gs.since) {
+        if (!gpos.current || gpos.current.name !== gs.name) gpos.current = { x: 330, y: 160, facing: -1, dist: 0, name: gs.name };
+        const q = gpos.current;
+        const leaving = !!gs.until && nowS >= gs.until;
+        const st = (gs.steps || []).filter(s => s.at <= nowS).pop();
+        let tx = GUEST_AT.x, ty = GUEST_AT.y, doing = st?.do || 'talk', face = 0;
+        if (leaving) { tx = 334; ty = 160; doing = 'look'; }
+        else if (st) {
+          const sp = st.spot;
+          if (sp >= 0 && sp < SPOTS.length) { tx = SPOTS[sp].stand.x - 4; ty = SPOTS[sp].stand.y; face = 1; }
+          else if (sp === -2) { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; tx = bs.x - 4; ty = bs.y; face = 1; }
+          else if (sp === -3) { tx = 202; ty = 160; }
+          else if (sp === -5) { tx = GUEST_POND.x; ty = GUEST_POND.y; face = -1; }
+          else if (sp === -7) { const h = Math.sin(st.at * 12.9898) * 43758.5453; tx = 184 + (h - Math.floor(h)) * 60; ty = 160; }
+          else if (del && !del.lying) { tx = del.x + (del.x > 300 ? -13 : 13); ty = Math.max(del.y, 147); }     // beside him
+        }
+        const walking = walk(q, tx, ty, 1.2);
+        if (!walking) q.facing = speaker && del && Math.abs(del.x - q.x) < 30 ? (del.x > q.x ? 1 : -1) : face || q.facing;
+        if (!(leaving && q.x > 326))
+          guest = { name: gs.name, kind: gs.kind, x: q.x, y: q.y, walking, doing: walking ? 'look' : doing, facing: q.facing, stride: q.dist,
+            speaking: speaker === gs.name };
+      } else gpos.current = null;
       render(ctx, {
         hour: gg.hour, isDay: gg.weather.is_day, cloud: gg.weather.cloud, rain: gg.weather.rain, snow: gg.weather.snow,
         temp: gg.weather.temp, growLight: gg.grow_light, spots: gg.spots,
         cat: gg.cat.here ? { here: true, where: gg.cat.where, doing: gg.cat.doing } : null, delamain: del,
         pond: { ice: gg.pond?.ice ?? 0, waterT: gg.pond?.water_t ?? 10 },
-        guest: gg.here && gg.guest ? { name: gg.guest.name, kind: gg.guest.kind, talking } : null,
+        guest,
       }, (now - t0) / 1000);
     };
     raf = requestAnimationFrame(frame);
@@ -183,6 +220,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
     setSending(false);
     setTimeout(load, 2500);
   };
+  const lastLine = g?.here && g.guest ? (g.guest.talk || []).filter(l => l.t <= now).pop() : undefined;
   const step = g?.here && g.visit ? (g.visit.steps || []).filter(s => s.at <= now).pop() : null;
   const units = g?.units || 'imperial';
   const groups = g ? (['window', 'shelf', 'greenhouse', 'outdoors'] as const).map(place => ({ place, spots: g.spots.filter(s => s.place === place) })) : [];
@@ -203,7 +241,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               {g.here && g.visit ? (
                 <p className="text-cyan-200"><b>Delamain is in the garden</b>{step ? `: ${step.text}` : ', looking around'}.</p>
               ) : <p className="text-gray-400">{g.asleep ? 'Delamain is asleep in bed.' : g.last_visit ? `Delamain was last here ${ago(g.last_visit)}.` : "Delamain hasn't been yet."}</p>}
-              {g.here && g.guest && <p className="text-amber-200 line-clamp-2"><b>{g.guest.name}:</b> “{g.guest.says}”</p>}
+              {g.here && g.guest && lastLine && <p className={`line-clamp-2 ${lastLine.who === 'Delamain' ? 'text-cyan-200' : 'text-amber-200'}`}><b>{lastLine.who}:</b> “{lastLine.text}”</p>}
               {g.here && g.visit?.noticed && <p className="italic text-gray-400 line-clamp-2">“{g.visit.noticed}”</p>}
             </div>
             <button onClick={() => setFull(false)} className="text-gray-400 hover:text-white shrink-0" title="Back (F or Esc)" aria-label="Leave full screen"><Minimize2 size={18} /></button>
@@ -229,10 +267,12 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
             {g.here && g.visit?.noticed && <p className="italic text-gray-300">“{g.visit.noticed}”</p>}
             {g.here && g.guest && (
               <div className="border-l-2 border-amber-300/50 pl-2 space-y-0.5">
-                <p className="text-amber-200"><b>{g.guest.name}</b> <span className="text-gray-500">({g.guest.about})</span>: “{g.guest.says}”</p>
+                <p className="text-gray-400"><b className="text-amber-200">{g.guest.name}</b> ({g.guest.about}) {g.guest.since && now < g.guest.since ? 'is coming up the lane' : g.guest.until && now >= g.guest.until ? 'has headed off' : 'is here'}.</p>
                 {g.guest.gift && <p className="text-gray-400">Brought {g.guest.gift}.</p>}
                 {g.guest.message && <p className="text-gray-400">Passed on your message: “{g.guest.message}”</p>}
-                {g.guest.reply && <p className="text-cyan-100"><b className="text-cyan-300">Delamain:</b> {g.guest.reply}</p>}
+                {(g.guest.talk || []).filter(l => l.t <= now).map(l => (
+                  <p key={l.t} className={l.who === 'Delamain' ? 'text-cyan-100' : 'text-amber-100'}><b className={l.who === 'Delamain' ? 'text-cyan-300' : 'text-amber-300'}>{l.who}:</b> {l.text}</p>
+                ))}
               </div>
             )}
             <p className="text-gray-500">

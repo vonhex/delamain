@@ -165,7 +165,12 @@ beekeeper, a botanist. Each is invented on their first visit (a name and a life 
 for a few visits, and remembers what was said before; a first visit may bring a rooted cutting (it
 starts ahead when he plants it) or a hand-tied lure (better luck at the pond). He talks with them in
 his own voice, can write a letter to someone who has been, which they answer when they next come, and
-can hope out loud for company. You can **send someone** from the Garden tab with a message: they pass it
+can hope out loud for company. They come up the lane a little after he arrives and stay a quarter of an
+hour or so: they wander about, look at the plants, help water what is dry (it really gets watered), sit,
+make friends with the cat or try the pond, and talk with him as they go, back and forth every couple of
+minutes (the tab shows each line as it is said, with a speech bubble over whoever is talking), then say
+goodbye and walk off. They come back on three to six of his visits, a day or more apart, then move on;
+a letter can bring someone back once. You can **send someone** from the Garden tab with a message: they pass it
 on word for word on his next visit (at once if he is awake), and his answer shows in the tab. Each
 visitor has a note in `Delamain/Garden/Visitors/`.
 

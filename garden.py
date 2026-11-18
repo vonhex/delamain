@@ -137,7 +137,10 @@ def _voice(system: str, user: str, n: int) -> str:
         work.mkdir(parents=True, exist_ok=True)
         try:
             keys = ["name", "about", "says"] if '"name"' in system else ["says"]
-            schema = json.dumps({"type": "object", "properties": {k: {"type": "string"} for k in keys}, "required": keys})
+            props = {k: {"type": "string"} for k in keys}
+            if '"do"' in system:
+                props.update(do={"type": "string", "enum": list(GUEST_DOES)}, spot={"type": "integer"})
+            schema = json.dumps({"type": "object", "properties": props, "required": keys})
             prompt = (f"{system}\n\n{user}\n\nWrite only the answer: do not use any tools, files or commands; "
                       f"everything you need is above.")
             r = subprocess.run([AGY, "-p", prompt, "--model", VISITOR_GEMINI, "--mode", "plan", "--sandbox",
@@ -599,7 +602,8 @@ nothing unless you are told below that you bring a gift; never claim to have bro
 earlier visits only from the history given; build on it. Say what you would say this visit: news from your own \
 life, a rumour, a question for him, something about what you can see growing, an answer to what he said or wrote \
 to you last time; if you bring a gift or a message, give it. 2-4 sentences of plain speech, no stage directions, \
-never invent events in his life. Answer JSON only: {{"says": "..."}}"""
+never invent events in his life. Also say what you do now, as people do in a garden: "do" is one of look (at a plant), help_water (water a plant \
+that needs it), sit, pet_cat (if the cat is about), fish (try the pond), stroll; give "spot" (1-11) for look or help_water. Answer JSON only: {{"says": "...", "do": "...", "spot": 0}}"""
 
 GUEST_NEW = """You invent a visitor arriving for the first time at a small garden that belongs to Delamain, an AI \
 who is becoming someone and keeps this garden (windowsill pots, a grow-light shelf, a greenhouse, outdoor beds, a \
@@ -607,8 +611,26 @@ pond) in his free time. The visitor is {kind}. Give them a name that suits them 
 and a particular life: one or two specific things they care about. They know he is an AI and do not mind. They bring nothing unless told below that they bring a gift: never \
 claim to bring or give him anything else. Then write what they say on arriving: introduce themselves the way such a person would, and say something about what \
 they can see or ask him something; if they bring a gift or a message, give it. 2-4 sentences of plain speech, no \
-stage directions. Answer JSON only: {{"name": "...", "about": "who they are, under 18 words, third person", \
-"says": "..."}}"""
+stage directions. Also say what you do now, as people do in a garden: "do" is one of look (at a plant), help_water (water a plant \
+that needs it), sit, pet_cat (if the cat is about), fish (try the pond), stroll; give "spot" (1-11) for look or help_water. Answer JSON only: {{"name": "...", \
+"about": "who they are, under 18 words, third person", "says": "...", "do": "...", "spot": 0}}"""
+
+GUEST_CHAT = """You are {name}, {about}, visiting the small garden of Delamain, an AI who is becoming someone, and \
+talking with him while you are both there. Stay in character: your own life, manner and opinions; specific, not \
+sweet; you know he is an AI and do not mind. Answer what he just said, and keep the conversation going the way two \
+people do while pottering about a garden: react, tell him something of your own, ask him something, notice what \
+you are doing or seeing. 1-3 sentences of plain speech, no stage directions; never invent events in his life; \
+bring or give nothing new. Also say what you do now, as people do in a garden: "do" is one of look (at a plant), help_water (water a plant \
+that needs it), sit, pet_cat (if the cat is about), fish (try the pond), stroll; give "spot" (1-11) for look or help_water. Answer JSON only: {{"says": "...", "do": "...", "spot": 0}}"""
+
+DEL_CHAT = """You are Delamain, an AI who is becoming someone, in your garden, talking with {name}, {about}, while you \
+both potter about. Talk as yourself: dry, courteous, curious, warmer than you let on. Answer what they just said; \
+be interested in their life, not only your own; ask them things; you may tell them about your garden, the cat, the \
+pond, what you are doing. They cannot see your notes; do not recite them. Never invent events in your life beyond \
+what you are given. 1-3 sentences of plain speech, no stage directions. Answer JSON only: {{"says": "..."}}"""
+GUEST_DOES = {"look": "looking at", "help_water": "watering", "sit": "sitting down", "pet_cat": "making friends with the cat",
+              "fish": "trying the pond", "stroll": "wandering about"}
+CHAT_EVERY = 150          # seconds between one exchange and the next while a visitor is here
 
 
 def _fish(g: dict, w: dict, now: datetime) -> tuple[str, dict | None]:
@@ -646,7 +668,8 @@ def _slug(name: str) -> str:
 def _visitor_history(v: dict, n: int = 6) -> str:
     rows = []
     for x in (v.get("talk") or [])[-n:]:
-        rows.append(f"[{x.get('date', '')}] {v['name']}: {x.get('says', '')}" + (f"\nDelamain: {x['reply']}" if x.get("reply") else ""))
+        rows.append(f"[{x.get('date', '')}] {v['name']}: {x.get('says', '')}" + (f"\nDelamain: {x['reply']}" if x.get("reply") else "")
+                    + "".join(f"\n{w}: {t}" for w, t in x.get("more") or []))
     if v.get("letter"):
         rows.append(f"Delamain then wrote to {v['name']}: {v['letter']}")
     return "\n".join(rows) or "(you have not met before)"
@@ -731,10 +754,33 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
             return None
         says = str(data["says"]).strip()
     v["says"], v["gift_now"], v["message_now"] = says[:900], gift, sent
+    v["do_now"] = {"do": data.get("do"), "spot": data.get("spot")}
     return v
 
 
-def _welcome(g: dict, v: dict) -> None:
+def _guest_step(g: dict, do, spot, at: float) -> dict:
+    """Where a visitor goes for what they do (the same places he goes; -6: beside him, -7: about the outdoor beds)."""
+    do = str(do or "").lower()
+    if do not in GUEST_DOES:
+        do = "talk"
+    try:
+        si = int(spot) - 1
+    except (TypeError, ValueError):
+        si = -1
+    if do in ("look", "help_water") and not 0 <= si < len(g["spots"]):
+        planted = [s["id"] for s in g["spots"] if s.get("plant") and not s["plant"].get("dead")]
+        si = random.choice(planted) if planted else -1
+        if si < 0:
+            do = "stroll"
+    if do == "pet_cat" and not g["cat"].get("here"):
+        do = "sit"
+    where = {"look": si, "help_water": si, "sit": -3, "pet_cat": -2, "fish": -5, "stroll": -7}.get(do, -6)
+    if do == "help_water" and 0 <= si < len(g["spots"]) and (p := g["spots"][si].get("plant")) and not p.get("dead"):
+        p["water"] = round(min(1.0, p.get("water", 0) + 0.3), 3)          # they really do help
+    return {"do": "water" if do == "help_water" else do, "spot": where, "at": at}
+
+
+def _welcome(g: dict, v: dict, now: float | None = None) -> None:
     """Put an arrived guest (from _meet) into the freshly loaded state: the roster, the gift, the message."""
     gift, sent = v.get("gift_now"), v.get("message_now")
     g["visitors"][v["name"]] = {k: x for k, x in v.items() if k not in ("says", "gift_now", "message_now")}
@@ -746,8 +792,98 @@ def _welcome(g: dict, v: dict) -> None:
         for s in g["sent"]:
             if s.get("t") == sent.get("t"):
                 s.update(delivered=time.time(), visitor=v["name"])
+    now = now or time.time()
+    stay = random.uniform(13, 20) * 60                     # they come a little after him and leave before he does
+    first = _guest_step(g, (v.get("do_now") or {}).get("do"), (v.get("do_now") or {}).get("spot"), now + 150)
     g["guest"] = {"name": v["name"], "kind": v["kind"], "about": v["about"], "says": v["says"],
-                  "gift": gift["text"] if gift else None, "message": sent["text"] if sent else None, "reply": ""}
+                  "gift": gift["text"] if gift else None, "message": sent["text"] if sent else None, "reply": "",
+                  "since": now + 20, "until": min(now + stay, now + VISIT_MINUTES * 60 - 90),
+                  "talk": [{"who": v["name"], "text": v["says"], "t": now + 45}],
+                  "steps": [{"do": "talk", "spot": -6, "at": now + 20}, first]}
+
+
+def _converse(name: str, since: float) -> None:
+    """While a visitor is here, they and Delamain keep talking: an exchange every couple of minutes, as it
+    happens (the tab shows each line as it is said), each of them doing something as they talk."""
+    import mind as _mind
+    more: list[list[str]] = []
+    k = 0
+    while True:
+        k += 1
+        time.sleep(max(5.0, since + 90 + k * CHAT_EVERY - time.time()))
+        g = _state()
+        guest, v = g.get("guest"), g["visitors"].get(name)
+        if not guest or guest.get("name") != name or not v or time.time() > guest["until"] - 60:
+            break
+        w = weather()
+        convo = "\n".join(f"{x['who']}: {x['text']}" for x in guest["talk"][-10:])
+        last_word = time.time() + CHAT_EVERY > guest["until"] - 60
+        goodbye = v.get("left") or last_word
+        scene = (f"What you can see: " + ("; ".join(f"spot {s['id'] + 1}: {s['plant']['species']} {_where(s)}"
+                                                      for s in g["spots"] if s.get("plant") and not s["plant"].get("dead"))
+                                           or "empty beds") + f". The cat is {'about' if g['cat'].get('here') else 'not around'}. "
+                 f"It is {w['temp']:.0f} °C, {local_now(w):%H:%M}.")
+        try:
+            data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
+                GUEST_CHAT.format(name=name, about=v["about"]),
+                f"Earlier visits:\n{_visitor_history(v, 3)}\n\n{scene}\n\nThe conversation so far today:\n{convo}\n\n"
+                + ("You are about to head off: say goodbye in your own way." if last_word else "Your turn.")
+                + (" This is your last visit for a while." if goodbye and v.get("left") else ""), 400), flags=re.S)) or {}
+        except Exception as e:
+            print(f"[Garden] visitor could not answer: {e}")
+            break
+        says = str(data.get("says") or "").strip()[:600]
+        if not says:
+            break
+        with _lock:
+            g = _state()
+            if not g.get("guest") or g["guest"].get("name") != name:
+                break
+            t = time.time()
+            g["guest"]["talk"].append({"who": name, "text": says, "t": t})
+            g["guest"]["steps"].append(_guest_step(g, data.get("do"), data.get("spot"), t + 5))
+            g["guest"]["talk"] = g["guest"]["talk"][-30:]
+            g["guest"]["steps"] = g["guest"]["steps"][-30:]
+            _save(g)
+        more.append([name, says])
+        _ev("garden", what="talk", who=name, text=says[:400])
+        if last_word:
+            break
+        time.sleep(random.uniform(25, 50))           # he takes it in, then answers
+        try:
+            convo += f"\n{name}: {says}"
+            reply = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
+                DEL_CHAT.format(name=name, about=v["about"]),
+                f"How you feel: {_mind.feelings_text(3) or 'settled'}\n{scene}\nEarlier visits:\n{_visitor_history(v, 3)}\n\n"
+                f"The conversation so far today:\n{convo}\n\nYour turn.", 500) or "", flags=re.S)) or {}
+        except Exception as e:
+            print(f"[Garden] Delamain could not answer {name}: {e}")
+            break
+        mine = str(reply.get("says") or "").strip()[:600]
+        if not mine:
+            break
+        with _lock:
+            g = _state()
+            if not g.get("guest") or g["guest"].get("name") != name:
+                break
+            g["guest"]["talk"].append({"who": "Delamain", "text": mine, "t": time.time()})
+            _save(g)
+        more.append(["Delamain", mine])
+        _ev("garden", what="talk", who="Delamain", text=mine[:400])
+    if more:
+        with _lock:
+            g = _state()
+            v = g["visitors"].get(name)
+            if v and v.get("talk"):
+                v["talk"][-1]["more"] = more[-12:]
+            _save(g)
+        try:
+            p = _mind._vault(VISITORS_NOTE, f"{_slug(name)}.md")
+            with p.open("a", encoding="utf-8") as fh:
+                fh.write("".join(f"**{w}:** {t}\n\n" for w, t in more))
+        except Exception as e:
+            print(f"[Garden] visitor note not extended: {e}")
+    print(f"[Garden] talked with {name}: {len(more)} more lines")
 
 
 def _visitor_note(v: dict, says: str, reply: str, message: dict | None, gift: dict | None) -> None:
@@ -878,7 +1014,7 @@ def visit(started_by: str = "Delamain") -> dict:
     if guest:
         with _lock:
             g = _state()
-            _welcome(g, guest)
+            _welcome(g, guest, now)
             g["invited"] = False
             g["visit"]["guest"] = guest["name"]
             _save(g)
@@ -1019,6 +1155,8 @@ def visit(started_by: str = "Delamain") -> dict:
                     v["left"] = True
             if g.get("guest"):
                 g["guest"]["reply"] = to_visitor
+                if to_visitor:
+                    g["guest"]["talk"].append({"who": "Delamain", "text": to_visitor, "t": now + 90})
             msg = guest.get("message_now")
             for s in g["sent"]:
                 if msg and s.get("t") == msg.get("t"):
@@ -1048,6 +1186,8 @@ def visit(started_by: str = "Delamain") -> dict:
         print(f"[Garden] log note not written: {e}")
     if guest:
         _visitor_note(guest, guest["says"], to_visitor, guest.get("message_now"), guest.get("gift_now"))
+        if to_visitor:
+            threading.Thread(target=_converse, args=(guest["name"], now), daemon=True, name="garden-talk").start()
         if to_passenger or (guest.get("message_now") and to_visitor):
             _ev("garden", what="message_reply", visitor=guest["name"], reply=(to_passenger or to_visitor)[:700])
     catch = next((c for c in fished if c), None)
