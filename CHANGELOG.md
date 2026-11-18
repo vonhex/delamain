@@ -4,7 +4,10 @@ All notable changes to Delamain are documented here.
 
 ---
 
-## [Unreleased]
+## [3.5.0] — 2026-11-18 — A life of his own
+
+A garden he keeps, a bed he sleeps in, a therapist he talks to, a memory that finds things by meaning,
+and a switch for every extra so a small model can run him.
 
 ### Added
 - **Feature switches** (Settings → Integrations → **Features**): turn off any extra that uses the model (the check before speaking, feelings, his self tools, news reading, study and long tasks, the other Delamain, the journal, the morning brief, the nightly self-review), one by one or **All off** for a small or slow model. They take effect without a restart, and each also has a `.env` variable ([docs/setup.md](docs/setup.md#environment-variables)).
