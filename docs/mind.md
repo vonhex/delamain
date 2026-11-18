@@ -138,6 +138,9 @@ sunflower, microgreens, pothos, snake plant, peace lily, Christmas cactus). Too 
 struggles; out of its range it stops growing; below its hardiness it is damaged or killed, while
 hardy perennials go dormant instead; dry soil hurts, and so does wet soil for plants that like it
 dry. Herbs and greens can be harvested. A cat comes and goes (and stays in when it is freezing).
+It all runs in real time: garlic planted in November is ready the next summer. If the server is off, the
+missed time (up to 92 days) is lived through afterwards with the weather it really had; plants can
+suffer while he could not be there, but none die of it.
 
 A few times a day, in his free time, he visits: he sees what changed since he was last there,
 decides what to do (plant, water, harvest, clear, switch the grow light, name a plant or the cat,

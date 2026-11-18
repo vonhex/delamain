@@ -9,6 +9,7 @@ All notable changes to Delamain are documented here.
 ### Fixed
 - **Unraid now sees updates.** The Docker image was published as an OCI index with a build-attestation entry; Unraid's update check asks for a Docker manifest, got a 404, and never offered an update. Images are now published as a plain Docker manifest.
 - `latest` now moves only with a release. Builds of `main` are published as `ghcr.io/vonhex/delamain:dev`.
+- **Delamain's garden lives through downtime.** After the server has been off, the missed time (up to 92 days, was 48 hours) is lived through hour by hour with the real weather it had, from Open-Meteo's history. Plants can suffer badly while he could not be there, but none die of it: he comes back to a rescue.
 
 ---
 

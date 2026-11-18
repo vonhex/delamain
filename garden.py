@@ -41,6 +41,7 @@ LOG_NOTE = "Delamain/Garden"
 VISIT_EVERY = 3.5 * 3600
 VISIT_HOURS = (7, 22)
 VISIT_MINUTES = 24
+CATCH_UP_DAYS = 92        # after downtime, the missed time is lived through, with its real weather, up to this
 VERSION = 2
 
 # the spots: (place, how many)
@@ -196,6 +197,7 @@ def weather() -> dict:
         import assistant_tools as _tools
         home = (config.get("home_address") or "").strip()
         where, source = {}, "default"
+        _weather_cache["where"] = {}
         if home:
             if _home.get("key") != home:
                 hit = _tools._geocode(home)
@@ -206,6 +208,7 @@ def weather() -> dict:
                 where, source = _home, "home"
         if not where and _shared.get("lat") is not None:
             where, source = _shared, "shared"
+        _weather_cache["where"] = dict(where)
         if where.get("lat") is not None:
             d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
                 "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 1,
@@ -221,6 +224,42 @@ def weather() -> dict:
         print(f"[Garden] weather unavailable: {e}")
     _weather_cache.update(t=time.time(), w=w)
     return w
+
+
+def history(start_ts: float, w: dict) -> dict[int, dict]:
+    """The real weather, hour by hour, from start_ts until now (Open-Meteo keeps 92 days), keyed by
+    UTC hour (unix time // 3600). Empty when the place is unknown or the service is unreachable."""
+    where = _weather_cache.get("where") or {}
+    if where.get("lat") is None:
+        return {}
+    try:
+        import requests
+        import assistant_tools as _tools
+        days = min(CATCH_UP_DAYS, int((time.time() - start_ts) / 86400) + 2)
+        d = requests.get(_tools.OPEN_METEO_URL, timeout=20, params={
+            "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "past_days": days,
+            "forecast_days": 1, "hourly": "temperature_2m,rain,snowfall,weather_code,cloud_cover,is_day",
+            "daily": "sunrise,sunset"}).json()
+        off = int(d.get("utc_offset_seconds") or 0)
+        hourly, daily = d["hourly"], d.get("daily") or {}
+        sun = {day: (r, st) for day, r, st in zip(daily.get("time", []), daily.get("sunrise", []), daily.get("sunset", []))}
+        out = {}
+        for i, stamp in enumerate(hourly["time"]):
+            local = datetime.fromisoformat(stamp)
+            utc = (local - timedelta(seconds=off)).replace(tzinfo=timezone.utc).timestamp()
+            if utc < start_ts - 3600:
+                continue
+            rise, set_ = sun.get(stamp[:10], (None, None))
+            out[int(utc // 3600)] = {
+                "temp": float(hourly["temperature_2m"][i] if hourly["temperature_2m"][i] is not None else w["temp"]),
+                "rain": float(hourly["rain"][i] or 0), "snow": float(hourly["snowfall"][i] or 0),
+                "cloud": int(hourly["cloud_cover"][i] or 0), "code": int(hourly["weather_code"][i] or 0),
+                "is_day": bool(hourly["is_day"][i]), "sunrise": rise or w.get("sunrise"), "sunset": set_ or w.get("sunset"),
+                "real": True, "offset": off, "source": w.get("source")}
+        return out
+    except Exception as e:
+        print(f"[Garden] no weather history for the missed time: {e}")
+        return {}
 
 
 def day_length(w: dict) -> float:
@@ -295,8 +334,9 @@ def _temp_factor(s: dict, t: float) -> float:
     return 1.0
 
 
-def _step(g: dict, hours: float, w: dict, now: datetime) -> None:
-    """Advance the world by up to an hour of real time."""
+def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> None:
+    """Advance the world by up to an hour of real time. away: catching up time he could not be there
+    (the server was down): plants can suffer badly, but nothing dies of it; he comes back to a rescue."""
     snowy = w["snow"] > 0
     for spot in g["spots"]:
         p = spot.get("plant")
@@ -338,7 +378,7 @@ def _step(g: dict, hours: float, w: dict, now: datetime) -> None:
             why.append("too little light")
         if not why:
             health += hours * 0.006
-        p["health"] = round(max(0.0, min(1.0, health)), 4)
+        p["health"] = round(max(0.12 if away else 0.0, min(1.0, health)), 4)
         p["dormant"] = bool(dormant)
         p["struggle"] = why
         if p["health"] <= 0:
@@ -389,19 +429,27 @@ def _where(spot: dict) -> str:
 
 
 def tick() -> dict:
-    """Bring the garden up to now, an hour at a time (at most two days after a long gap)."""
+    """Bring the garden up to now, an hour at a time. After downtime the missed time is lived through
+    (up to CATCH_UP_DAYS), each hour with the weather it really had where the garden is."""
     if not enabled():
         return _state()
     w = weather()
+    start_t = _state().get("t", time.time())
+    start_t = max(start_t, time.time() - CATCH_UP_DAYS * 86400)
+    hist = history(start_t, w) if time.time() - start_t > 2 * 3600 and w.get("real") else {}
     with _lock:
         g = _state()
-        start_t = g.get("t", time.time())
-        gap = min(48.0, max(0.0, (time.time() - start_t) / 3600))
+        start_t = max(g.get("t", time.time()), time.time() - CATCH_UP_DAYS * 86400)
+        gap = max(0.0, (time.time() - start_t) / 3600)
+        if gap > 24:
+            print(f"[Garden] catching up {gap / 24:.1f} days" + (" with their real weather" if hist else ""))
         done = 0.0
         while gap - done > 1e-6:
             step = min(1.0, gap - done)
             done += step
-            _step(g, step, w, local_at(start_t + done * 3600, w))
+            ts = start_t + done * 3600
+            hw = hist.get(int(ts // 3600), w)
+            _step(g, step, hw, local_at(ts, hw), away=time.time() - ts > 3600)
         g["t"] = time.time()
         v = g.get("visit")
         if v and time.time() > v.get("until", 0):
