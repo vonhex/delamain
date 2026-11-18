@@ -168,6 +168,13 @@ on the Android Auto screen. The full guide, Docker volumes and every setting are
 
 <table>
   <tr>
+    <td><img src="Screenshots/garden.png" alt="Delamain's garden at golden hour" /><br><sub>Delamain's garden at golden hour: real plants on the windowsill, under the grow light, in the greenhouse and outdoors, under the real sky</sub></td>
+    <td><img src="Screenshots/garden-night.png" alt="Delamain's garden on a frosty night" /><br><sub>The same garden on a frosty night: moonlight, the lantern and the lamp post, the cat asleep on the bench</sub></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
     <td><img src="Screenshots/emotions.png" alt="The Emotions panel" /><br><sub>What he feels, and why: all thirty feelings</sub></td>
     <td><img src="Screenshots/self.png" alt="The Self panel" /><br><sub>His mind and self-improvement: studies, favourites, tasks, playbook</sub></td>
   </tr>
