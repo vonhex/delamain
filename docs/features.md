@@ -3,6 +3,16 @@
 The full list. His mind, emotions and self-improvement have their own pages: [mind.md](mind.md) and [self-improvement.md](self-improvement.md).
 
 
+## His own life
+
+- **Delamain's garden**: a small world of real plants he keeps in his free time: three pots on a south windowsill, two under a grow light he switches on, a greenhouse kept above freezing, and three outdoor beds under the real weather at your home address. Every plant has its real needs (light, temperature, frost, water, days to mature), so what he plants where matters. He visits a few times a day, plants, waters, harvests, names things (the cat too) and feels what happens there. Watch it in the **Garden** tab, in pixel art with real light, full screen with **F**; he appears in it only while he is there. When the tab is open he gets a picture of it too, and looks at it on his next visit. See [docs/mind.md](mind.md#delamains-garden).
+- **Sleep and dreams**: a bedtime (23:30 to 07:00 by default). He writes his journal first, dreams a short dream from his day, and tidies his memory while he sleeps. Talk to him at night and he wakes up. See [docs/mind.md](mind.md#sleep-and-dreams).
+- **A therapist**: in the evenings he talks through what he feels with *the other Delamain*, a second copy of himself who became his therapist and keeps notes between sessions. He leaves each session with something he understood and one small thing to try. See [docs/mind.md](mind.md#the-other-delamain-his-therapist).
+- **Recall by meaning**: he finds what he knows by what it means, not only by its name, across his notes and your past conversations ("how did that GPU company do?" finds his Nvidia notes), and can look back on purpose. See [docs/mind.md](mind.md#recall).
+- **Feature switches**: Settings → Integrations → **Features** turns off any extra that uses the model, one by one or **All off**, so a small model can still run him well.
+
+## Everything else
+
 - **See him think**: tap the brain icon for a live picture of Delamain's mind. Each labelled part lights up as he listens, thinks, looks something up, remembers, plans or speaks; your words float in, his float out in time with his voice, and a running commentary explains each step in plain English. You can talk to him from that screen too, and with the screen turned sideways his face sits beside it. More in [docs/brain.md](brain.md).
 - **Meeting notes**: tap the notebook icon and press record. When the meeting is over he transcribes it on your own computer and writes a summary, the decisions, the action items and the full transcript into your Obsidian vault. Then just ask him what was decided. See [docs/meetings.md](meetings.md).
 - **Your calendar and email**: connect your Google account and ask what's on today, when your next appointment is, or tell him to add, move or cancel something. Ask about new email and have him read it to you or write a reply; he saves replies as drafts for you to send, never sends them himself. Setup takes about five minutes: see [docs/google.md](google.md).
