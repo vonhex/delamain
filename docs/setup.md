@@ -166,6 +166,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_VISION` ⚙ | `true` | Looking at pictures in his free time (needs a model that reads images) |
 | `DELAMAIN_TWIN` ⚙ | `true` | Evening therapy with the other Delamain |
 | `DELAMAIN_GARDEN` ⚙ | `true` | Delamain's garden: real plants he tends in his free time ([mind.md](mind.md#delamains-garden)). Its sky is the weather at your home address (or where your phone last was) |
+| `DELAMAIN_VISITOR_VOICE` ⚙ | `local` | Who speaks for visitors to his garden: `local` (his own model) or `gemini` (Gemini through Google's `agy` CLI on the host; falls back to `local`) |
 | `TZ` | `UTC` in Docker | Your time zone (e.g. `America/Denver`); Unraid passes it automatically. His bedtime, journal and study hours follow it |
 | `DELAMAIN_SLEEP` ⚙ | `23:30-07:00` | His bedtime (`HH:MM-HH:MM`), or `off` ([mind.md](mind.md#sleep-and-dreams)) |
 | `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |

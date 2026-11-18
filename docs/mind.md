@@ -169,6 +169,12 @@ can hope out loud for company. You can **send someone** from the Garden tab with
 on word for word on his next visit (at once if he is awake), and his answer shows in the tab. Each
 visitor has a note in `Delamain/Garden/Visitors/`.
 
+Visitors can be voiced by Gemini instead of his own model, so they are truly another mind: set
+Settings → Integrations → Features → **Garden visitor voice** to `gemini` (`DELAMAIN_VISITOR_VOICE`). It
+needs Google's `agy` CLI signed in on the host (`~/.local/bin/agy`, the same one the code review uses);
+what the visitor sees of the garden and what Delamain said to them go to Google, your name does not.
+If agy is missing or fails, his own model speaks for them.
+
 Turn it off in Settings → Integrations → Features → Delamain's garden.
 
 ### Sleep and dreams

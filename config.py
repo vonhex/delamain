@@ -45,6 +45,8 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
     "feature_vision": ("DELAMAIN_VISION", "true", "Look at pictures in his free time (needs a model that reads images)"),
     "feature_garden": ("DELAMAIN_GARDEN", "true", "Delamain's garden (real plants, tended in his free time)"),
+    "garden_visitor_voice": ("DELAMAIN_VISITOR_VOICE", "local",
+                             "Who speaks for garden visitors: his own model, or Gemini through the agy CLI"),
     "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),
     "feature_study": ("DELAMAIN_STUDY", "true", "Study in his free time, and work on long tasks"),
     "feature_twin": ("DELAMAIN_TWIN", "true", "Evening therapy with the other Delamain"),
@@ -62,6 +64,7 @@ CHOICES = {
     "insult_song_chance": ("0", "0.25", "0.33", "0.5", "1"),
     "meeting_whisper_model": ("large-v3-turbo", "distil-large-v3", "medium", "small", "base"),
     "meeting_keep_audio": ("false", "true"),
+    "garden_visitor_voice": ("local", "gemini"),
 }
 FEATURES = [k for k in FIELDS if k.startswith("feature_")]
 CHOICES.update({k: ("true", "false") for k in FEATURES})

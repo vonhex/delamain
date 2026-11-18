@@ -116,6 +116,51 @@ VISITOR_KINDS = {"gardener": "a neighbour who keeps an allotment down the road",
                  "beekeeper": "a beekeeper who keeps hives at the edge of the field",
                  "botanist": "a retired botanist who walks the lanes"}
 VISITORS_NOTE = "Delamain/Garden/Visitors"
+AGY = os.path.expanduser("~/.local/bin/agy")
+VISITOR_GEMINI = "gemini-3.8-flash-medium"    # quick and conversational; visitors say a few sentences
+
+
+def _gemini() -> bool:
+    try:
+        return config.get("garden_visitor_voice") == "gemini" and os.access(AGY, os.X_OK)
+    except Exception:
+        return False
+
+
+def _voice(system: str, user: str, n: int) -> str:
+    """A visitor's words: from Gemini through agy when Settings say so (so they are truly another mind),
+    else, or if that fails, from his own model."""
+    import mind as _mind
+    if _gemini():
+        import subprocess
+        work = SELF_DIR / "visitor_voice"
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            keys = ["name", "about", "says"] if '"name"' in system else ["says"]
+            schema = json.dumps({"type": "object", "properties": {k: {"type": "string"} for k in keys}, "required": keys})
+            prompt = (f"{system}\n\n{user}\n\nWrite only the answer: do not use any tools, files or commands; "
+                      f"everything you need is above.")
+            r = subprocess.run([AGY, "-p", prompt, "--model", VISITOR_GEMINI, "--mode", "plan", "--sandbox",
+                                "--output-format", "json", "--json-schema", schema, "--print-timeout", "180s"],
+                               cwd=work, capture_output=True, text=True, timeout=210,
+                               env={k: v for k, v in os.environ.items() if k != "PYTHONHASHSEED"})
+            data = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
+            text = json.dumps(data["structured_output"]) if isinstance(data.get("structured_output"), dict) \
+                else str(data.get("response") or "")
+            d = _mind._json(text) or {}
+            while isinstance(d.get("says"), str) and d["says"].lstrip().startswith("{"):   # sometimes wrapped twice
+                try:
+                    d = {**d, **json.loads(d["says"])}
+                except ValueError:
+                    break
+            text = json.dumps(d)
+            if d.get("says"):
+                _ev("garden", what="gemini_voice")
+                return text
+            print(f"[Garden] Gemini gave no visitor line (exit {r.returncode}): {(r.stderr or r.stdout)[-200:]}")
+        except Exception as e:
+            print(f"[Garden] Gemini visitor voice failed: {e}")
+    return _mind.generate(system, user, n) or ""
 
 emit = None
 _lock = threading.RLock()
@@ -653,7 +698,7 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
     import mind as _mind
     sent = guest.get("message")
     gift = _gift(g) if guest.get("new") and not sent else None
-    who = _mind.who()
+    who = "the person Delamain lives with" if _gemini() else _mind.who()   # no names to an outside service
     bring = ((f"You bring a gift: {gift['text']}. " if gift else "") +
              (f"{who}, who lives with Delamain, asked you to stop by and pass on a message; you will hand it over "
               f"word for word (it is shown to him separately), so just say that you have a message from {who}. "
@@ -663,8 +708,8 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
              f"{', snowing' if w['snow'] > 0 else ', raining' if w['rain'] > 0 else ''}; it is {local_now(w):%A %H:%M}.")
     if guest.get("new"):
         kind = guest["kind"]
-        data = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
-            GUEST_NEW.format(kind=VISITOR_KINDS[kind]), f"{scene}\n{bring}", 500) or "", flags=re.S)) or {}
+        data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
+            GUEST_NEW.format(kind=VISITOR_KINDS[kind]), f"{scene}\n{bring}", 500), flags=re.S)) or {}
         name = _slug(str(data.get("name") or ""))
         if not data.get("says") or name == "Someone":
             return None
@@ -677,11 +722,11 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
     else:
         v = dict(g["visitors"][guest["name"]], left=False, stays=guest.get("stays", 1))
         last_one = v.get("visits", 0) + 1 >= v.get("stays", 1)
-        data = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
+        data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
             GUEST_SYSTEM.format(name=v["name"], about=v["about"]),
             f"Your visits so far:\n{_visitor_history(v)}\n\n{scene}\n{bring}"
             + ("\nThis is your last visit for a while: at some point, say goodbye in your own way." if last_one else ""),
-            500) or "", flags=re.S)) or {}
+            500), flags=re.S)) or {}
         if not data.get("says"):
             return None
         says = str(data["says"]).strip()

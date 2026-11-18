@@ -8,6 +8,7 @@ All notable changes to Delamain are documented here.
 
 ### Added
 - **Visitors in Delamain's garden** (his own idea, from the Self panel): now and then someone comes by while he is there (a neighbour, a seed merchant, another AI, a child, a retired cab driver, a beekeeper, a botanist), invented on their first visit, staying a few visits and remembering what was said. They may bring a rooted cutting or a lure; he can write letters they answer next time, and hope for company. **Send someone** from the Garden tab with a message: they pass it on word for word and his answer shows in the tab. Notes in `Delamain/Garden/Visitors/`; `POST /api/garden/visitor`.
+- **Visitors voiced by Gemini** (optional): Settings → Features → Garden visitor voice → `gemini` (`DELAMAIN_VISITOR_VOICE`) has Gemini speak for them through the `agy` CLI, so they are truly another mind; falls back to his own model.
 - **A pond and a bed**: a pond with a jetty past the pine where he fishes (catch and release; it follows the water's warmth and the hour, and freezes over in a hard cold spell), and a bed in the house where the tab shows him asleep at night and he can lie down by day.
 - **More animation**: a four-frame walk whose stride follows the ground he covers (no more sliding feet), sitting, crouching to plant, harvest and clear, stroking the cat, gesturing as he talks, tipping the watering can, casting and waiting on a float that bobs and nibbles, blinking. Visitors are drawn by who they are.
 
