@@ -143,8 +143,9 @@ See [mind.md](mind.md). 404 when `mind.py` could not load.
 | `GET /api/mind` | mood, feelings (`emotions`, `all_emotions`, `families`, `half_lives`), `thought`, `moments`, `baseline`, portrait, opinions, studies, `interests`, `favourites`, `questions`, `tasks`, `last_brief`, `last_twin` |
 | `POST /api/mind/news` | read the news now |
 | `POST /api/mind/journal` | write tonight's journal now |
-| `GET /api/garden` | his garden now: every spot with its conditions and plant, the grow light, the cat, the weather, and whether he is there (with his steps) |
+| `GET /api/garden` | his garden now: every spot with its conditions and plant, the grow light, the cat, the weather, whether he is there (with his steps) or asleep, the pond, visitors and the messages you sent |
 | `POST /api/garden/visit` | send him to his garden now |
+| `POST /api/garden/visitor` | send someone to the garden with a message for him: `{"message": "...", "by": "optional name of a past visitor"}`; at most three on the way at once |
 | `POST /api/mind/twin` | start a therapy session with the other Delamain (runs in the background) |
 
 ### Self-improvement

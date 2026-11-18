@@ -1,9 +1,10 @@
 // Pixel-art renderer for his garden: a 256x160 frame drawn pixel by pixel into an ImageData buffer
 // (everything is redrawn each frame, about ten times a second), then scaled up crisply in the page.
-// The house with its south window and grow-light shelf, the greenhouse, and the outdoor beds, under
-// the real sky; every plant drawn by its kind and stage; the cat; and Delamain while he is there.
+// The house with its south window, grow-light shelf and his bed, the greenhouse, the outdoor beds and
+// the pond past the pine, under the real sky; every plant drawn by its kind and stage; the cat; whoever
+// has come by; and Delamain while he is there (asleep in his bed at night).
 
-export const W = 256, H = 120;          // the canvas: the lower part of a 256x160 world
+export const W = 320, H = 120;          // the canvas: the lower part of a 320x160 world
 const WH = 160, YOFF = 40;
 
 export type PSpot = {
@@ -14,7 +15,9 @@ export type PWorld = {
   hour: number; isDay: boolean; cloud: number; rain: number; snow: number; temp: number;
   growLight: boolean; spots: PSpot[];
   cat: { here: boolean; where?: string; doing?: string } | null;
-  delamain: { x: number; y: number; walking: boolean; doing: string; facing: number } | null;
+  delamain: { x: number; y: number; walking: boolean; doing: string; facing: number; lying?: boolean; stride?: number } | null;
+  pond: { ice: number; waterT: number };
+  guest: { name: string; kind: string; talking: boolean } | null;
 };
 type RGB = [number, number, number];
 
@@ -80,6 +83,11 @@ export const CAT_SPOT: Record<string, { x: number; y: number }> = {
 export const BENCH_STAND: Record<string, { x: number; y: number }> = {
   inside: { x: 54, y: 157 }, greenhouse: { x: 154, y: 159 }, outdoors: { x: 214, y: 160 },
 };
+// where he goes for the other things he does (x + 7 is where he stands, as for the spots)
+export const BED_STAND = { x: 40, y: 157 }, POND_STAND = { x: 271, y: 147 }, TALK_STAND = { x: 172, y: 160 };
+export const GUEST_AT = { x: 192, y: 160 };
+const BED = { x0: 36, x1: 63, top: 146 };
+const MOON = { x: 236, y: 54 };
 
 // ── the sky ────────────────────────────────────────────────────────────────
 function skyStops(hour: number): RGB[] {
@@ -106,19 +114,19 @@ function sky(b: Buf, w: PWorld, t: number) {
     for (let x = 0; x < W; x++) b.set(x, y, dith(x, y, fr) ? hi : lo);
   }
   if (!w.isDay) {
-    for (let k = 0; k < 70; k++) {
+    for (let k = 0; k < 88; k++) {
       const x = Math.floor(hash(k) * W), y = YOFF + Math.floor(hash(k + 99) * 58);
       const tw = 0.5 + 0.5 * Math.sin(t * (1 + hash(k + 7) * 2) + k);
       b.set(x, y, [255, 255, 240], (1 - w.cloud / 100) * (0.35 + 0.65 * tw));
     }
-    const mx = 210, my = 54;   // a crescent moon
+    const mx = MOON.x, my = MOON.y;   // a crescent moon
     b.glow(mx, my, 14, [200, 210, 255], 0.25 * (1 - w.cloud / 120));
     for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) {
       if (x * x + y * y <= 36 && (x - 3) * (x - 3) + (y + 2) * (y + 2) > 26) b.set(mx + x, my + y, x < -3 ? [226, 232, 240] : [248, 250, 252]);
     }
   } else {
     const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
-    const sx = 60 + st * 180, sy = 90 - Math.sin(st * Math.PI) * 36;
+    const sx = 60 + st * 220, sy = 90 - Math.sin(st * Math.PI) * 36;
     const vis = 1 - w.cloud / 130;
     b.glow(sx, sy, 16, [255, 240, 180], 0.28 * vis);
     b.disc(sx, sy, 5, [253, 224, 71], vis);
@@ -406,43 +414,88 @@ const DEL_IDLE = [
   '....ll.ll....',
   '....bb.bb....',
 ];
-const DEL_WALK = [
-  ...DEL_IDLE.slice(0, 15),
-  '....kk.kk....',
-  '...kk...kk...',
-  '...ll...ll...',
-  '..ll.....ll..',
-  '..ll.....ll..',
-  '.ll.......ll.',
-  '.bb.......bb.',
-];
+// His poses, built from the upper body over different legs. Facing right; mirrored to face left.
+// l = the near leg, L = the far leg (darker), so a stride reads as one leg passing the other.
+const UPPER = DEL_IDLE.slice(0, 15);
+const LEGS: Record<string, string[]> = {
+  stand:   DEL_IDLE.slice(15),
+  contact: ['....kkkkk....', '....kk.kk....', '...LL...ll...', '...LL...ll...', '..LL.....ll..', '..LL.....ll..', '.BB.......bbb'],
+  pass:    ['....kkkkk....', '....kk.kk....', '....ll.LL....', '....ll.LL....', '....ll.LL....', '....ll..LL...', '....bb...BB..'],
+};
+const swapLegs = (rows: string[]) => rows.map(r => r.replace(/[lLbB]/g, c => ({ l: 'L', L: 'l', b: 'B', B: 'b' } as Record<string, string>)[c]));
+const WALK = [LEGS.contact, LEGS.pass, swapLegs(LEGS.contact), swapLegs(LEGS.pass)];
+const SEAT = ['....kkkkkllbb'];                                       // sitting on the ground, legs out in front
+const CROUCH = ['....kkkkkkk..', '....kk...ll..', '....LL...ll..', '...BBB...bbb.'];   // down on his heels to tend something
 
 function delamain(b: Buf, d: NonNullable<PWorld['delamain']>, t: number) {
-  const frame = d.walking && Math.floor(t * 6) % 2 ? DEL_WALK : DEL_IDLE;
-  const x0 = Math.round(d.x) - 6, y0 = Math.round(d.y) - frame.length;
+  const pose = d.walking ? 'walk' : d.doing === 'sit' || d.doing === 'sit_with_cat' ? 'sit'
+    : d.doing === 'plant' || d.doing === 'harvest' || d.doing === 'clear' ? 'crouch' : 'stand';
+  // the frame: the stride follows the distance walked, so his feet do not slide
+  const phase = Math.floor((d.stride ?? t * 8) / 3.2) % 4;
+  const rows: string[][] = Array.from({ length: 22 }, () => [...'.............']);
+  const put = (src: string[], at: number) => src.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.' && at + j >= 0 && at + j < 22) rows[at + j][i] = ch; }));
+  let upperAt = 0;
+  if (pose === 'walk') { put(WALK[phase], 15); upperAt = phase % 2 === 0 ? 1 : 0; }
+  else if (pose === 'sit') { put(SEAT, 21); upperAt = 6; }
+  else if (pose === 'crouch') { put(CROUCH, 18); upperAt = 3; }
+  else put(LEGS.stand, 15);
+  put(UPPER, upperAt);
+  // hands: where his near hand is depends on what he is doing
+  const H = (x: number, y: number) => { if (y >= 0 && y < 22) rows[y][x] = 's'; };
+  const clearHand = () => { const y = upperAt + 12; if (y < 22) rows[y][11] = rows[y][11] === 's' ? '.' : rows[y][11]; };
+  if (pose === 'walk') {                                    // arms swing against the legs
+    clearHand(); const y = upperAt + 12;
+    H(phase === 0 ? 12 : phase === 2 ? 10 : 11, y - (phase === 0 ? 1 : 0));
+  } else if (d.doing === 'talk' && Math.floor(t * 0.8) % 3 === 0) {   // a gesture now and then as he talks
+    clearHand(); H(12, upperAt + 9); H(11, upperAt + 10);
+  } else if (pose === 'crouch') {                           // working the soil
+    clearHand(); H(12, upperAt + 13 + (Math.floor(t * 3) % 2));
+  } else if (d.doing === 'sit_with_cat') {                  // a hand on the cat, stroking
+    clearHand(); H(12 + (Math.floor(t * 1.2) % 2), upperAt + 13);
+  }
+  if (Math.floor(t * 0.45) % 7 === 0 && (t * 0.45) % 1 < 0.08) rows[2] = rows[2].map(c => (c === 'v' ? 'h' : c));   // he blinks
+  const x0 = Math.round(d.x) - 6, y0 = Math.round(d.y) - 22;
   const pulse = 0.75 + 0.25 * Math.sin(t * 3);
-  b.glow(Math.round(d.x), y0 + 10, 16, [34, 211, 238], 0.15 * pulse);
+  b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, [34, 211, 238], 0.15 * pulse);
   const col: Record<string, RGB> = {
     h: [15, 23, 42], v: mix([34, 211, 238], [207, 250, 254], pulse - 0.5), k: [21, 94, 117], t: [34, 211, 238],
-    n: [30, 41, 59], s: [14, 116, 144], l: [12, 74, 110], b: [2, 6, 23],
+    n: [30, 41, 59], s: [14, 116, 144], l: [12, 74, 110], L: [8, 50, 76], b: [2, 6, 23], B: [2, 4, 14],
   };
-  b.rect(x0 + 3, y0 + frame.length, 7, 1, [0, 0, 0], 0.35);
-  frame.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === '.') return;
-    b.set(x0 + (d.facing < 0 ? 12 - x : x), y0 + y, col[ch]);
-  }));
-  const hand = { x: x0 + (d.facing < 0 ? 1 : 11), y: y0 + 12 };
-  if (d.doing === 'water') {
-    const dir = d.facing < 0 ? -1 : 1, cx = hand.x + (dir < 0 ? -4 : 1);
-    b.rect(cx, hand.y - 1, 4, 3, [100, 116, 139]); b.set(cx + (dir < 0 ? -1 : 4), hand.y - 2, [100, 116, 139]); b.set(cx + (dir < 0 ? -2 : 5), hand.y - 3, [100, 116, 139]);
-    for (let k = 0; k < 3; k++) b.set(cx + (dir < 0 ? -2 : 5), hand.y - 2 + ((t * 18 + k * 4) % 10), [125, 211, 252]);
+  b.rect(x0 + 3, y0 + 22, pose === 'sit' ? 10 : 7, 1, [0, 0, 0], 0.35);
+  const fx = (x: number) => x0 + (d.facing < 0 ? 12 - x : x);
+  rows.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') b.set(fx(x), y0 + y, col[ch]); }));
+  const dir = d.facing < 0 ? -1 : 1;
+  const hand = { x: fx(11), y: y0 + upperAt + 12 };
+  if (d.doing === 'water') {                                // the can tips forward and back as he pours
+    const tip = Math.sin(t * 2) > 0 ? 1 : 0, cx = hand.x + (dir < 0 ? -4 : 1);
+    b.rect(cx, hand.y - 1, 4, 3, [100, 116, 139]); b.set(cx + (dir < 0 ? -1 : 4), hand.y - 2 + tip, [100, 116, 139]); b.set(cx + (dir < 0 ? -2 : 5), hand.y - 3 + tip * 2, [100, 116, 139]);
+    if (tip) for (let k = 0; k < 4; k++) b.set(cx + (dir < 0 ? -2 : 5) + (k % 2) * dir, hand.y + ((t * 18 + k * 3) % 9), [125, 211, 252]);
   }
-  if (d.doing === 'harvest') { b.rect(hand.x - 1, hand.y, 4, 3, [161, 98, 7]); b.set(hand.x, hand.y - 1, [74, 222, 128]); b.set(hand.x + 1, hand.y - 1, [74, 222, 128]); }
+  if (d.doing === 'harvest') { b.rect(hand.x - (dir < 0 ? 4 : -1), hand.y + 2, 4, 3, [161, 98, 7]); b.set(hand.x + dir, hand.y + 1, [74, 222, 128]); b.set(hand.x + dir * 2, hand.y + 1, [74, 222, 128]); }
+  if (d.doing === 'plant') { b.set(hand.x + dir, hand.y + 3, [120, 90, 60]); if (Math.floor(t * 3) % 2) b.set(hand.x + dir * 2, hand.y + 2, [120, 90, 60]); }
+  if (d.doing === 'fish') {
+    // every so often he reels in and casts again; between casts the float bobs, and now and then something nibbles
+    const cyc = t % 16, R = 11;
+    let ang = 0.95, flying = -1;
+    if (cyc < 0.5) ang = 0.95 + (2.1 - 0.95) * (cyc / 0.5);
+    else if (cyc < 0.85) { ang = 2.1 - (2.1 - 0.45) * ((cyc - 0.5) / 0.35); }
+    else if (cyc < 1.6) { ang = 0.45 + (0.95 - 0.45) * ((cyc - 0.85) / 0.75); flying = (cyc - 0.85) / 0.75; }
+    const tipX = hand.x + dir * Math.cos(ang) * R, tipY = hand.y - Math.sin(ang) * R;
+    b.line(hand.x, hand.y, tipX, tipY, [120, 84, 50]);
+    const restX = tipX + dir * 7, restY = POND.cy - 1;
+    if (cyc < 0.85) return;                                  // the line is in the air, too fine to see
+    const nibble = Math.sin(t * 0.37) > 0.93 ? 1 : 0;
+    const fxp = flying >= 0 ? tipX + (restX - tipX) * flying : restX;
+    const fyp = flying >= 0 ? tipY + (restY - tipY) * flying - Math.sin(flying * Math.PI) * 6 : restY + Math.round(Math.sin(t * 2.2) * 0.5) + nibble;
+    b.line(tipX, tipY, fxp, fyp - 1, [226, 232, 240], 0.45);
+    b.set(fxp, fyp - 1, [239, 68, 68]); b.set(fxp, fyp, [248, 250, 252]);
+    if (nibble && flying < 0) for (let a = 0; a < 8; a++) b.set(fxp + Math.cos(a / 8 * Math.PI * 2) * 3, fyp + 1 + Math.sin(a / 8 * Math.PI * 2), [255, 255, 255], 0.3);
+  }
 }
 
 function cat(b: Buf, c: NonNullable<PWorld['cat']>, t: number) {
   // a cat about 35 cm high sitting: five pixels, as it should be next to him
-  const at = CAT_SPOT[c.where || 'inside'] || CAT_SPOT.inside;
+  const at = /bed/.test(c.doing || '') ? { x: 57, y: BED.top } : CAT_SPOT[c.where || 'inside'] || CAT_SPOT.inside;
   const fur: RGB = [41, 37, 36], light: RGB = [87, 83, 78], eye: RGB = [250, 204, 21];
   const asleep = /asleep|curled/.test(c.doing || '');
   const x = at.x, y = at.y;
@@ -478,7 +531,7 @@ function cone(b: Buf, cx: number, y0: number, y1: number, half: number, c: RGB, 
 function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w: PWorld, sx: number, sy: number, sunVis: number) {
   const hw = W >> 1, hh = H >> 1;
   const night = !w.isDay;
-  const src = night ? { x: 210, y: 54 - YOFF, vis: Math.max(0, 1 - w.cloud / 90) * 0.55 } : { x: sx, y: sy, vis: sunVis };
+  const src = night ? { x: MOON.x, y: MOON.y - YOFF, vis: Math.max(0, 1 - w.cloud / 90) * 0.55 } : { x: sx, y: sy, vis: sunVis };
   if (src.vis > 0.05) {
     // what lets light through: open sky (the bright part near the light most), half through the glass
     const m = new Float32Array(hw * hh);
@@ -544,6 +597,134 @@ function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w
   }
 }
 
+// ── the pond past the pine, with its jetty ─────────────────────────────────
+const POND = { cx: 295, cy: 151, rx: 24, ry: 4 };
+function pond(b: Buf, w: PWorld, t: number) {
+  const { cx, cy, rx, ry } = POND;
+  const night = !w.isDay, ice = w.pond.ice, frozen = ice >= 0.6, warm = w.pond.waterT;
+  const top = skyStops(w.hour);
+  const skyC = mix(top[top.length - 1], top[1], 0.35);
+  for (let y = cy - ry - 2; y <= cy + ry + 2; y++) for (let x = cx - rx - 3; x <= cx + rx + 3; x++) {
+    const dx = (x - cx) / rx, dy = (y - cy) / ry, d = dx * dx + dy * dy;
+    const bank = ((x - cx) / (rx + 3)) ** 2 + ((y - cy) / (ry + 2)) ** 2;
+    if (d > 1) { if (bank <= 1) b.set(x, y, night ? [38, 34, 34] : dith(x, y, 0.4) ? [92, 74, 52] : [74, 58, 40]); continue; }
+    let c: RGB;
+    const rim = d > 1 - ice * 1.4;                                   // ice creeps in from the edges
+    if (frozen || rim) {
+      c = dith(x, y, 0.3) ? [205, 226, 240] : [228, 239, 247];
+      if (frozen && (Math.abs((x - cx) * 0.35 - (y - cy) * 1.6 - 2) < 0.4 || Math.abs((x - cx + 9) * 0.5 + (y - cy) * 1.4) < 0.35)) c = [160, 190, 215];
+      if (w.snow > 0 && hash(x * 3.1 + y) > 0.35) c = [248, 250, 252];
+      if (night) c = mix(c, [40, 50, 80], 0.55);
+    } else {
+      const deep = 1 - d;
+      c = night ? mix([14, 22, 44], [26, 40, 74], 1 - deep) : mix(mix(skyC, [26, 86, 104], 0.35 + deep * 0.4), [20, 60, 70], dy > 0 ? 0.15 : 0);
+      const ripple = (x * 0.5 + y * 3.3 + t * 1.6) % 11;
+      if (ripple < 1 && dith(x, y, 0.5)) c = mix(c, [255, 255, 255], night ? 0.12 : 0.3);
+      if (night && Math.abs(x - MOON.x - 58) < 2 + (y - cy + ry) * 0.3 && (y + Math.floor(t * 2)) % 2 === 0) c = mix(c, [230, 230, 200], 0.55);
+      if (!night && w.cloud < 70 && hash(x * 7 + Math.floor(t * 3) * 13 + y) > 0.985) c = [255, 252, 230];   // glints
+    }
+    b.set(x, y, c);
+  }
+  if (!frozen && warm > 14) for (const [lx, ly, fl] of [[302, 152, warm > 18], [311, 150, false], [287, 154, false]] as const) {
+    b.set(lx - 1, ly, [52, 120, 60]); b.set(lx, ly, [74, 150, 70]); b.set(lx + 1, ly, [52, 120, 60]); b.set(lx + 2, ly, [40, 100, 50]);
+    if (fl) { b.set(lx, ly - 1, [249, 168, 212]); b.set(lx + 1, ly - 1, [253, 242, 248]); }
+  }
+  for (const [rx0, n] of [[268, 5], [314, 7]] as const) for (let k = 0; k < n; k++) {      // reeds and cattails
+    const x = rx0 + k + (k > 2 ? 1 : 0), h = 6 + Math.floor(hash(x) * 6);
+    const green = warm > 8 && !frozen, c: RGB = green ? [62, 110, 50] : [150, 128, 84], sway = Math.round(Math.sin(t * 1.3 + x) * 0.6);
+    for (let j = 0; j < h; j++) b.set(x + (j > h - 3 ? sway : 0), cy + 1 - j, night ? mix(c, [10, 14, 24], 0.55) : c);
+    if (k % 3 === 1) { b.set(x + sway, cy - h, [101, 67, 33]); b.set(x + sway, cy - h + 1, [101, 67, 33]); }
+  }
+  // a fish jumps now and then, at dawn and dusk when the water is warm enough
+  if (!frozen && warm > 12 && ((w.hour >= 5 && w.hour < 9) || (w.hour >= 17 && w.hour < 21))) {
+    const ph = (t % 23) / 23, fx = 290 + hash(Math.floor(t / 23)) * 18;
+    if (ph < 0.05) { const f = ph / 0.05; b.set(fx + f * 4, cy - 1 - Math.sin(f * Math.PI) * 4, [190, 200, 190]); b.set(fx + f * 4 - 1, cy - Math.sin(f * Math.PI) * 4, [150, 160, 150]); }
+    else if (ph < 0.2) { const r = 1 + (ph - 0.05) * 30; for (let a = 0; a < 12; a++) b.set(fx + 4 + Math.cos(a / 12 * Math.PI * 2) * r, cy + Math.sin(a / 12 * Math.PI * 2) * r * 0.3, [255, 255, 255], 0.35 * (1 - (ph - 0.05) / 0.15)); }
+  }
+  // the jetty: grey planks on posts
+  const wood: RGB = night ? [70, 60, 52] : [150, 128, 104], dark: RGB = night ? [40, 34, 30] : [96, 78, 60];
+  for (let x = 263; x <= 286; x++) { b.set(x, 147, x % 3 === 0 ? dark : mix(wood, [255, 255, 255], 0.12)); b.set(x, 148, wood); b.set(x, 149, dark); }
+  for (const px of [265, 275, 285]) for (let y = 150; y < 155; y++) b.set(px, y, dark);
+}
+
+// his bed, under the window: a low frame, a pillow, a blanket
+function bedroom(b: Buf, night: boolean) {
+  const { x0, x1, top } = BED;
+  const frame: RGB = night ? [62, 44, 32] : [110, 74, 46], dark: RGB = night ? [40, 28, 22] : [76, 50, 32];
+  for (let y = top - 4; y < 150; y++) { b.set(x0, y, dark); b.set(x0 + 1, y, frame); }      // headboard
+  b.rect(x0, top - 5, 2, 1, frame);
+  for (let y = top + 3; y < 150; y++) { b.set(x1, y, dark); }                                // foot
+  b.rect(x0 + 2, top + 3, x1 - x0 - 1, 2, frame);                                           // the frame
+  b.set(x0 + 3, 149, dark); b.set(x1 - 1, 149, dark);
+  b.rect(x0 + 2, top + 1, x1 - x0 - 2, 2, night ? [170, 170, 176] : [236, 232, 226]);         // sheet
+  b.rect(x0 + 2, top - 1, 5, 2, night ? [190, 190, 196] : [250, 248, 244]);                   // pillow
+  for (let x = x0 + 8; x < x1; x++) for (let y = top; y < top + 3; y++)                       // blanket, a woven teal
+    b.set(x, y, (x + y) % 4 === 0 ? (night ? [16, 70, 80] : [17, 94, 89]) : (night ? [22, 90, 100] : [20, 128, 120]));
+}
+
+function sleeper(b: Buf, t: number, asleep: boolean) {
+  // lying on his back, head on the pillow, the blanket over him
+  const { x0, top } = BED, hx = x0 + 3, hy = top - 3;
+  const pulse = asleep ? 0.35 + 0.2 * Math.sin(t * 0.9) : 0.8;
+  b.rect(hx, hy, 4, 3, [15, 23, 42]);
+  for (let i = 0; i < 4; i++) b.set(hx + i, hy, mix([34, 211, 238], [207, 250, 254], pulse - 0.3), asleep ? 0.6 : 1);   // his visor, dimmed
+  b.glow(hx + 2, hy, 6, [34, 211, 238], 0.12 * pulse);
+  for (let x = x0 + 8; x < x0 + 24; x++) b.set(x, top - 1, (x + Math.floor(t)) % 5 === 0 ? [14, 116, 110] : [20, 128, 120]);   // him, under the blanket
+  b.rect(x0 + 7, top - 1, 1, 2, [21, 94, 117]);
+  if (asleep) for (let k = 0; k < 3; k++) {                                               // z z z
+    const ph = ((t * 0.35) + k / 3) % 1, zx = hx + 3 + ph * 8 + k, zy = hy - 3 - ph * 12;
+    const a = Math.sin(ph * Math.PI) * 0.8;
+    b.set(zx, zy, [226, 232, 240], a); b.set(zx + 1, zy, [226, 232, 240], a); b.set(zx + 1, zy + 1, [226, 232, 240], a); b.set(zx, zy + 2, [226, 232, 240], a); b.set(zx + 1, zy + 2, [226, 232, 240], a);
+  }
+}
+
+// ── whoever has come by ────────────────────────────────────────────────────
+const PERSON = [
+  '...aaaaa...', '..AAAAAAA..', '...fffff...', '...fefef...', '...fffff...', '....fff....',
+  '..ccccccc..', '.ccccccccc.', '.cc.ccc.cc.', '.cc.ccc.cc.', '.cc.ccc.cc.', '.ff.ccc.ff.',
+  '...ppppp...', '...pp.pp...', '...pp.pp...', '...pp.pp...', '...pp.pp...', '...pp.pp...', '...bb.bb...',
+];
+const KIND: Record<string, { a?: string; A?: string; c: string; p: string; b?: string; pack?: string; small?: boolean }> = {
+  gardener: { a: '#d6b56d', A: '#c9a24f', c: '#4d7c0f', p: '#6b4f2e' },
+  merchant: { a: '#3f3f46', A: '#27272a', c: '#7f1d1d', p: '#44403c', pack: '#92400e' },
+  beekeeper: { a: '#f5f5f4', A: '#a8a29e', c: '#f5f5f4', p: '#e7e5e4', b: '#57534e' },
+  botanist: { a: '#d4d4d8', c: '#a16207', p: '#57534e' },
+  driver: { a: '#1f2937', A: '#111827', c: '#1e3a8a', p: '#111827' },
+  child: { a: '#78350f', c: '#f97316', p: '#1d4ed8', small: true },
+};
+const SKIN = ['#f1c27d', '#c68642', '#8d5524', '#e0ac69', '#ffdbac', '#a86b3c'];
+
+function guest(b: Buf, g: NonNullable<PWorld['guest']>, t: number) {
+  const x = GUEST_AT.x, y = GUEST_AT.y;
+  let seed = 0;
+  for (const ch of g.name) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
+  if (g.kind === 'ai') {         // another of his kind: his own shape, another colour
+    const frame = DEL_IDLE, x0 = x - 6, y0 = y - frame.length, pulse = 0.75 + 0.25 * Math.sin(t * 2.6 + 1);
+    b.glow(x, y0 + 10, 14, [232, 121, 249], 0.14 * pulse);
+    const col: Record<string, RGB> = { h: [30, 16, 40], v: mix([232, 121, 249], [253, 230, 255], pulse - 0.5), k: [88, 28, 135], t: [232, 121, 249], n: [40, 20, 50], s: [107, 33, 168], l: [59, 7, 100], b: [20, 4, 30] };
+    b.rect(x0 + 3, y0 + frame.length, 7, 1, [0, 0, 0], 0.35);
+    frame.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') b.set(x0 + 12 - i, y0 + j, col[ch]); }));
+    return;
+  }
+  const k = KIND[g.kind] || KIND.gardener;
+  const rows = k.small ? [PERSON[0], ...PERSON.slice(2, 6), ...PERSON.slice(6, 12), ...PERSON.slice(12, 16), PERSON[18]] : PERSON;
+  const x0 = x - 5, y0 = y - rows.length + Math.round(Math.sin(t * 1.1 + seed) * 0.3);
+  const skin = hex(SKIN[seed % SKIN.length]);
+  const col: Record<string, RGB | null> = {
+    a: hex(k.a || SKIN[(seed + 3) % SKIN.length]), A: k.A ? hex(k.A) : null, f: skin, e: [30, 27, 24], c: hex(k.c), p: hex(k.p), b: hex(k.b || '#1c1917'),
+  };
+  if (k.pack) b.rect(x0 + 8, y0 + 6, 4, 6, hex(k.pack));
+  b.rect(x0 + 2, y, 7, 1, [0, 0, 0], 0.35);
+  const wave = g.talking && Math.floor(t * 1.5) % 4 === 0;
+  rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    const c = col[ch];
+    if (ch === '.' || !c) return;
+    if (wave && ch === 'f' && i === 1 && j > 6) { b.set(x0 + i, y0 + j - 3, c); return; }      // a hand up as they talk
+    b.set(x0 + i, y0 + j, c);
+  }));
+  if (g.kind === 'beekeeper') for (let i = 3; i < 8; i++) b.set(x0 + i, y0 + 2, [120, 113, 108], 0.6);   // the veil
+}
+
 // ── the whole frame ────────────────────────────────────────────────────────
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
@@ -569,6 +750,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (snowing && j % 7 === 0) for (let i = -half; i <= half; i++) b.set(250 + i, 110 + j, [241, 245, 249]);
   }
   b.rect(249, 154, 3, 4, [87, 60, 36]);
+  pond(b, w, t);
   // a rain barrel by the greenhouse, and a lamp post on the path
   for (let j = 0; j < 9; j++) for (let i = 0; i < 6; i++) b.set(170 + i, 148 + j, j === 2 || j === 6 ? [68, 64, 60] : i === 0 || i === 5 ? [96, 60, 28] : [139, 90, 43]);
   b.rect(170, 147, 6, 1, [61, 50, 40]);
@@ -621,6 +803,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   // the floor and a rug
   for (let y = floor; y < WH; y++) for (let x = 0; x < hx1; x++) b.set(x, y, x % 10 === 0 || y === floor ? [52, 36, 27] : (night ? [58, 42, 31] : [92, 64, 45]));
   for (let y = 151; y < 154; y++) for (let x = 44; x < 74; x++) b.set(x, y, (x + y) % 3 === 0 ? [180, 83, 9] : (y === 151 || y === 153) ? [120, 53, 15] : [154, 52, 18]);
+  bedroom(b, night);
   // pots and plants
   for (let i = 0; i < 5; i++) pot(b, SPOTS[i].x, SPOTS[i].y, w.spots[i]?.water);
   w.spots.forEach((s, i) => { if (SPOTS[i]) plant(b, s, SPOTS[i].x, SPOTS[i].y - 1, SPOTS[i].pot ? 0.6 : 0.9, t, s.place === 'outdoors'); });
@@ -648,7 +831,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   b.rect(gcx, peakY + 1, 1, 6, [87, 83, 78]); b.rect(gcx - 1, peakY + 7, 3, 2, night ? [253, 230, 138] : [168, 162, 158]);
   // light through the house window: shafts onto the floor, with dust turning in them
   const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
-  const sunX = 60 + st * 180, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
+  const sunX = 60 + st * 220, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
   const warm: RGB = w.hour < 8.5 || w.hour > 15.3 ? [255, 190, 120] : [255, 236, 190];
   if (sunVis > 0.15) {
     const skew = Math.max(-14, Math.min(-3, -(sunX - 50) / 12));
@@ -684,7 +867,9 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   } else if (w.hour < 8 || w.hour > 16) {
     for (let y = 108; y < WH; y++) for (let x = 0; x < W; x++) b.set(x, y, [251, 146, 60], 0.06);
   }
-  if (w.delamain) delamain(b, w.delamain, t);
+  if (w.guest) guest(b, w.guest, t);
+  if (w.delamain?.lying) sleeper(b, t, w.delamain.doing === 'sleep');
+  else if (w.delamain) delamain(b, w.delamain, t);
   if (raining || snowing) {
     const n = snowing ? 70 : 50 + Math.min(80, w.rain * 40);
     for (let k = 0; k < n; k++) {

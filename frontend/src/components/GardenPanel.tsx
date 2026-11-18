@@ -4,8 +4,8 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { render, W, H, SPOTS, BENCH_STAND, type PWorld } from './gardenPixels';
-import { X, Sprout, Maximize2, Minimize2 } from 'lucide-react';
+import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, type PWorld } from './gardenPixels';
+import { X, Sprout, Maximize2, Minimize2, Send } from 'lucide-react';
 
 type Spot = {
   id: number; place: 'window' | 'shelf' | 'greenhouse' | 'outdoors'; temp: number; light: number; daily_light: number;
@@ -21,6 +21,12 @@ type Garden = {
   cat: { name?: string; here: boolean; where?: string; doing?: string };
   here: boolean; visit: { since: number; until: number; steps: Step[]; noticed?: string } | null;
   last_visit: number; log: { t: number; who: string; text: string }[]; hour: number;
+  asleep?: boolean;
+  guest?: { name: string; kind: string; about: string; says: string; gift?: string | null; message?: string | null; reply?: string } | null;
+  pond?: { ice: number; water_t: number; lure: boolean; caught: { t: number; species: string; cm: number }[]; best: Record<string, number>; total: number };
+  visitors?: { name: string; kind: string; about: string; visits: number; left: boolean; last: number; letter: boolean; talk: { date: string; says: string; reply?: string }[] }[];
+  sent?: { t: number; text: string; by?: string; delivered?: number | null; visitor?: string | null; reply?: string | null }[];
+  gifts?: string[];
 };
 
 export { Sprout as GardenIcon };
@@ -41,7 +47,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
   useEffect(() => { if (capture) capture.current = ref.current; });
   const gRef = useRef(g);
   gRef.current = g;
-  const pos = useRef<{ x: number; y: number; facing: number } | null>(null);
+  const pos = useRef<{ x: number; y: number; facing: number; dist: number } | null>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
@@ -56,25 +62,35 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
       if (gg.here && gg.visit) {
         const st = (gg.visit.steps || []).filter(s => s.at <= Date.now() / 1000).pop();
         let target = { x: 170, y: 152 }, doing = 'look';
+        let face = 0;
         if (st) {
           doing = st.do;
-          target = st.spot >= 0 && st.spot < SPOTS.length ? SPOTS[st.spot].stand : (BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside);
+          target = st.spot >= 0 && st.spot < SPOTS.length ? SPOTS[st.spot].stand
+            : st.spot === -4 ? BED_STAND : st.spot === -5 ? POND_STAND : st.spot === -6 ? TALK_STAND
+            : (BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside);
+          face = st.spot === -5 || st.spot === -6 ? 1 : 0;
         }
-        if (!pos.current) pos.current = { x: 170, y: 152, facing: -1 };     // he comes in by the greenhouse door
+        if (!pos.current) pos.current = { x: 170, y: 152, facing: -1, dist: 0 };     // he comes in by the greenhouse door
         const p = pos.current;
         const tx = target.x + 7, dx = tx - p.x, dy = target.y - p.y;
         const walking = Math.abs(dx) > 0.6 || Math.abs(dy) > 0.6;
         if (walking) {
           const d = Math.hypot(dx, dy), step = Math.min(d, 1.4);
-          p.x += (dx / d) * step; p.y += (dy / d) * step;
+          p.x += (dx / d) * step; p.y += (dy / d) * step; p.dist += step;
           if (Math.abs(dx) > 0.6) p.facing = dx > 0 ? 1 : -1;
-        } else p.facing = SPOTS.some(s => Math.abs(s.stand.x + 7 - p.x) < 1) ? -1 : p.facing;   // turn to the plant
-        del = { x: p.x, y: p.y, walking, doing: walking ? 'look' : doing, facing: p.facing };
-      } else pos.current = null;
+        } else p.facing = face || (SPOTS.some(s => Math.abs(s.stand.x + 7 - p.x) < 1) ? -1 : p.facing);   // turn to the plant, the water, the visitor
+        del = { x: p.x, y: p.y, walking, doing: walking ? 'look' : doing, facing: p.facing, lying: !walking && doing === 'rest', stride: p.dist };
+      } else {
+        pos.current = null;
+        if (gg.asleep) del = { x: 0, y: 0, walking: false, doing: 'sleep', facing: 1, lying: true };   // asleep in his bed
+      }
+      const talking = !!(gg.here && gg.visit && (gg.visit.steps || []).filter(s => s.at <= Date.now() / 1000).pop()?.do === 'talk');
       render(ctx, {
         hour: gg.hour, isDay: gg.weather.is_day, cloud: gg.weather.cloud, rain: gg.weather.rain, snow: gg.weather.snow,
         temp: gg.weather.temp, growLight: gg.grow_light, spots: gg.spots,
         cat: gg.cat.here ? { here: true, where: gg.cat.where, doing: gg.cat.doing } : null, delamain: del,
+        pond: { ice: gg.pond?.ice ?? 0, waterT: gg.pond?.water_t ?? 10 },
+        guest: gg.here && gg.guest ? { name: gg.guest.name, kind: gg.guest.kind, talking } : null,
       }, (now - t0) / 1000);
     };
     raf = requestAnimationFrame(frame);
@@ -92,6 +108,9 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const [now, setNow] = useState(Date.now() / 1000);
   const [sending, setSending] = useState(false);
   const [full, setFull] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [by, setBy] = useState('');
+  const [msgNote, setMsgNote] = useState('');
   const fullRef = useRef<HTMLDivElement>(null);
   const shot = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -154,6 +173,16 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
     setSending(false);
     setTimeout(load, 2500);
   };
+  const sendVisitor = async () => {
+    if (!msg.trim()) return;
+    setSending(true);
+    const r = await fetch('/api/garden/visitor', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg.trim(), by }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (r && r.ok) { setMsg(''); setMsgNote(d.note || 'On the way.'); } else setMsgNote(d.detail || 'Could not send anyone just now.');
+    setSending(false);
+    setTimeout(load, 2500);
+  };
   const step = g?.here && g.visit ? (g.visit.steps || []).filter(s => s.at <= now).pop() : null;
   const units = g?.units || 'imperial';
   const groups = g ? (['window', 'shelf', 'greenhouse', 'outdoors'] as const).map(place => ({ place, spots: g.spots.filter(s => s.place === place) })) : [];
@@ -173,7 +202,8 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
             <div className="flex-1 space-y-1">
               {g.here && g.visit ? (
                 <p className="text-cyan-200"><b>Delamain is in the garden</b>{step ? `: ${step.text}` : ', looking around'}.</p>
-              ) : <p className="text-gray-400">{g.last_visit ? `Delamain was last here ${ago(g.last_visit)}.` : "Delamain hasn't been yet."}</p>}
+              ) : <p className="text-gray-400">{g.asleep ? 'Delamain is asleep in bed.' : g.last_visit ? `Delamain was last here ${ago(g.last_visit)}.` : "Delamain hasn't been yet."}</p>}
+              {g.here && g.guest && <p className="text-amber-200 line-clamp-2"><b>{g.guest.name}:</b> “{g.guest.says}”</p>}
               {g.here && g.visit?.noticed && <p className="italic text-gray-400 line-clamp-2">“{g.visit.noticed}”</p>}
             </div>
             <button onClick={() => setFull(false)} className="text-gray-400 hover:text-white shrink-0" title="Back (F or Esc)" aria-label="Leave full screen"><Minimize2 size={18} /></button>
@@ -191,11 +221,20 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               <p className="text-cyan-200"><b>Delamain is in the garden now</b>{step ? `: ${step.text}` : ', looking around'}. Here until {new Date(g.visit.until * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>
             ) : (
               <p className="text-gray-400">
+                {g.asleep ? <>Delamain is asleep in bed. </> : null}
                 {g.last_visit ? <>Delamain was last here {ago(g.last_visit)}.</> : <>Delamain hasn't been yet.</>}{' '}
                 <button disabled={sending} onClick={() => void send()} className="text-emerald-300 hover:underline disabled:opacity-50">{sending ? 'Sending Delamain…' : 'Send Delamain to the garden'}</button>
               </p>
             )}
             {g.here && g.visit?.noticed && <p className="italic text-gray-300">“{g.visit.noticed}”</p>}
+            {g.here && g.guest && (
+              <div className="border-l-2 border-amber-300/50 pl-2 space-y-0.5">
+                <p className="text-amber-200"><b>{g.guest.name}</b> <span className="text-gray-500">({g.guest.about})</span>: “{g.guest.says}”</p>
+                {g.guest.gift && <p className="text-gray-400">Brought {g.guest.gift}.</p>}
+                {g.guest.message && <p className="text-gray-400">Passed on your message: “{g.guest.message}”</p>}
+                {g.guest.reply && <p className="text-cyan-100"><b className="text-cyan-300">Delamain:</b> {g.guest.reply}</p>}
+              </div>
+            )}
             <p className="text-gray-500">
               Outside {deg(g.weather.temp, units)}{g.weather.snow > 0 ? ', snowing' : g.weather.rain > 0 ? ', raining' : g.weather.cloud > 70 ? ', overcast' : ''}, {g.daylight} h of daylight today{g.weather.real ? '' : ' (no home address set: a mild default sky)'}
               {' · '}grow light {g.grow_light ? 'on (6am–8pm)' : 'off'}
@@ -236,6 +275,57 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               </ul>
             </section>
           ))}
+          {g.pond && (
+            <section className="space-y-1">
+              <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">
+                THE POND <span className="text-gray-500 normal-case tracking-normal">· water about {deg(g.pond.water_t, units)} · {g.pond.ice >= 0.6 ? 'frozen over' : g.pond.ice > 0.15 ? 'ice at the edges' : 'open'}{g.pond.lure ? ' · Delamain has a hand-tied lure' : ''}</span>
+              </h3>
+              {g.pond.total === 0 ? <p className="text-xs text-gray-500">Delamain hasn't caught anything yet. Catch and release; the fish feed best at dawn and dusk.</p> : (
+                <p className="text-xs text-gray-300">
+                  {g.pond.total} caught and let go. Best: {Object.entries(g.pond.best).map(([k, v]) => `${k} ${units === 'metric' ? `${v} cm` : `${(v / 2.54).toFixed(1)} in`}`).join(' · ')}.
+                  <span className="text-gray-500"> Last: {g.pond.caught[g.pond.caught.length - 1].species}, {ago(g.pond.caught[g.pond.caught.length - 1].t)}.</span>
+                </p>
+              )}
+            </section>
+          )}
+          <section className="space-y-1.5">
+            <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">VISITORS</h3>
+            {(g.visitors || []).length === 0 ? <p className="text-xs text-gray-500">Nobody has come by yet. People turn up now and then while Delamain is there, and stay for a few visits.</p> : (
+              <ul className="space-y-1 text-xs">
+                {(g.visitors || []).map(v => (
+                  <li key={v.name} className="text-gray-300">
+                    <b className={v.left ? 'text-gray-400' : 'text-amber-200'}>{v.name}</b> <span className="text-gray-500">· {v.about} · {v.visits} visit{v.visits === 1 ? '' : 's'}{v.left ? ', moved on' : ''}{v.letter ? ' · Delamain wrote to them' : ''}{v.last ? ` · ${ago(v.last)}` : ''}</span>
+                    {v.talk.length > 0 && <div className="text-[11px] text-gray-400 pl-2 line-clamp-2">“{v.talk[v.talk.length - 1].says}”{v.talk[v.talk.length - 1].reply && <span className="text-cyan-200/80"> Delamain: {v.talk[v.talk.length - 1].reply}</span>}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="space-y-1 pt-1">
+              <p className="text-[11px] text-gray-400">Send someone to the garden with a message for Delamain. They'll pass it on word for word, and his answer will show up here.</p>
+              <div className="flex gap-1.5">
+                <input value={msg} onChange={e => setMsg(e.target.value)} maxLength={600} placeholder="Your message…" onKeyDown={e => { if (e.key === 'Enter') void sendVisitor(); }}
+                  className="flex-1 min-w-0 bg-black/40 border border-white/15 rounded-sm px-2 py-1 text-xs text-white placeholder:text-gray-600" />
+                {(g.visitors || []).length > 0 && (
+                  <select value={by} onChange={e => setBy(e.target.value)} className="bg-black/40 border border-white/15 rounded-sm px-1 text-xs text-gray-300" aria-label="Who carries it">
+                    <option value="">someone new</option>
+                    {(g.visitors || []).map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
+                  </select>
+                )}
+                <button disabled={sending || !msg.trim()} onClick={() => void sendVisitor()} className="text-emerald-300 hover:text-emerald-200 disabled:opacity-40 px-1" aria-label="Send"><Send size={14} /></button>
+              </div>
+              {msgNote && <p className="text-[11px] text-gray-500">{msgNote}</p>}
+              {(g.sent || []).length > 0 && (
+                <ul className="space-y-1 text-[11px]">
+                  {(g.sent || []).map(m => (
+                    <li key={m.t} className="text-gray-400">
+                      <span className="text-gray-500 font-mono">{ago(m.t)}</span> You: “{m.text}” <span className="text-gray-500">{m.delivered ? `· carried by ${m.visitor}` : '· on the way'}</span>
+                      {m.reply && <div className="pl-2 text-cyan-100"><b className="text-cyan-300">Delamain:</b> {m.reply}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
           <section className="space-y-1">
             <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">WHAT HAPPENED</h3>
             {g.log.length === 0 ? <p className="text-xs text-gray-500">Nothing yet.</p> : (
@@ -247,7 +337,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
                 ))}
               </ul>
             )}
-            <p className="text-[10px] text-gray-500">Delamain's own account of each visit is in <span className="font-mono">Delamain/Garden/</span> in the vault.</p>
+            <p className="text-[10px] text-gray-500">Delamain's own account of each visit is in <span className="font-mono">Delamain/Garden/</span> in the vault; each visitor has a note in <span className="font-mono">Delamain/Garden/Visitors/</span>.</p>
           </section>
         </>)}
       </div>

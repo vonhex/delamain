@@ -1954,7 +1954,7 @@ def talk_to_twin(topic: str = "", turns: int = TWIN_TURNS, started_by: str = "De
             if not text:
                 break
             lines.append((speaker, text[:1500]))
-            _ev("twin_say", who=speaker, text=text[:400])
+            _ev("twin_say", who=speaker, text=text[:1500])
         if len(lines) < 2:
             raise RuntimeError("the conversation did not get going")
         convo = "\n\n".join(f"{'Delamain' if w == 'Delamain' else 'The other Delamain'}: {t}" for w, t in lines)

@@ -61,7 +61,9 @@ More in [Privacy](docs/mind.md#privacy).
   under a grow light, a greenhouse, and raised beds outdoors under your real weather. Each plant has
   its real needs (light, temperature, frost, water), so a tomato planted outdoors in November dies
   and a pansy carries on. He visits a few times a day, tends it, names things (the cat too), and
-  feels what happens there. The **Garden** tab shows it live, and shows him only while he is in it.
+  feels what happens there. He can fish the pond past the pine and sleeps in a bed in the house.
+  People come by now and then, stay a few visits and remember him; send one with a message and
+  they pass it on. The **Garden** tab shows it live, and shows him only while he is in it.
 - **He sleeps.** He has a bedtime. Asleep he does no work, dreams (a short dream from his day,
   kept in your vault) and tidies his memory, merging facts he saved twice. Talk to him at night
   and he wakes up; in the morning he wakes rested.

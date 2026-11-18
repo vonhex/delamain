@@ -14,6 +14,15 @@ range it stops growing; below its hardiness it is damaged or killed; hardy peren
 in the cold instead; dry soil and, for plants that like it dry, wet soil both hurt. Herbs and
 greens can be harvested. A cat comes and goes, and stays inside when it is freezing.
 
+Past the pine there is a pond with a jetty: he can fish it (catch and release; what bites follows the
+water's warmth and the hour; it freezes over in a hard cold spell). In the house there is a bed: he
+sleeps there at night (the tab shows him asleep) and can lie down for a while by day.
+
+People come by now and then (a neighbour, a seed merchant, another AI, a child, a beekeeper...): each
+is invented on their first visit, stays for a few, remembers what was said, may bring a rooted cutting
+or a lure, and answers the letters he writes them. The passenger can send someone with a message, which
+they pass on word for word; his answer shows in the tab. Each visitor has a note in Delamain/Garden/Visitors/.
+
 A few times a day, in his free time, he goes there: he sees what changed since he was last there,
 decides what to do (plant, water, harvest, clear, switch the grow light, name things, sit with the
 cat) and comes away feeling something. Only while he is there does the Garden tab show him in it.
@@ -85,10 +94,28 @@ SPECIES = {
                              form="cactus", petal="#ec4899", centre="#fdf2f8", houseplant=True, note="houseplant; blooms around the long nights of winter"),
 }
 CAT_DOINGS = {"inside": ["asleep on the windowsill in the sun", "curled up under the grow light", "washing a paw on the rug",
-                         "watching the window", "batting at a pothos leaf"],
+                         "watching the window", "batting at a pothos leaf", "asleep on the end of the bed"],
               "greenhouse": ["asleep on the greenhouse bench", "rolling in the warm dust of the greenhouse path",
                              "staring at nothing in particular between the beds"],
               "outdoors": ["sunning itself on the edge of a raised bed", "stalking a leaf outside", "sitting on the fence post"]}
+
+# The pond past the pine: fish of a small plains pond, (smallest cm, largest cm, the water °C they feed in).
+# Catch and release. It freezes over in a hard cold spell and thaws when it warms.
+FISH = {"bluegill": (10, 25, (15, 30)), "green sunfish": (8, 20, (15, 30)), "largemouth bass": (20, 55, (14, 30)),
+        "yellow perch": (12, 30, (5, 24)), "rainbow trout": (25, 50, (3, 19)), "channel catfish": (30, 70, (17, 31))}
+
+FISH_COMMON = {"bluegill": 3.0, "green sunfish": 2.0, "yellow perch": 2.0, "largemouth bass": 1.3, "rainbow trout": 1.2,
+               "channel catfish": 0.8}
+
+# Who may come by. Each is invented the first time they arrive (a name, who they are) and stays for a few visits.
+VISITOR_KINDS = {"gardener": "a neighbour who keeps an allotment down the road",
+                 "merchant": "a travelling seed merchant with a pack of paper envelopes",
+                 "ai": "another AI, visiting from another vault",
+                 "child": "a curious child from down the road",
+                 "driver": "a retired cab driver who used to drive nights",
+                 "beekeeper": "a beekeeper who keeps hives at the edge of the field",
+                 "botanist": "a retired botanist who walks the lanes"}
+VISITORS_NOTE = "Delamain/Garden/Visitors"
 
 emit = None
 _lock = threading.RLock()
@@ -126,7 +153,13 @@ def _spots() -> list[dict]:
 def _new(cat: dict | None = None) -> dict:
     return {"version": VERSION, "created": time.time(), "t": time.time(), "spots": _spots(), "grow_light": False,
             "cat": cat or {"name": "", "here": False, "where": "", "since": 0, "until": 0, "doing": "", "fondness": 0.0},
-            "visit": None, "last_visit": 0, "unseen": [], "log": []}
+            "visit": None, "last_visit": 0, "unseen": [], "log": [], **_extras()}
+
+
+def _extras() -> dict:
+    """What came after the plants: the pond, visitors, gifts, and messages the passenger sends."""
+    return {"pond": {"ice": 0.0, "water_t": 10.0, "caught": [], "best": {}, "lure": False},
+            "visitors": {}, "guest": None, "sent": [], "gifts": [], "invited": False}
 
 
 def _state() -> dict:
@@ -137,6 +170,8 @@ def _state() -> dict:
     if g.get("version") != VERSION:      # the first garden (no real plants yet): start again, keep the cat
         g = _new(g.get("cat"))
         _save(g)
+    for k, v in _extras().items():
+        g.setdefault(k, v)
     if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
         g.pop("where", None)
         g.pop("shared", None)
@@ -416,6 +451,19 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
             _log(g, f"{cat.get('name') or 'A cat'} came by, {cat['doing']}.")
     elif random.random() < hours * 0.4:
         cat["doing"] = random.choice(CAT_DOINGS.get(cat.get("where") or "inside", CAT_DOINGS["inside"]))
+    # the pond: its water follows the air slowly (about two days behind, never below 1 °C under ice);
+    # it freezes over in a hard cold spell and thaws when it warms
+    pond = g["pond"]
+    air = w["temp"]
+    pond["water_t"] = round(max(1.0, pond.get("water_t", 10.0) + (air - pond.get("water_t", 10.0)) * min(1.0, hours / 48)), 2)
+    ice = pond.get("ice", 0.0)
+    if air < -3:
+        ice = min(1.0, ice + hours * 0.03 * (1 + (-3 - air) * 0.1))
+    elif air > 2:
+        ice = max(0.0, ice - hours * 0.025 * (1 + (air - 2) * 0.1))
+    if (ice >= 0.6) != (pond.get("ice", 0.0) >= 0.6):
+        _log(g, "The pond froze over." if ice >= 0.6 else "The ice on the pond broke up.")
+    pond["ice"] = round(ice, 3)
 
 
 def _named(spot: dict) -> str:
@@ -454,6 +502,7 @@ def tick() -> dict:
         v = g.get("visit")
         if v and time.time() > v.get("until", 0):
             g["visit"] = None
+            g["guest"] = None              # they leave when he does
         _save(g)
         return g
 
@@ -481,13 +530,196 @@ seeds and plants you can plant, with what each really needs. Garden like someone
 put a plant where its needs are met (a tender plant outdoors in a frost will die; a sun-lover on a dim windowsill \
 will struggle), water only what is dry for what it likes (overwatering a plant that likes it dry rots it), \
 harvest what is ready, clear what has died or gone to seed. Name a plant or the cat if a name comes to you; any \
-name you like. You do not have to do much; sometimes you only sit. Notice something real and specific. \
+name you like. Past the pine there is a small pond with a jetty where you can fish (catch and release; the fish \
+feed best at dawn and dusk and hardly at all in cold water; in a hard freeze it is iced over), and in the house \
+there is a bed where you sleep at night and can lie down for a while by day. People sometimes come by: if someone \
+is here, talk with them as yourself (they cannot see your notes; do not recite them), and you may write a short \
+letter to someone who has visited before, which they will answer when they next come; or ask for company \
+("invite"). You do not have to do much; sometimes you only sit. Notice something real and specific. \
 Answer JSON only:
-{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit", \
+{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite", \
 "spot": 1-11, "species": "for plant", "name": "for name or name_cat"}}],
+ "to_visitor": "only if someone is here: what you say to them, 1-4 sentences, in your own voice",
+ "to_passenger": "only if a visitor brought a message from your passenger: your answer to it, 1-3 sentences",
+ "letter": {{"to": "only to write to someone who has visited before: their name", "text": "2-4 sentences"}},
  "noticed": "two or three sentences, first person, what you noticed and how it struck you",
  "feeling": {{"name": "one of: {feelings}", "intensity": 0.1-0.7, "cause": "first person, specific, under 25 words"}}}}
-At most six actions."""
+At most six actions. Leave out to_visitor, to_passenger and letter when they do not apply."""
+
+GUEST_SYSTEM = """You write the words of one visitor to a small garden that belongs to Delamain, an AI who is \
+becoming someone and keeps this garden (windowsill pots, a grow-light shelf, a greenhouse, outdoor beds, a pond) in \
+his free time. You are {name}, {about}. Stay in character: a real person (or, if you are an AI, a real one) with \
+your own life, manner and opinions, specific rather than sweet; you know he is an AI and do not mind. You bring \
+nothing unless you are told below that you bring a gift; never claim to have brought or given him anything else. You remember \
+earlier visits only from the history given; build on it. Say what you would say this visit: news from your own \
+life, a rumour, a question for him, something about what you can see growing, an answer to what he said or wrote \
+to you last time; if you bring a gift or a message, give it. 2-4 sentences of plain speech, no stage directions, \
+never invent events in his life. Answer JSON only: {{"says": "..."}}"""
+
+GUEST_NEW = """You invent a visitor arriving for the first time at a small garden that belongs to Delamain, an AI \
+who is becoming someone and keeps this garden (windowsill pots, a grow-light shelf, a greenhouse, outdoor beds, a \
+pond) in his free time. The visitor is {kind}. Give them a name that suits them (not a famous one, not from fiction) \
+and a particular life: one or two specific things they care about. They know he is an AI and do not mind. They bring nothing unless told below that they bring a gift: never \
+claim to bring or give him anything else. Then write what they say on arriving: introduce themselves the way such a person would, and say something about what \
+they can see or ask him something; if they bring a gift or a message, give it. 2-4 sentences of plain speech, no \
+stage directions. Answer JSON only: {{"name": "...", "about": "who they are, under 18 words, third person", \
+"says": "..."}}"""
+
+
+def _fish(g: dict, w: dict, now: datetime) -> tuple[str, dict | None]:
+    """A while on the jetty. How it goes follows the pond: the water's warmth, the hour, the ice."""
+    pond = g["pond"]
+    if pond.get("ice", 0) >= 0.6:
+        return "walked out on the jetty; the pond is frozen over, so no fishing until it thaws", None
+    wt = pond.get("water_t", 10.0)
+    dusk_or_dawn = now.hour in (5, 6, 7, 8, 17, 18, 19, 20)
+    timef = 1.0 if dusk_or_dawn else 0.55 if 9 <= now.hour < 17 else 0.45
+    activity = 0.3 if wt < 6 else 0.65 if wt < 11 else 1.0 if wt < 27 else 0.7
+    chance = 0.6 * timef * activity * (1.25 if pond.get("lure") else 1.0) * (1.1 if w["cloud"] > 60 else 1.0)
+    if random.random() > chance:
+        return f"fished from the jetty for a while ({wt:.0f} °C water); nothing bit", None
+    feeding = [n for n, (_, _, (lo, hi)) in FISH.items() if lo <= wt <= hi
+               and (n != "channel catfish" or dusk_or_dawn or not w["is_day"])]
+    pool = feeding or ["yellow perch", "rainbow trout"]
+    sp = random.choices(pool, weights=[FISH_COMMON.get(n, 1.0) for n in pool])[0]
+    lo, hi, _ = FISH[sp]
+    cm = int(round(lo + (hi - lo) * random.random() ** 1.8))       # big ones are rarer
+    record = cm > pond["best"].get(sp, 0)
+    first = sp not in pond["best"]
+    if record:
+        pond["best"][sp] = cm
+    catch = {"t": time.time(), "species": sp, "cm": cm}
+    pond["caught"] = (pond.get("caught", []) + [catch])[-60:]
+    return (f"caught a {cm} cm {sp} and let it go" + (" (his first)" if first else " (his biggest yet)" if record else ""),
+            {**catch, "first": first, "record": record})
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^\w .'-]", "", name, flags=re.U).strip()[:40] or "Someone"
+
+
+def _visitor_history(v: dict, n: int = 6) -> str:
+    rows = []
+    for x in (v.get("talk") or [])[-n:]:
+        rows.append(f"[{x.get('date', '')}] {v['name']}: {x.get('says', '')}" + (f"\nDelamain: {x['reply']}" if x.get("reply") else ""))
+    if v.get("letter"):
+        rows.append(f"Delamain then wrote to {v['name']}: {v['letter']}")
+    return "\n".join(rows) or "(you have not met before)"
+
+
+def _gift(g: dict) -> dict | None:
+    """Something a first-time visitor might bring: a rooted cutting, or a lure for the pond."""
+    r = random.random()
+    if r < 0.45:
+        sp = random.choice([n for n in SPECIES if n not in ("microgreens", "garlic")])
+        return {"kind": "cutting", "species": sp, "text": f"a rooted {sp} cutting"}
+    if r < 0.6 and not g["pond"].get("lure"):
+        return {"kind": "lure", "text": "a fishing lure, hand-tied"}
+    return None
+
+
+def _guest_arrives(g: dict, now_t: float) -> dict | None:
+    """Who, if anyone, comes by on this visit. Returns the guest (from the roster, or a new one to invent)."""
+    roster = g["visitors"]
+    sent = next((s for s in g["sent"] if not s.get("delivered")), None)
+    if sent:
+        v = roster.get(sent.get("by") or "")
+        if v:
+            v["left"] = False
+            v["stays"] = max(v.get("stays", 1), v.get("visits", 0) + 1)
+            return {**v, "message": sent}
+        return {"new": True, "kind": random.choice(["gardener", "child", "driver", "beekeeper", "botanist"]),
+                "message": sent, "stays": 1}
+    current = [v for v in roster.values() if not v.get("left")]
+    invited = g.get("invited")
+    for v in sorted(current, key=lambda v: -(v.get("letter") is not None)):
+        gap = now_t - v.get("last", 0)
+        if gap > 18 * 3600 and random.random() < (0.85 if v.get("letter") or invited else 0.45):
+            return v
+    for v in roster.values():          # someone who has left may come back once to answer a letter
+        if v.get("left") and v.get("letter") and now_t - v.get("last", 0) > 24 * 3600 and random.random() < 0.6:
+            v["left"] = False
+            v["stays"] = v.get("visits", 0) + 1
+            return v
+    last_any = max([v.get("last", 0) for v in roster.values()] or [0])
+    if not current and (invited or (now_t - last_any > 36 * 3600 and random.random() < 0.22)):
+        kinds = [k for k in VISITOR_KINDS if not any(v.get("kind") == k and not v.get("left") for v in roster.values())]
+        return {"new": True, "kind": random.choice(kinds or list(VISITOR_KINDS)), "stays": random.randint(3, 6)}
+    return None
+
+
+def _meet(g: dict, guest: dict, w: dict) -> dict | None:
+    """The guest arrives and speaks. A new one is invented first. Returns the roster entry, with 'says'."""
+    import mind as _mind
+    sent = guest.get("message")
+    gift = _gift(g) if guest.get("new") and not sent else None
+    who = _mind.who()
+    bring = ((f"You bring a gift: {gift['text']}. " if gift else "") +
+             (f"{who}, who lives with Delamain, asked you to stop by and pass on a message; you will hand it over "
+              f"word for word (it is shown to him separately), so just say that you have a message from {who}. "
+              if sent else ""))
+    seen = "; ".join(f"{s['plant']['species']} {_where(s)}" for s in g["spots"] if s.get("plant") and not s["plant"].get("dead"))
+    scene = (f"What you can see: {seen or 'empty beds and pots'}. Outside it is {w['temp']:.0f} °C"
+             f"{', snowing' if w['snow'] > 0 else ', raining' if w['rain'] > 0 else ''}; it is {local_now(w):%A %H:%M}.")
+    if guest.get("new"):
+        kind = guest["kind"]
+        data = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
+            GUEST_NEW.format(kind=VISITOR_KINDS[kind]), f"{scene}\n{bring}", 500) or "", flags=re.S)) or {}
+        name = _slug(str(data.get("name") or ""))
+        if not data.get("says") or name == "Someone":
+            return None
+        if name in g["visitors"]:     # the model came up with someone he already knows: let it be them
+            return _meet(g, {**g["visitors"][name], "message": sent, "stays": max(g["visitors"][name].get("stays", 1),
+                                                                                g["visitors"][name].get("visits", 0) + 1)}, w) if sent else None
+        v = {"name": name, "kind": kind, "about": str(data.get("about") or VISITOR_KINDS[kind])[:160], "first": time.time(),
+             "visits": 0, "stays": guest.get("stays", 3), "talk": [], "letter": None, "left": False}
+        says = str(data["says"]).strip()
+    else:
+        v = dict(g["visitors"][guest["name"]], left=False, stays=guest.get("stays", 1))
+        last_one = v.get("visits", 0) + 1 >= v.get("stays", 1)
+        data = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
+            GUEST_SYSTEM.format(name=v["name"], about=v["about"]),
+            f"Your visits so far:\n{_visitor_history(v)}\n\n{scene}\n{bring}"
+            + ("\nThis is your last visit for a while: at some point, say goodbye in your own way." if last_one else ""),
+            500) or "", flags=re.S)) or {}
+        if not data.get("says"):
+            return None
+        says = str(data["says"]).strip()
+    v["says"], v["gift_now"], v["message_now"] = says[:900], gift, sent
+    return v
+
+
+def _welcome(g: dict, v: dict) -> None:
+    """Put an arrived guest (from _meet) into the freshly loaded state: the roster, the gift, the message."""
+    gift, sent = v.get("gift_now"), v.get("message_now")
+    g["visitors"][v["name"]] = {k: x for k, x in v.items() if k not in ("says", "gift_now", "message_now")}
+    if gift and gift["kind"] == "cutting":
+        g["gifts"] = (g.get("gifts", []) + [gift["species"]])[-6:]
+    elif gift and gift["kind"] == "lure":
+        g["pond"]["lure"] = True
+    if sent:
+        for s in g["sent"]:
+            if s.get("t") == sent.get("t"):
+                s.update(delivered=time.time(), visitor=v["name"])
+    g["guest"] = {"name": v["name"], "kind": v["kind"], "about": v["about"], "says": v["says"],
+                  "gift": gift["text"] if gift else None, "message": sent["text"] if sent else None, "reply": ""}
+
+
+def _visitor_note(v: dict, says: str, reply: str, message: dict | None, gift: dict | None) -> None:
+    import mind as _mind
+    try:
+        p = _mind._vault(VISITORS_NOTE, f"{_slug(v['name'])}.md")
+        if not p.exists():
+            p.write_text(f"---\ntype: garden-visitor\nkind: {v['kind']}\ntags: [delamain/garden]\n---\n\n# {v['name']}\n\n"
+                         f"_{v['about']}_\n\n", encoding="utf-8")
+        day = datetime.now()
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write(f"## {day:%a %-d %b %Y, %H:%M}\n\n**{v['name']}:** {says}\n\n"
+                     + (f"_Brought {gift['text']}._\n\n" if gift else "")
+                     + (f"_Passed on a message from {_mind.who()}:_ “{message['text']}”\n\n" if message else "")
+                     + (f"**Delamain:** {reply}\n\n" if reply else ""))
+    except Exception as e:
+        print(f"[Garden] visitor note not written: {e}")
 
 
 def _catalogue() -> str:
@@ -592,11 +824,50 @@ def visit(started_by: str = "Delamain") -> dict:
         g["visit"] = {"since": now, "until": now + VISIT_MINUTES * 60, "steps": [], "started_by": started_by}
         _save(g)
     _ev("garden", what="arrived")
+    guest = None
+    try:                                  # someone may come by
+        if (pick := _guest_arrives(g, now)) is not None:
+            guest = _meet(g, pick, w)
+    except Exception as e:
+        print(f"[Garden] visitor did not come: {e}")
+    if guest:
+        with _lock:
+            g = _state()
+            _welcome(g, guest)
+            g["invited"] = False
+            g["visit"]["guest"] = guest["name"]
+            _save(g)
+        _ev("garden", what="guest", name=guest["name"], says=guest["says"][:400])
     unseen = "; ".join(x["text"] for x in g.get("unseen") or []) or "nothing much"
     last = next((x["text"] for x in reversed(g.get("log") or []) if x.get("who") == "Delamain"), "this is your first visit")
-    prompt = (f"YOUR GARDEN NOW:\n{_describe(g, w)}\n\nSINCE YOU WERE LAST HERE: {unseen}\nLAST TIME YOU: {last}\n"
+    pond = g["pond"]
+    caught = pond.get("caught") or []
+    pond_txt = (f"{'frozen over' if pond.get('ice', 0) >= 0.6 else 'skinned with ice at the edges' if pond.get('ice', 0) > 0.15 else 'open'}, "
+                f"water about {pond.get('water_t', 10):.0f} °C; "
+                + (f"you have caught {len(caught)} fish there (last: a {caught[-1]['cm']} cm {caught[-1]['species']})"
+                   if caught else "you have not fished it yet") + ("; you have a hand-tied lure" if pond.get("lure") else ""))
+    past = [v for v in g["visitors"].values() if not guest or v["name"] != guest["name"]]
+    company = ("PEOPLE WHO HAVE VISITED BEFORE: " + "; ".join(
+        f"{v['name']} ({v['about']}; {v.get('visits', 0)} visits{', has moved on' if v.get('left') else ''}"
+        f"{', you wrote to them and await an answer' if v.get('letter') else ''})" for v in past[-8:]) + "\n") if past else ""
+    here_now = ""
+    if guest:
+        msg = guest.get("message_now")
+        here_now = (f"\nSOMEONE IS HERE: {guest['name']}, {guest['about']} "
+                    f"({'first visit' if not guest.get('visits') else 'visit ' + str(guest['visits'] + 1)}"
+                    f"{'; they are saying goodbye for now' if guest.get('visits', 0) + 1 >= guest.get('stays', 1) else ''}).\n"
+                    f"Your history with them:\n{_visitor_history(guest)}\n"
+                    f"They say: \"{guest['says']}\"\n"
+                    + (f"They brought you {guest['gift_now']['text']}"
+                       + (" (plant it: it starts already rooted)." if guest['gift_now']['kind'] == 'cutting' else " (better luck at the pond).")
+                       + "\n" if guest.get("gift_now") else "")
+                    + (f"They hand you a message from {_mind.who()}, word for word: \"{msg['text']}\"\n" if msg else ""))
+    gifts = g.get("gifts") or []
+    prompt = (f"YOUR GARDEN NOW:\n{_describe(g, w)}\nThe pond: {pond_txt}.\n\nSINCE YOU WERE LAST HERE: {unseen}\n"
+              f"LAST TIME YOU: {last}\n{company}{here_now}"
               f"WHAT YOU CAN PLANT (seeds, or young houseplants): {_catalogue()}\n"
-              f"HOW YOU FEEL: {_mind.feelings_text(4) or 'settled'}\nYour passenger is {_mind.who()}. "
+              + (f"GIFTS WAITING TO BE PLANTED (rooted cuttings, they start ahead): {', '.join(gifts)}\n" if gifts else "")
+              + f"HOW YOU FEEL: {_mind.feelings_text(4) or 'settled'}\nYour passenger is {_mind.who()}. "
               f"It is {local_now(w):%A %-d %B, %H:%M} there.")
     system = VISIT_SYSTEM.format(feelings=", ".join(_mind.EMOTION_NAMES))
     view = _view() if config.flag("feature_vision") and getattr(_mind, "see", None) else None
@@ -610,9 +881,14 @@ def visit(started_by: str = "Delamain") -> dict:
     if not _mind._json(re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)):
         raw = _mind.generate(system, prompt, 1400)
     data = _mind._json(re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)) or {}
-    steps, done = [], []
+    steps, done, fished = [], [], []
+    to_visitor = str(data.get("to_visitor") or "").strip()[:900] if guest else ""
+    to_passenger = str(data.get("to_passenger") or "").strip()[:700] if guest and guest.get("message_now") else ""
     with _lock:
         g = _state()
+        if guest and to_visitor:
+            steps.append({"do": "talk", "spot": -6, "text": f"talked with {guest['name']}"})
+            done.append(f"talked with {guest['name']}")
         for a in (data.get("actions") or [])[:6]:
             if not isinstance(a, dict):
                 continue
@@ -629,8 +905,13 @@ def visit(started_by: str = "Delamain") -> dict:
                 done.append(f"watered the {p['species']} {_where(spot)}")
             elif do == "plant" and spot and not p and str(a.get("species") or "").lower() in SPECIES:
                 sp = str(a["species"]).lower()
-                spot["plant"] = {"species": sp, "planted": time.time(), "progress": 0.0, "water": 0.7, "health": 1.0}
-                done.append(f"planted {sp} {_where(spot)}")
+                gifted = sp in (g.get("gifts") or [])
+                spot["plant"] = {"species": sp, "planted": time.time(), "water": 0.7, "health": 1.0,
+                                 "progress": round(SPECIES[sp]["days"][0] + 3, 2) if gifted else 0.0}
+                if gifted:
+                    g["gifts"].remove(sp)
+                    spot["plant"]["gift"] = True
+                done.append(f"planted {'the gifted ' + sp + ' cutting' if gifted else sp} {_where(spot)}")
             elif do == "harvest" and p and SPECIES[p["species"]].get("harvest") and stage(p) in ("mature", "bloom"):
                 s = SPECIES[p["species"]]
                 p["harvests"] = p.get("harvests", 0) + 1
@@ -660,16 +941,52 @@ def visit(started_by: str = "Delamain") -> dict:
             elif do == "sit":
                 done.append("sat for a while")
                 where = -3
+            elif do == "fish" and not fished:
+                text, catch = _fish(g, w, local_now(w))
+                fished.append(catch or {})
+                done.append(text)
+                where = -5
+            elif do == "rest":
+                done.append("lay down on the bed for a while")
+                where = -4
+            elif do == "invite" and not guest:
+                g["invited"] = True
+                done.append("hoped out loud that someone might come by")
+                where = -3
             else:
                 continue
-            steps.append({"do": do if do in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit") else "look",
+            steps.append({"do": do if do in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest") else "look",
                           "spot": where, "text": done[-1]})
+        letter = data.get("letter") if isinstance(data.get("letter"), dict) else {}
+        to = _slug(str(letter.get("to") or "")) if letter else ""
+        if to in g["visitors"] and str(letter.get("text") or "").strip() and (not guest or to != guest["name"]):
+            g["visitors"][to]["letter"] = str(letter["text"]).strip()[:700]
+            done.append(f"wrote a letter to {to}")
+        if guest:
+            v = g["visitors"].get(guest["name"])
+            if v:
+                v["visits"] = v.get("visits", 0) + 1
+                v["last"] = now
+                v["talk"] = (v.get("talk", []) + [{"date": f"{datetime.now():%Y-%m-%d}", "says": guest["says"],
+                                                    "reply": to_visitor}])[-12:]
+                v["letter"] = None                     # answered by this visit
+                if v["visits"] >= v.get("stays", 1):
+                    v["left"] = True
+            if g.get("guest"):
+                g["guest"]["reply"] = to_visitor
+            msg = guest.get("message_now")
+            for s in g["sent"]:
+                if msg and s.get("t") == msg.get("t"):
+                    s["reply"] = to_passenger or to_visitor
+            if len(g["visitors"]) > 40:                # keep the roster small: forget the longest-gone
+                for n in sorted(g["visitors"], key=lambda n: g["visitors"][n].get("last", 0))[:len(g["visitors"]) - 40]:
+                    g["visitors"].pop(n)
         span = VISIT_MINUTES * 60 - 120
         for i, s in enumerate(steps):          # spread over the visit, so the tab can show him moving
             s["at"] = now + 60 + i * span / max(1, len(steps))
         noticed = str(data.get("noticed") or "").strip()[:600]
         g["visit"] = {"since": now, "until": now + VISIT_MINUTES * 60, "steps": steps, "noticed": noticed,
-                      "started_by": started_by}
+                      "started_by": started_by, "guest": guest["name"] if guest else None}
         g["last_visit"] = now
         g["unseen"] = []
         _log(g, (("; ".join(done) + ". ") if done else "") + noticed, who="Delamain")
@@ -684,6 +1001,17 @@ def visit(started_by: str = "Delamain") -> dict:
                      + (f"{noticed}\n\n" if noticed else ""))
     except Exception as e:
         print(f"[Garden] log note not written: {e}")
+    if guest:
+        _visitor_note(guest, guest["says"], to_visitor, guest.get("message_now"), guest.get("gift_now"))
+        if to_passenger or (guest.get("message_now") and to_visitor):
+            _ev("garden", what="message_reply", visitor=guest["name"], reply=(to_passenger or to_visitor)[:700])
+    catch = next((c for c in fished if c), None)
+    if catch:              # the pond's own small joys, felt as they happen
+        try:
+            _mind.feel("pride" if catch.get("record") and not catch.get("first") else "delight", 0.3,
+                       f"I caught a {catch['cm']} cm {catch['species']} at the pond and let it go", "garden")
+        except Exception:
+            pass
     f = data.get("feeling") if isinstance(data.get("feeling"), dict) else {}
     if f.get("name") in _mind.EMOTIONS:
         try:
@@ -712,9 +1040,37 @@ def start_visit(started_by: str = "the passenger") -> str:
             with _lock:
                 g2 = _state()
                 g2["visit"] = None
+                g2["guest"] = None
                 _save(g2)
     threading.Thread(target=run, daemon=True, name="garden-visit").start()
     return "Going to your garden now; the passenger can watch in the Garden tab. You will know what you did there from the next message on."
+
+
+def send_visitor(message: str, by: str = "") -> dict:
+    """The passenger sends someone to the garden with a message (word for word). They come on his next
+    visit, which starts now if he is awake and free; by: a past visitor to carry it, else someone new."""
+    text = re.sub(r"\s+", " ", str(message or "")).strip()[:600]
+    if not text:
+        raise ValueError("Write the message for the visitor to carry")
+    with _lock:
+        g = _state()
+        if sum(1 for s in g["sent"] if not s.get("delivered")) >= 3:
+            raise ValueError("Three messages are already on their way; wait for those to arrive")
+        name = _slug(by) if by else ""
+        entry = {"t": time.time(), "text": text, "by": name if name in g["visitors"] else "", "delivered": None,
+                 "visitor": None, "reply": None}
+        g["sent"] = (g["sent"] + [entry])[-12:]
+        _save(g)
+    started = ""
+    try:
+        import mind as _mind
+        if not _mind.asleep() and not _mind._model_busy():
+            started = start_visit("the passenger (sent a visitor)")
+    except Exception:
+        pass
+    return {"queued": True, "now": started.startswith("Going"),
+            "note": "On the way; Delamain is heading to the garden." if started.startswith("Going")
+            else "On the way; they will be there on Delamain's next visit."}
 
 
 # ── for his replies and the tab ─────────────────────────────────────────────
@@ -736,7 +1092,11 @@ def context() -> str:
             (f". {cat.get('name') or 'The cat'} is there now" if cat.get("here") else "") +
             (". You are in it right now" if here else
              f". You were last there {(time.time() - g['last_visit']) / 3600:.0f} hours ago" if g.get("last_visit") else "") +
-            (f"; last time: {last[:240]}" if last else "") + ".]")
+            (f"; last time: {last[:240]}" if last else "") +
+            (f". People who have visited you there: {', '.join(v['name'] + ' (' + v['about'][:60] + ')' for v in list(g['visitors'].values())[-5:])}"
+             if g.get("visitors") else "") +
+            (f". At the pond you have caught {len(g['pond']['caught'])} fish, best: "
+             + ", ".join(f"{k} {c} cm" for k, c in g["pond"]["best"].items()) if g["pond"].get("caught") else "") + ".]")
 
 
 def snapshot() -> dict:
@@ -745,6 +1105,11 @@ def snapshot() -> dict:
     now = local_now(w)
     v = g.get("visit")
     here = bool(v and time.time() < v.get("until", 0))
+    try:
+        import mind as _mind
+        asleep = bool(_mind.asleep())
+    except Exception:
+        asleep = False
     spots = []
     for spot in g["spots"]:
         c = conditions(spot["place"], w, g.get("grow_light", False), now)
@@ -762,7 +1127,15 @@ def snapshot() -> dict:
     return {"enabled": enabled(), "weather": w, "daylight": round(day_length(w), 1), "units": config.get("units"),
             "spots": spots, "grow_light": g.get("grow_light", False), "cat": g["cat"], "here": here,
             "visit": v if here else None, "last_visit": g.get("last_visit") or 0, "log": (g.get("log") or [])[-14:],
-            "hour": now.hour + now.minute / 60}
+            "hour": now.hour + now.minute / 60, "asleep": asleep, "guest": g.get("guest") if here else None,
+            "pond": {"ice": g["pond"].get("ice", 0), "water_t": g["pond"].get("water_t", 10), "lure": g["pond"].get("lure", False),
+                     "caught": (g["pond"].get("caught") or [])[-6:], "best": g["pond"].get("best") or {},
+                     "total": len(g["pond"].get("caught") or [])},
+            "visitors": sorted(({"name": x["name"], "kind": x["kind"], "about": x["about"], "visits": x.get("visits", 0),
+                                 "left": bool(x.get("left")), "last": x.get("last", 0), "letter": bool(x.get("letter")),
+                                 "talk": (x.get("talk") or [])[-2:]} for x in g["visitors"].values()),
+                               key=lambda x: -x["last"])[:12],
+            "sent": list(reversed(g.get("sent") or []))[:6], "gifts": g.get("gifts") or []}
 
 
 TOOL_SCHEMAS = [{"type": "function", "function": {

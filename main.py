@@ -1895,6 +1895,21 @@ async def garden_visit(_=Depends(require_auth)):
     return {"started": await asyncio.to_thread(_garden.start_visit, "the passenger (Garden tab)")}
 
 
+@app.post("/api/garden/visitor")
+async def garden_send_visitor(request: Request, _=Depends(require_auth)):
+    """Send someone to the garden with a message for him (word for word); by: a past visitor to carry it."""
+    if not _garden or not _mind:
+        raise HTTPException(status_code=404, detail="Not installed")
+    if not config.flag("feature_garden"):
+        raise HTTPException(status_code=409, detail="The garden is switched off in Settings")
+    body = await request.json()
+    try:
+        return await asyncio.to_thread(_garden.send_visitor, str((body or {}).get("message") or ""),
+                                       str((body or {}).get("by") or ""))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/mind")
 async def mind_snapshot(_=Depends(require_auth)):
     if not _mind:
