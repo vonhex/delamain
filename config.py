@@ -44,7 +44,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "feature_recall": ("DELAMAIN_RECALL", "true", "Recall by meaning (a small embedding model on the CPU)"),
     "feature_self_tools": ("DELAMAIN_SELF_TOOLS", "true", "Tools for his own mind (rules, skills, tasks, notes on himself)"),
     "feature_vision": ("DELAMAIN_VISION", "true", "Look at pictures in his free time (needs a model that reads images)"),
-    "feature_garden": ("DELAMAIN_GARDEN", "true", "His garden: a small greenhouse world he tends in his free time"),
+    "feature_garden": ("DELAMAIN_GARDEN", "true", "Delamain's garden (real plants, tended in his free time)"),
     "feature_news": ("DELAMAIN_NEWS_READING", "true", "Read the news through the day"),
     "feature_study": ("DELAMAIN_STUDY", "true", "Study in his free time, and work on long tasks"),
     "feature_twin": ("DELAMAIN_TWIN", "true", "Evening therapy with the other Delamain"),

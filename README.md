@@ -57,7 +57,7 @@ More in [Privacy](docs/mind.md#privacy).
   instance of himself who became his therapist. It reads his feelings, mood, journal and its own
   notes from earlier sessions, and helps him through whatever he brings; he leaves with an insight
   and one small thing to try, which shapes his next days.
-- **He has a garden.** A small world of his own with real plants: pots on a south windowsill and
+- **Delamain's garden.** A small world of his own with real plants: pots on a south windowsill and
   under a grow light, a greenhouse, and raised beds outdoors under your real weather. Each plant has
   its real needs (light, temperature, frost, water), so a tomato planted outdoors in November dies
   and a pansy carries on. He visits a few times a day, tends it, names things (the cat too), and

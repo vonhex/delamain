@@ -4,7 +4,7 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { render, W, H, SPOTS, BENCH_STAND, type PWorld } from './gardenPixels';
-import { X, Sprout } from 'lucide-react';
+import { X, Sprout, Maximize2, Minimize2 } from 'lucide-react';
 
 type Spot = {
   id: number; place: 'window' | 'shelf' | 'greenhouse' | 'outdoors'; temp: number; light: number; daily_light: number;
@@ -35,7 +35,7 @@ const STAGE: Record<string, string> = {
 };
 const PLACE: Record<string, string> = { window: 'South windowsill', shelf: 'Grow-light shelf', greenhouse: 'Greenhouse', outdoors: 'Outdoor beds' };
 
-function PixelScene({ g }: { g: Garden }) {
+function PixelScene({ g, big = false }: { g: Garden; big?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const gRef = useRef(g);
   gRef.current = g;
@@ -79,8 +79,8 @@ function PixelScene({ g }: { g: Garden }) {
     return () => cancelAnimationFrame(raf);
   }, []);
   return (
-    <canvas ref={ref} width={W} height={H} className="w-full rounded-md border border-emerald-400/25 bg-black"
-      style={{ imageRendering: 'pixelated' }} role="img" aria-label={`His garden${g.here ? ', with Delamain in it' : ''}`} />
+    <canvas ref={ref} width={W} height={H} className={big ? 'block bg-black' : 'w-full rounded-md border border-emerald-400/25 bg-black'}
+      style={big ? { imageRendering: 'pixelated', width: `min(100vw, calc((100vh - 84px) * ${W / H}))`, height: 'auto' } : { imageRendering: 'pixelated' }} role="img" aria-label={`Delamain's garden${g.here ? ', with Delamain in it' : ''}`} />
   );
 }
 
@@ -89,6 +89,17 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now() / 1000);
   const [sending, setSending] = useState(false);
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) setFull(v => !v);
+      if (e.key === 'Escape') setFull(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const load = useCallback(() => {
     fetch('/api/garden', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -107,7 +118,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const send = async () => {
     setSending(true);
     const r = await fetch('/api/garden/visit', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-    if (r && !r.ok) setError((await r.json().catch(() => ({}))).detail || 'He could not go just now.');
+    if (r && !r.ok) setError((await r.json().catch(() => ({}))).detail || 'Delamain could not go just now.');
     setSending(false);
     setTimeout(load, 2500);
   };
@@ -117,22 +128,39 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   return (
     <div className="flex flex-col h-full bg-cyber-dark/95 text-white text-sm">
       <div className="flex items-center justify-between px-4 py-2 border-b border-emerald-400/30 bg-emerald-400/5 shrink-0">
-        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> HIS_GARDEN</span>
-        <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close"><X size={18} /></button>
+        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> DELAMAINS_GARDEN</span>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setFull(true)} className="text-gray-400 hover:text-emerald-300" title="Fill the screen with the garden (F)" aria-label="Full screen"><Maximize2 size={16} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close"><X size={18} /></button>
+        </div>
       </div>
+      {full && g && (
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-center" role="dialog" aria-label="Delamain's garden, full screen">
+          <PixelScene g={g} big />
+          <div className="w-full flex items-start gap-3 px-4 py-2 text-xs text-gray-300 min-h-[84px]">
+            <div className="flex-1 space-y-1">
+              {g.here && g.visit ? (
+                <p className="text-cyan-200"><b>Delamain is in the garden</b>{step ? `: ${step.text}` : ', looking around'}.</p>
+              ) : <p className="text-gray-400">{g.last_visit ? `Delamain was last here ${ago(g.last_visit)}.` : "Delamain hasn't been yet."}</p>}
+              {g.here && g.visit?.noticed && <p className="italic text-gray-400 line-clamp-2">“{g.visit.noticed}”</p>}
+            </div>
+            <button onClick={() => setFull(false)} className="text-gray-400 hover:text-white shrink-0" title="Back (F or Esc)" aria-label="Leave full screen"><Minimize2 size={18} /></button>
+          </div>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {error && <p className="text-xs text-red-400">{error}</p>}
         {!g ? <p className="text-xs text-gray-500 font-mono">Walking down to the garden…</p> : !g.enabled ? (
-          <p className="text-xs text-gray-400">His garden is switched off (Settings → Integrations → Features → His garden).</p>
+          <p className="text-xs text-gray-400">Delamain's garden is switched off (Settings → Integrations → Features → Delamain's garden).</p>
         ) : (<>
           <PixelScene g={g} />
           <div className="text-xs text-gray-300 space-y-1">
             {g.here && g.visit ? (
-              <p className="text-cyan-200"><b>He is in the garden now</b>{step ? `: ${step.text}` : ', looking around'}. Here until {new Date(g.visit.until * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>
+              <p className="text-cyan-200"><b>Delamain is in the garden now</b>{step ? `: ${step.text}` : ', looking around'}. Here until {new Date(g.visit.until * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>
             ) : (
               <p className="text-gray-400">
-                {g.last_visit ? <>He was last here {ago(g.last_visit)}.</> : <>He has not been yet.</>}{' '}
-                <button disabled={sending} onClick={() => void send()} className="text-emerald-300 hover:underline disabled:opacity-50">{sending ? 'Sending him…' : 'Send him to the garden'}</button>
+                {g.last_visit ? <>Delamain was last here {ago(g.last_visit)}.</> : <>Delamain hasn't been yet.</>}{' '}
+                <button disabled={sending} onClick={() => void send()} className="text-emerald-300 hover:underline disabled:opacity-50">{sending ? 'Sending Delamain…' : 'Send Delamain to the garden'}</button>
               </p>
             )}
             {g.here && g.visit?.noticed && <p className="italic text-gray-300">“{g.visit.noticed}”</p>}
@@ -182,12 +210,12 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               <ul className="space-y-1 text-xs">
                 {[...g.log].reverse().map((e, k) => (
                   <li key={k} className={e.who === 'Delamain' ? 'text-cyan-100' : 'text-gray-400'}>
-                    <span className="text-gray-500 font-mono">{ago(e.t)}</span> {e.who === 'Delamain' && <b className="text-cyan-300">He: </b>}{e.text}
+                    <span className="text-gray-500 font-mono">{ago(e.t)}</span> {e.who === 'Delamain' && <b className="text-cyan-300">Delamain: </b>}{e.text}
                   </li>
                 ))}
               </ul>
             )}
-            <p className="text-[10px] text-gray-500">His own account of each visit is in <span className="font-mono">Delamain/Garden/</span> in the vault.</p>
+            <p className="text-[10px] text-gray-500">Delamain's own account of each visit is in <span className="font-mono">Delamain/Garden/</span> in the vault.</p>
           </section>
         </>)}
       </div>

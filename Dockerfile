@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsndfile1 \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps
@@ -39,6 +40,7 @@ COPY --from=frontend /frontend/dist /app/frontend_dist
 RUN mkdir -p /app/checkpoints /app/data
 
 ENV PYTHONUNBUFFERED=1 \
+    TZ=UTC \
     DELAMAIN_DB=/app/data/delamain.db \
     DELAMAIN_AUDIO_DIR=/app/data/audio_output \
     DELAMAIN_LINES_DIR=/app/data/line_clips \

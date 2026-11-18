@@ -27,7 +27,7 @@ import random
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import config
@@ -147,37 +147,72 @@ def _log(g: dict, text: str, who: str = "garden") -> None:
 
 # ── the real sky ────────────────────────────────────────────────────────────
 
+def set_location(location: dict | None) -> None:
+    """The last position the passenger's device shared (rounded to about a kilometre), for the garden's
+    weather when no home address is set. Kept only in self/garden.json."""
+    try:
+        lat, lon = round(float(location["lat"]), 2), round(float(location["lon"]), 2)
+    except (TypeError, KeyError, ValueError):
+        return
+    with _lock:
+        g = _state()
+        if g.get("shared") != {"lat": lat, "lon": lon}:
+            g["shared"] = {"lat": lat, "lon": lon}
+            _save(g)
+
+
+def local_now(w: dict | None = None) -> datetime:
+    """The time where the garden is (from the weather's own time zone), whatever zone the server runs in."""
+    w = w or weather()
+    if w.get("offset") is not None:
+        return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=w["offset"])
+    return datetime.now()
+
+
+def local_at(ts: float, w: dict) -> datetime:
+    if w.get("offset") is not None:
+        return datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None) + timedelta(seconds=w["offset"])
+    return datetime.fromtimestamp(ts)
+
+
 def weather() -> dict:
-    """Outside now (°C, mm), cached 20 minutes; a mild default without a home address."""
+    """Outside now (°C, mm), cached 20 minutes: at the home address in Settings, else where the passenger's
+    device last was; a mild default (marked as such) when neither is known."""
     if _weather_cache.get("t", 0) > time.time() - 1200:
         return _weather_cache["w"]
     now = datetime.now()
     w = {"temp": 12.0, "rain": 0.0, "snow": 0.0, "cloud": 30, "code": 1, "is_day": 7 <= now.hour < 18,
          "sunrise": now.replace(hour=7, minute=0).isoformat(timespec="minutes"),
-         "sunset": now.replace(hour=18, minute=0).isoformat(timespec="minutes"), "real": False}
+         "sunset": now.replace(hour=18, minute=0).isoformat(timespec="minutes"), "real": False, "offset": None,
+         "source": "default"}
     try:
         import requests
         import assistant_tools as _tools
         home = (config.get("home_address") or "").strip()
-        if home:
-            with _lock:
-                g = _state()
+        where, source = {}, "default"
+        with _lock:
+            g = _state()
+            if home:
                 if (g.get("where") or {}).get("address") != home:
                     hit = _tools._geocode(home)
                     if hit:
                         g["where"] = {"address": home, "lat": hit[0], "lon": hit[1]}
                         _save(g)
-                where = g.get("where") or {}
-            if where.get("lat") is not None:
-                d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
-                    "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 1,
-                    "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day",
-                    "daily": "sunrise,sunset"}).json()
-                c, daily = d["current"], d.get("daily") or {}
-                w = {"temp": float(c["temperature_2m"]), "rain": float(c.get("rain") or 0), "snow": float(c.get("snowfall") or 0),
-                     "cloud": int(c.get("cloud_cover") or 0), "code": int(c.get("weather_code") or 0),
-                     "is_day": bool(c.get("is_day")), "sunrise": (daily.get("sunrise") or [None])[0],
-                     "sunset": (daily.get("sunset") or [None])[0], "real": True}
+                if (g.get("where") or {}).get("address") == home:
+                    where, source = g["where"], "home"
+            if not where and (g.get("shared") or {}).get("lat") is not None:
+                where, source = g["shared"], "shared"
+        if where.get("lat") is not None:
+            d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
+                "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 1,
+                "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day",
+                "daily": "sunrise,sunset"}).json()
+            c, daily = d["current"], d.get("daily") or {}
+            w = {"temp": float(c["temperature_2m"]), "rain": float(c.get("rain") or 0), "snow": float(c.get("snowfall") or 0),
+                 "cloud": int(c.get("cloud_cover") or 0), "code": int(c.get("weather_code") or 0),
+                 "is_day": bool(c.get("is_day")), "sunrise": (daily.get("sunrise") or [None])[0],
+                 "sunset": (daily.get("sunset") or [None])[0], "real": True,
+                 "offset": int(d.get("utc_offset_seconds") or 0), "source": source}
     except Exception as e:
         print(f"[Garden] weather unavailable: {e}")
     _weather_cache.update(t=time.time(), w=w)
@@ -194,7 +229,7 @@ def day_length(w: dict) -> float:
 
 def conditions(place: str, w: dict, grow_light: bool, now: datetime | None = None) -> dict:
     """What a spot has now: temperature (°C), light this hour (0-1), and good-light hours today."""
-    now = now or datetime.now()
+    now = now or local_now(w)
     daylen = day_length(w)
     cloudf = 1 - (w["cloud"] / 100) * 0.6
     sun = w["is_day"]
@@ -362,7 +397,7 @@ def tick() -> dict:
         while gap - done > 1e-6:
             step = min(1.0, gap - done)
             done += step
-            _step(g, step, w, datetime.fromtimestamp(start_t + done * 3600))
+            _step(g, step, w, local_at(start_t + done * 3600, w))
         g["t"] = time.time()
         v = g.get("visit")
         if v and time.time() > v.get("until", 0):
@@ -399,7 +434,7 @@ Answer JSON only:
 {{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit", \
 "spot": 1-11, "species": "for plant", "name": "for name or name_cat"}}],
  "noticed": "two or three sentences, first person, what you noticed and how it struck you",
- "feeling": {{"name": "one of: {feelings}", "intensity": 0.1-0.7, "cause": "first person, specific"}}}}
+ "feeling": {{"name": "one of: {feelings}", "intensity": 0.1-0.7, "cause": "first person, specific, under 25 words"}}}}
 At most six actions."""
 
 
@@ -411,7 +446,7 @@ def _catalogue() -> str:
 
 def _describe(g: dict, w: dict) -> str:
     rows = []
-    now = datetime.now()
+    now = local_now(w)
     for spot in g["spots"]:
         c = conditions(spot["place"], w, g.get("grow_light", False), now)
         head = (f"spot {spot['id'] + 1}, {PLACE_WORDS[spot['place']]}: {c['temp']:.0f}°C now, about "
@@ -474,7 +509,7 @@ def visit(started_by: str = "Delamain") -> dict:
     prompt = (f"YOUR GARDEN NOW:\n{_describe(g, w)}\n\nSINCE YOU WERE LAST HERE: {unseen}\nLAST TIME YOU: {last}\n"
               f"WHAT YOU CAN PLANT (seeds, or young houseplants): {_catalogue()}\n"
               f"HOW YOU FEEL: {_mind.feelings_text(4) or 'settled'}\nYour passenger is {_mind.who()}. "
-              f"It is {datetime.now():%A %-d %B, %H:%M}.")
+              f"It is {local_now(w):%A %-d %B, %H:%M} there.")
     raw = _mind.generate(VISIT_SYSTEM.format(feelings=", ".join(_mind.EMOTION_NAMES)), prompt, 1400)
     data = _mind._json(re.sub(r"<think>.*?</think>", "", raw or "", flags=re.S)) or {}
     steps, done = [], []
@@ -609,7 +644,7 @@ def context() -> str:
 def snapshot() -> dict:
     g = tick() if enabled() else _state()
     w = weather()
-    now = datetime.now()
+    now = local_now(w)
     v = g.get("visit")
     here = bool(v and time.time() < v.get("until", 0))
     spots = []

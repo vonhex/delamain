@@ -2104,6 +2104,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     _self.record_user(user_text)
                 if _mind and config.flag("feature_feelings"):
                     _mind.hear(user_text)
+                if _garden and msg.get("location"):
+                    _garden.set_location(msg.get("location"))   # the garden's sky, when no home address is set
                 _brain.emit("heard", text=user_text[:300], chars=len(user_text), persona=persona_now,
                             dungeon=campaign.title if campaign else None)
                 loop = asyncio.get_event_loop()

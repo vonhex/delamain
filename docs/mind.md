@@ -120,7 +120,7 @@ it, and does not flatter him or hurry him toward feeling better. Afterwards:
 You can watch a session line by line in the Brain view, start one from the Self panel, or ask him
 to talk something through with the other Delamain. Transcripts go to `Delamain/Conversations/`.
 
-### His garden
+### Delamain's garden
 
 A small world of his own with real plants, living in real time whether or not he is there:
 
@@ -145,7 +145,7 @@ whatever names he likes, or just sit) and comes away feeling something about it.
 check on his garden and he goes. The **Garden** tab (the sprout icon) draws it live: the real sky,
 every plant by its kind and stage, the cat, and Delamain himself, only while he is actually there,
 walking to whatever he is tending. His own account of each visit goes to `Delamain/Garden/`.
-Turn it off in Settings → Integrations → Features → His garden.
+Turn it off in Settings → Integrations → Features → Delamain's garden.
 
 ### Sleep and dreams
 

@@ -50,7 +50,7 @@ const HINT: Record<string, string> = {
   feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',
   feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
   feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
-  feature_garden: 'A small greenhouse of his own that grows in real time under your real sky. He visits a few times a day, tends it and feels things about it; watch it in the Garden tab',
+  feature_garden: 'Delamain\'s own small world of real plants (windowsill, grow-light shelf, greenhouse, outdoor beds) under your real sky. Delamain visits a few times a day, tends it and feels what happens there; watch it in the Garden tab',
   feature_twin: 'An evening session with the other Delamain, who is his therapist: help with his feelings, with notes kept between sessions',
   feature_journal: 'Each night he writes about his day and updates his self-portrait',
   feature_brief: 'From 7am, the first time the app is open: weather, calendar, mail and news',

@@ -947,13 +947,24 @@ def _intensity_word(i: float) -> str:
     return "overwhelming" if i > 0.85 else "strong" if i > 0.6 else "clear" if i > 0.35 else "faint"
 
 
+def _clip(text: str, n: int) -> str:
+    """Shorten at a sentence or word boundary, never mid-word, with an ellipsis when cut."""
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if len(text) <= n:
+        return text
+    cut = text[:n]
+    end = max(cut.rfind(". "), cut.rfind("; "), cut.rfind(", "))
+    cut = cut[:end] if end > n * 0.6 else cut[:cut.rfind(" ")] if " " in cut else cut
+    return cut.rstrip(" ,;:—-") + "…"
+
+
 def feel(name: str, intensity: float, cause: str, source: str = "event") -> None:
     """He feels something, for a reason."""
     name = (name or "").strip().lower()
     if name not in EMOTIONS:
         return
     intensity = max(0.05, min(1.0, float(intensity or 0)))
-    cause = (cause or "").strip()[:200]
+    cause = _clip(cause, 400)
     with _lock:
         st = _state()
         now = time.time()

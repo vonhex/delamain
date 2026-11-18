@@ -804,7 +804,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
         <button
           onClick={() => setIsGardenOpen(o => !o)}
           className={`p-2 rounded-lg transition-colors ${isGardenOpen ? 'bg-emerald-400/20 text-emerald-300' : 'text-gray-500 hover:text-emerald-300 hover:bg-cyber-gray'}`}
-          title="His garden: a small greenhouse world he tends in his free time"
+          title="Delamain's garden: real plants Delamain tends in his free time"
         >
           <GardenIcon size={24} />
         </button>
