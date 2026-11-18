@@ -158,11 +158,16 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_PRONUNCIATIONS` | `pronunciations.local.txt` | Your own "Word = respelling" list for words the voice gets wrong (on top of `pronunciations.txt`) |
 | `DELAMAIN_VERIFY` ⚙ | `true` | The check before speaking ([mind.md](mind.md#honesty)); `false` turns it off |
 | `DELAMAIN_FEELINGS` ⚙ | `true` | Feelings and inner life: the appraisal after each reply, and his mood in every prompt |
+| `DELAMAIN_RECALL` ⚙ | `true` | Recall by meaning: a small embedding model on the CPU over his notes and your conversations ([mind.md](mind.md#recall)); `false` searches by words only |
+| `DELAMAIN_EMBED_MODEL` | `BAAI/bge-small-en-v1.5` | The embedding model (a Hugging Face repo with `onnx/model.onnx`) |
 | `DELAMAIN_SELF_TOOLS` ⚙ | `true` | Offer the model the tools that change his playbook, skills, tasks and knowledge |
 | `DELAMAIN_NEWS_READING` ⚙ | `true` | Reading the news through the day |
 | `DELAMAIN_STUDY` ⚙ | `true` | Free-time study and long tasks |
 | `DELAMAIN_VISION` ⚙ | `true` | Looking at pictures in his free time (needs a model that reads images) |
-| `DELAMAIN_TWIN` ⚙ | `true` | Evening talks with the other Delamain |
+| `DELAMAIN_TWIN` ⚙ | `true` | Evening therapy with the other Delamain |
+| `DELAMAIN_GARDEN` ⚙ | `true` | Delamain's garden: real plants he tends in his free time ([mind.md](mind.md#delamains-garden)). Its sky is the weather at your home address (or where your phone last was) |
+| `TZ` | `UTC` in Docker | Your time zone (e.g. `America/Denver`); Unraid passes it automatically. His bedtime, journal and study hours follow it |
+| `DELAMAIN_SLEEP` ⚙ | `23:30-07:00` | His bedtime (`HH:MM-HH:MM`), or `off` ([mind.md](mind.md#sleep-and-dreams)) |
 | `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |
 | `DELAMAIN_BRIEF` ⚙ | `true` | The morning brief |
 | `DELAMAIN_SELF_REVIEW` ⚙ | `true` | The nightly self-review and code proposals |

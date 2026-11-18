@@ -12,7 +12,8 @@
         │ SSE       │                                                              │
         └───────────┤  brain.py ── live feed of everything below                   │
                     │  mind.py  ── knowledge, study, news, emotions, journal,      │
-                    │              the other Delamain, tasks, morning brief        │
+                    │              therapy, sleep and dreams, tasks, morning brief │
+                    │  recall.py ── search by meaning over notes and conversations │
                     │  self_improve.py ── playbook, tuning, nightly review,        │
                     │              code proposals you approve                      │
                     └───┬─────────────────────┬──────────────────────┬────────────┘
@@ -56,6 +57,13 @@ routing services.
 - **Pre-recorded replies** (`lines.py`): short everyday messages are answered with a fixed line in
   the current core's voice, with a lip-synced clip when one exists, skipping the model. "How are
   you", kind words and small talk go to the model instead, so he answers from how he feels.
+
+### Recall (`recall.py`)
+An index over his vault notes and the conversation log, rebuilt from them at any time
+(`self/recall.sqlite`): passages with a full-text entry (SQLite FTS5) and a vector from a small
+embedding model (bge-small through onnxruntime, CPU only, four threads). Searches blend the two.
+It feeds the passages that bear on each message into the prompt, picks memories by relevance once
+they outgrow their budget, and answers the `search_memory` tool. Updated every five minutes.
 
 ### His mind (`mind.py`)
 Knowledge notes, news reading, free-time study (rotating areas of life, favourite subjects),

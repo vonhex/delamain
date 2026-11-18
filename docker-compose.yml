@@ -14,6 +14,7 @@ services:
       # Optional: Obsidian vault for notes and long-term memory
       - ${OBSIDIAN_VAULT_PATH:-./vault}:/vault
     environment:
+      - TZ=${TZ:-UTC}   # your time zone (e.g. America/Denver): his bedtime, journal and garden follow it
       - LLM_URL=${LLM_URL:-http://host.docker.internal:8080/v1/chat/completions}
       - LLM_MODEL=${LLM_MODEL:-}
       - LLM_API_KEY=${LLM_API_KEY:-}

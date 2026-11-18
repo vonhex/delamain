@@ -26,7 +26,7 @@ export interface IntegrationsHandle {
 }
 
 // Extras that cost model time: turn them off for a small or slow model.
-const FEATURES = ['feature_verify', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision',
+const FEATURES = ['feature_verify', 'feature_recall', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision', 'feature_garden',
   'feature_twin', 'feature_journal', 'feature_brief', 'feature_self_review'];
 const isOn = (v: string | undefined) => !['0', 'false', 'no', 'off'].includes((v ?? '').trim().toLowerCase());
 const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('true') && f.choices.includes('false');
@@ -34,7 +34,7 @@ const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('tru
 const ORDER: { title: string; keys: string[] }[] = [
   { title: 'Language model', keys: ['llm_url', 'llm_model', 'llm_api_key', 'llm_reasoning_effort', 'llm_model_file'] },
   { title: 'You', keys: ['home_address'] },
-  { title: 'Features', keys: FEATURES },
+  { title: 'Features', keys: ['sleep_hours', ...FEATURES] },
   { title: 'Tools', keys: ['tools_enabled', 'searxng_url', 'obsidian_vault_path', 'news_rss_url', 'osrm_url', 'units'] },
   { title: 'Meeting notes', keys: ['meeting_whisper_model', 'meeting_language', 'meeting_keep_audio'] },
   { title: 'Google', keys: ['google_client_id', 'google_client_secret'] },
@@ -43,12 +43,15 @@ const ORDER: { title: string; keys: string[] }[] = [
 
 const HINT: Record<string, string> = {
   feature_verify: 'Before a reply is spoken, the model reads it again for claims it cannot back up. One extra model call per reply',
+  sleep_hours: 'He sleeps through these hours: no studying or news, and he dreams and tidies his memory. Message him and he wakes up. "off" keeps him up all night',
+  feature_recall: 'Finds what he knows by meaning, not only by name, in his notes and your past conversations. A 130 MB model on the CPU; off, he searches by words only',
   feature_feelings: 'After each reply, a short call decides what he felt; his feelings and mood go into every reply',
   feature_self_tools: 'Offers the model the tools that change his playbook, skills, tasks and knowledge. Small models do better with fewer tools',
   feature_news: 'Every few hours in the day he reads the headlines and keeps what matters',
   feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
   feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
-  feature_twin: 'A conversation with his sceptical twin in the evening',
+  feature_garden: 'Delamain\'s own small world of real plants (windowsill, grow-light shelf, greenhouse, outdoor beds) under your real sky. Delamain visits a few times a day, tends it and feels what happens there; watch it in the Garden tab',
+  feature_twin: 'An evening session with the other Delamain, who is his therapist: help with his feelings, with notes kept between sessions',
   feature_journal: 'Each night he writes about his day and updates his self-portrait',
   feature_brief: 'From 7am, the first time the app is open: weather, calendar, mail and news',
   feature_self_review: 'After 03:30 he reviews the day and may draft a change to his own code (you approve it)',

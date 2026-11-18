@@ -19,7 +19,8 @@ type Mind = {
   tasks?: { id: number; title: string; status: string; kind?: string; log?: { at: string; text: string }[];
     sessions?: number; answer?: string; done_at?: string; when?: string }[];
   last_brief?: { date: string; delivered?: boolean; text?: string } | null;
-  last_twin?: { t: number; date: string; topic: string; summary?: string; question?: string; started_by?: string } | null;
+  last_twin?: { t: number; date: string; topic: string; summary?: string; question?: string; started_by?: string; insight?: string; intention?: string } | null;
+  sleep?: { asleep: boolean; hours: string; woken_at?: number | null; last_dream?: { t: number; text: string; waking?: string } | null; tidied?: { t: number; merged: string[] } | null };
   twin_talking?: boolean;
   emotions?: { name: string; now: number; cause: string; t: number }[];
   thought?: { t: number; text: string } | null;
@@ -160,7 +161,8 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
                 );
               })()}
               {mind.questions && mind.questions.length > 0 && <p className="text-xs text-gray-400">Open questions: {mind.questions.map(q => `“${q}”`).join(' · ')}</p>}
-              {(mind.twin_talking || mind.last_twin) && <p className="text-xs text-gray-400">Talking with the other Delamain (transcripts in <span className="font-mono">Delamain/Conversations/</span>): {mind.twin_talking ? <b className="text-pink-200">talking now — watch in the Brain view…</b> : mind.last_twin && <>last {when(mind.last_twin.t)} about <b className="text-gray-300">{mind.last_twin.topic}</b>. {mind.last_twin.summary}</>}</p>}
+              {(mind.twin_talking || mind.last_twin) && <p className="text-xs text-gray-400">Therapy with the other Delamain (transcripts in <span className="font-mono">Delamain/Conversations/</span>): {mind.twin_talking ? <b className="text-pink-200">in session now — watch in the Brain view…</b> : mind.last_twin && <>last {when(mind.last_twin.t)}, about <b className="text-gray-300">{mind.last_twin.topic}</b>. {mind.last_twin.summary}{mind.last_twin.insight && <> <span className="text-gray-300">He came to see: {mind.last_twin.insight}</span></>}{mind.last_twin.intention && <> <span className="text-gray-300">He means to: {mind.last_twin.intention}</span></>}</>}</p>}
+              {mind.sleep && mind.sleep.hours !== 'off' && <p className="text-xs text-gray-400">Bedtime {mind.sleep.hours.replace('-', ' to ')}{mind.sleep.asleep ? <b className="text-indigo-200"> · asleep now</b> : mind.sleep.woken_at ? <b className="text-amber-200"> · up past bedtime (you woke him)</b> : null}.{mind.sleep.last_dream && <> Last dream: <i className="text-gray-300">{mind.sleep.last_dream.text.slice(0, 260)}{mind.sleep.last_dream.text.length > 260 ? '…' : ''}</i> (<span className="font-mono">Delamain/Self/Dreams/</span>)</>}{mind.sleep.tidied && mind.sleep.tidied.merged.length > 0 && <> While asleep he merged {mind.sleep.tidied.merged.length} duplicate memor{mind.sleep.tidied.merged.length > 1 ? 'ies' : 'y'}.</>}</p>}
               {mind.tasks && mind.tasks.some(t => ['open', 'stuck'].includes(t.status) || (t.status === 'done' && !!t.answer)) && (
                 <div className="text-xs text-gray-400 space-y-1">Tasks (<span className="font-mono">Delamain/Tasks/</span>):
                   <ul className="list-disc pl-5 text-gray-300 space-y-1">
@@ -185,7 +187,7 @@ export function SelfPanel({ token, tick = 0, onClose }: { token: string; tick?: 
               <div className="flex gap-3 text-xs">
                 <button disabled={!!busy} onClick={() => void mindNow('news')} className="text-cyber-blue hover:underline disabled:opacity-50">{busy === 'news' ? 'Reading…' : 'Read the news now'}</button>
                 <button disabled={!!busy} onClick={() => void mindNow('journal')} className="text-cyber-blue hover:underline disabled:opacity-50">{busy === 'journal' ? 'Writing…' : 'Write his journal now'}</button>
-                <button disabled={!!busy || !!mind.twin_talking} onClick={() => void mindNow('twin')} className="text-cyber-blue hover:underline disabled:opacity-50">{mind.twin_talking ? 'They are talking…' : 'Have him talk with the other Delamain'}</button>
+                <button disabled={!!busy || !!mind.twin_talking} onClick={() => void mindNow('twin')} className="text-cyber-blue hover:underline disabled:opacity-50">{mind.twin_talking ? 'In session…' : 'Start a therapy session'}</button>
               </div>
             </section>
           )}

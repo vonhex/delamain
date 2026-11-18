@@ -37,6 +37,16 @@ try:   # his self-improvement: learning from corrections, self-tuning, and code 
 except Exception as _e:
     _self = None
     print(f"[Self] not loaded: {_e}")
+try:   # recall by meaning over his notes and your conversations
+    import recall as _recall
+except Exception as _e:
+    _recall = None
+    print(f"[Recall] not loaded: {_e}")
+try:   # his garden: a small world of his own
+    import garden as _garden
+except Exception as _e:
+    _garden = None
+    print(f"[Garden] not loaded: {_e}")
 try:   # his inner life: knowledge notes, study, news, emotions, journal, opinions, the other Delamain
     import mind as _mind
 except Exception as _e:
@@ -143,6 +153,13 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
+    if _garden:
+        _garden.emit = _brain.emit
+        _garden.start()
+    if _recall:
+        _recall.emit = _brain.emit
+        _recall.db_conversations = lambda: _db.DB_PATH
+        _recall.start()
     meeting_task = asyncio.create_task(_meetings.worker(_meeting_think, _meeting_notify))
     yield
     reminder_task.cancel()
@@ -767,10 +784,17 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
         system += (f"\n[PASSENGER HOME: {home}. 'Home' means this address: use it for 'take me home' "
                    "([NAVIGATE:" + home + "]), the drive time home and the weather at home.]")
     if _real_name(user_name):
+        if _mind:
+            try:
+                _mind.set_passenger(_real_name(user_name))
+            except Exception as e:
+                print(f"[Mind] name not set: {e}")
         system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
                    "driver who knows a regular passenger would; not in every reply.]")
     if config.flag("tools_enabled"):
-        memory = _tools.memory_context()
+        latest_said = next((m["content"] for m in reversed(history) if m.get("role") == "user"
+                            and isinstance(m.get("content"), str)), "")
+        memory = _tools.memory_context(latest_said)
         if memory:
             system += "\n\n[LONG-TERM MEMORY]\n" + memory
         if _self:
@@ -786,6 +810,16 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
                            + _mind.knowledge_context(latest))
             except Exception as e:
                 print(f"[Mind] context not added: {e}")
+        if _garden:
+            try:
+                system += _garden.context()
+            except Exception as e:
+                print(f"[Garden] context not added: {e}")
+        if _recall:
+            try:
+                system += _recall.context(latest_said, skip=system[-5000:])
+            except Exception as e:
+                print(f"[Recall] context not added: {e}")
     # Dungeon Master mode: the adventure, what has happened in it and the dice go in
     # with every reply, and narration gets room beyond the usual one or two sentences.
     if campaign:
@@ -1220,6 +1254,15 @@ async def _mind_loop() -> None:
     await asyncio.sleep(120)
     while True:
         try:
+            if _mind.asleep():          # bedtime: the journal if it is still owed, then dreams; nothing else
+                if _mind.bedtime_due():
+                    if config.flag("feature_journal") and _mind.journal_due():
+                        rows = await loop.run_in_executor(None, lambda: _db.query_conversations(since=time.time() - 86400, limit=300))
+                        await loop.run_in_executor(None, _mind.write_journal, rows, "")
+                    await loop.run_in_executor(None, _mind.go_to_sleep)
+                await asyncio.sleep(600)
+                continue
+            _mind.wake_if_due()
             if config.flag("feature_feelings"):
                 _mind.tick()
                 _mind.sample_mood()
@@ -1232,6 +1275,12 @@ async def _mind_loop() -> None:
                     print(f"[Mind] talk with the other Delamain failed: {e}")
                     tw = _mind._twin(); tw["last"] = {"date": time.strftime("%Y-%m-%d"), "error": str(e)[:200]}
                     _mind._twin_save(tw)
+            elif _garden and _garden.visit_due():   # free time in his garden
+                try:
+                    await loop.run_in_executor(None, _garden.visit)
+                except Exception as e:
+                    print(f"[Garden] visit failed: {e}")
+                    st = _garden._state(); st["visit"] = None; st["last_visit"] = time.time(); _garden._save(st)
             elif config.flag("feature_study") and _mind.study_due():   # free time: study something on his own
                 try:
                     await loop.run_in_executor(None, _mind.study)
@@ -1363,7 +1412,8 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             choice = ({"type": "function", "function": {"name": "get_news"}}
                       if wants_news and round_no == 0 else "auto")
             body.update(tools=_tools.TOOL_SCHEMAS + _dungeon.tool_schemas() + (_self.TOOL_SCHEMAS if _self and config.flag("feature_self_tools") else [])
-                        + (_mind.TOOL_SCHEMAS if _mind and config.flag("feature_self_tools") else []),
+                        + (_mind.TOOL_SCHEMAS if _mind and config.flag("feature_self_tools") else [])
+                        + (_garden.TOOL_SCHEMAS if _garden and config.flag("feature_garden") else []),
                         tool_choice=choice)
             body["max_tokens"] = max(payload.get("max_tokens", 150), 400)  # room for tool arguments (note text)
         response = await _think(body, round_no)
@@ -1492,6 +1542,8 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                 # Tools that change him are off for a turn that has read outside content.
                 tainted = bool((called - {tool_name}) & _self.UNTRUSTED)
                 result = await loop.run_in_executor(None, _self.run_tool, tool_name, fn.get("arguments", "{}"), tainted)
+            elif _garden and tool_name in _garden.TOOL_NAMES:
+                result = await loop.run_in_executor(None, _garden.run_tool, tool_name, fn.get("arguments", "{}"))
             elif _mind and tool_name in _mind.TOOL_NAMES:
                 if tool_name == "correct" and _self and (called - {tool_name}) & _self.UNTRUSTED:
                     result = "Refused: corrections come from the passenger, and this turn read outside content. Ask them to repeat it."
@@ -1814,6 +1866,35 @@ async def reports_file(name: str, _=Depends(require_auth)):
                         content_disposition_type="inline")
 
 
+@app.get("/api/garden")
+async def garden_snapshot(_=Depends(require_auth)):
+    """His garden as it is now: beds, cat, the sky, and whether he is in it."""
+    if not _garden:
+        raise HTTPException(status_code=404, detail="Not installed")
+    return await asyncio.to_thread(_garden.snapshot)
+
+
+@app.post("/api/garden/view")
+async def garden_view(request: Request, _=Depends(require_auth)):
+    """The Garden tab's picture of the garden, so Delamain can see what it looks like."""
+    if not _garden:
+        raise HTTPException(status_code=404, detail="Not installed")
+    body = await request.json()
+    if not await asyncio.to_thread(_garden.save_view, (body or {}).get("image", "")):
+        raise HTTPException(status_code=400, detail="Not a PNG picture")
+    return {"ok": True}
+
+
+@app.post("/api/garden/visit")
+async def garden_visit(_=Depends(require_auth)):
+    """Send him to his garden now."""
+    if not _garden or not _mind:
+        raise HTTPException(status_code=404, detail="Not installed")
+    if not config.flag("feature_garden"):
+        raise HTTPException(status_code=409, detail="The garden is switched off in Settings")
+    return {"started": await asyncio.to_thread(_garden.start_visit, "the passenger (Garden tab)")}
+
+
 @app.get("/api/mind")
 async def mind_snapshot(_=Depends(require_auth)):
     if not _mind:
@@ -2034,6 +2115,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     _self.record_user(user_text)
                 if _mind and config.flag("feature_feelings"):
                     _mind.hear(user_text)
+                if _garden and msg.get("location"):
+                    _garden.set_location(msg.get("location"))   # the garden's sky, when no home address is set
                 _brain.emit("heard", text=user_text[:300], chars=len(user_text), persona=persona_now,
                             dungeon=campaign.title if campaign else None)
                 loop = asyncio.get_event_loop()

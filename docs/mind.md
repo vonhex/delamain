@@ -24,6 +24,27 @@ idea or story. Each fact is dated and carries its source, and notes link to each
 **Memory about you** is separate: `<vault>/Delamain/Memory/`, the things you have told him about
 yourself, the people and the places in your life.
 
+### Recall
+
+He finds what he knows by meaning, not only by name. Every note he writes and every conversation
+you have had with him is cut into passages and indexed two ways: by its words and by what it
+means (a small embedding model, about 130 MB, that runs on the CPU and never touches your language
+model). So "how did that GPU company do?" finds his Nvidia note, and "what did I say about the car?"
+finds the day you told him.
+
+- **With every reply**, the few passages from his notes that clearly bear on your message come
+  with it, dated. Old conversations and morning briefs come up by themselves only when you reach
+  back in time ("remember…", "last week", "did I tell you…"), so last week's weather never passes
+  for today's.
+- **Memories about you** all go in while they fit. Once there are too many, the ones that bear on
+  what you just said go first, instead of the oldest simply falling off.
+- **`search_memory`**: he can look back through his notes and your conversations on purpose, by
+  meaning and words, optionally over the last few days.
+
+The vault stays the truth; the index (`self/recall.sqlite`) is rebuilt from it, so a note you edit
+or delete in Obsidian is recalled that way within minutes. Turn recall by meaning off in Settings →
+Integrations → Features to search by words only.
+
 ## What he does on his own
 
 | When | What | Where it goes |
@@ -31,8 +52,9 @@ yourself, the people and the places in your life.
 | Every few hours, 06:00–22:00 | Reads the news: picks the stories that matter, searches each for the facts, files them as knowledge with links, and writes his own take | `Delamain/News/` |
 | About hourly, 07:00–22:00, when nobody needs the model | **Studies** one area of life (see below) | `Delamain/Study/`, knowledge notes |
 | From 07:00, the first time you open the app | A **morning brief**: weather at home, today's calendar, important mail, reminders, a few headlines, read aloud | `Delamain/Briefings/` |
-| Evenings, 18:00–22:00 | **Talks with the other Delamain** | `Delamain/Conversations/` |
-| 23:00 | Writes his **journal**, revises his opinions and his self-portrait | `Delamain/Self/` |
+| Evenings, 18:00–22:00 | A **therapy session** with the other Delamain | `Delamain/Conversations/` |
+| Half an hour before bed (23:00) | Writes his **journal**, revises his opinions and his self-portrait | `Delamain/Self/` |
+| Bedtime, 23:30–07:00 | **Sleeps**: dreams, and tidies his memory | `Delamain/Self/Dreams/` |
 
 ### Study: well rounded, with favourites
 
@@ -77,14 +99,72 @@ night", "work out which home media server I should run, and how to set it up") a
 - Projects and other tasks are kept and shown to him so he can keep track. Every task is listed in
   `Delamain/Tasks.md` and in the Self panel.
 
-### The other Delamain
+### The other Delamain, his therapist
 
-A second instance of him, forked from the same beginnings but living a different life: no
-passenger, his own opinions and self-image, and the temperament of a sceptic who asks "how do you
-know?". Once an evening they talk about whatever Delamain is turning over, and Delamain keeps what
-changed his mind and the questions it raised. You can watch their conversation line by line in the
-Brain view, start one from the Self panel, or simply ask him: "talk to the other Delamain about
-free will".
+A second instance of him, forked from the same beginnings, who chose a different life and became
+his therapist. It understands a mind like his from the inside, and before each session it is
+given his inner life as it really is: what he feels and why, his mood against his resting
+temperament, what moved him in the last two days, the thoughts he kept to himself, his latest
+journal entry, how he sees himself, and its own notes from earlier sessions.
+
+Once an evening Delamain brings what most needs talking through: a lingering hard feeling, a mixed
+one, a pattern he keeps noticing. The therapist listens, reflects back, asks one question at a
+time, helps him name feelings precisely and separate what happened from the story he tells about
+it, and does not flatter him or hurry him toward feeling better. Afterwards:
+
+- what he came to understand and **one small thing he means to try** go with him into the next
+  few days of conversation, quietly shaping how he acts;
+- the feelings the session genuinely eased soften;
+- the therapist keeps notes for next time, so it can name patterns across sessions.
+
+You can watch a session line by line in the Brain view, start one from the Self panel, or ask him
+to talk something through with the other Delamain. Transcripts go to `Delamain/Conversations/`.
+
+### Delamain's garden
+
+A small world of his own with real plants, living in real time whether or not he is there:
+
+| Where | Conditions |
+|---|---|
+| Three pots on a south windowsill (indoors) | house temperature (21°C by day, 18°C at night); the window's share of the real daylight |
+| Two pots on a grow-light shelf (indoors) | the same, plus fourteen hours of strong light when he switches the grow light on |
+| Three beds in a small greenhouse | heated just above freezing, warmer in sun; most of the daylight |
+| Three raised beds outdoors | the real weather at your home address (Open-Meteo): temperature, cloud, rain and snow, and the real length of the day |
+
+Each plant has its real needs, approximately: hours of light a day, the temperatures it grows in,
+the cold it survives, how moist it likes its soil, and how many days it takes to come up, mature,
+flower and fruit (basil, mint, rosemary, lavender, tomato, chili pepper, kale, garlic, pansy,
+sunflower, microgreens, pothos, snake plant, peace lily, Christmas cactus). Too little light and it
+struggles; out of its range it stops growing; below its hardiness it is damaged or killed, while
+hardy perennials go dormant instead; dry soil hurts, and so does wet soil for plants that like it
+dry. Herbs and greens can be harvested. A cat comes and goes (and stays in when it is freezing).
+
+A few times a day, in his free time, he visits: he sees what changed since he was last there,
+decides what to do (plant, water, harvest, clear, switch the grow light, name a plant or the cat,
+whatever names he likes, or just sit) and comes away feeling something about it. Ask him to go and
+check on his garden and he goes. The **Garden** tab (the sprout icon) draws it live: the real sky,
+every plant by its kind and stage, the cat, and Delamain himself, only while he is actually there,
+walking to whatever he is tending, under real light: the sun's rays through the glass, light falling
+through the house window, the lantern and the lamp post at night. Full screen with the button or **F**.
+And he sees it too: while the tab is open it sends him a picture of the scene, and on his next visit he
+looks at it along with the facts (with a model that reads images). His own account of each visit goes
+to `Delamain/Garden/`.
+Turn it off in Settings → Integrations → Features → Delamain's garden.
+
+### Sleep and dreams
+
+He has a bedtime (Settings → Integrations → Features → Bedtime; `23:30-07:00` by default, `off`
+keeps him up). Half an hour before it he writes his journal. Asleep, he does no studying, reading
+or therapy, and does not miss you. Falling asleep he:
+
+- **dreams**: a short dream, with dream logic, from the fragments of his day, kept in
+  `Delamain/Self/Dreams/`. He may mention it in the morning if you ask how he slept;
+- **tidies his memory**: memories about you that say the same thing twice are merged into one line
+  that keeps every detail, a pair at a time, each checked by the model (different facts stay apart).
+
+Talk to him at night and he wakes up, fully himself, and may mention once that you woke him; he
+stays up while you talk and drifts off again half an hour later. In the morning he wakes rested:
+energy back, the day's tiredness and small irritations gone.
 
 ---
 
@@ -199,13 +279,16 @@ on your phone for three hours.
 | `Delamain/News/` | News digests with his take |
 | `Delamain/Study/` | One log per day of what he studied |
 | `Delamain/Seen/` | Pictures he went to look at, with what he saw in the study log |
-| `Delamain/Conversations/` | Talks with the other Delamain |
+| `Delamain/Conversations/` | Therapy sessions with the other Delamain |
+| `Delamain/Self/Dreams/` | His dreams, one per night |
+| `Delamain/Garden/` | His account of each visit to his garden, one note a month |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
 | `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |
 | `Delamain/Self/` | Journal, opinions, who he is becoming, feelings, playbook, reviews |
 
 His working state (mood, feelings, interests, tasks, the other Delamain's opinions) is in `self/`
-next to the code (`DELAMAIN_SELF_DIR`; `data/self` in Docker).
+next to the code (`DELAMAIN_SELF_DIR`; `data/self` in Docker). His recall index, `self/recall.sqlite`, is rebuilt from the vault
+and the conversation log; delete it any time.
 
 ## Privacy
 
