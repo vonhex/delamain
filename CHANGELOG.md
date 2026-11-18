@@ -4,6 +4,13 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.6.1] — 2026-11-18
+
+### Fixed
+- **Unraid sees updates, for real this time.** 3.6.0 dropped the attestation entry, but the image was still published with OCI media types, and the registry answers Unraid's Docker v2 request with a 404 for those. Images are now published with Docker media types.
+
+---
+
 ## [3.6.0] — 2026-11-18 — Company
 
 ### Added
