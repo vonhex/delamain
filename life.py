@@ -29,7 +29,7 @@ PLACES = {"sleep": "bed", "garden": "garden", "therapy": "rug", "town": "town", 
           "talk": "office", "work": "office", "news": "armchair", "tea": "window", "read": "armchair", "shelf": "shelf",
           "cat": "cat", "pinboard": "pinboard", "field": "field_edge", "kite": "kite", "bench": "bench", "stars": "telescope",
           "woodpile": "woodpile", "guitar": "armchair", "stretch": "rug", "sketch": "easel", "cook": "stove", "letter": "study_desk",
-          "feeder": "feeder", "porch": "porch", "aquarium": "aquarium", "language": "study_desk"}
+          "feeder": "feeder", "porch": "porch", "aquarium": "aquarium", "language": "study_desk", "attic": "attic_desk", "skylight": "skylight"}
 
 
 def _mark(what: str, **detail) -> None:
@@ -123,18 +123,23 @@ def _idle(now: datetime, cat_inside: bool) -> tuple[str, str]:
     crop = o["crop"]
     field = (("field", f"walking along the edge of his {crop}" if o["stage"] not in ("dead",) else "looking at what is left of his crop")
              if crop else ("field", "looking over the field behind the house"))
+    bare = not crop and slot % 2 == 0          # a bare field is worth a look now and then, not every hour
+    upstairs = [("attic", "at his terminal upstairs, browsing"), ("skylight", "looking out of the skylight at the sky")]
     if h < 9.5:
         options = [("tea", "having his tea at the window"), ("read", "reading in the armchair"), ("shelf", "looking along his shelf"),
                    ("stretch", "stretching on the rug")]
-        if o["fine"] and o["day"]:
+        if o["fine"] and o["day"] and not bare:
             options += [field, field] if crop else [field]
+        options.append(upstairs[1])
         if o["cold"] and o["day"] and o["fine"]:
             options.append(("woodpile", "splitting firewood for the stove"))
     elif h < 17:
         options = [("read", "reading in the armchair"), ("shelf", "looking along his shelf"), ("pinboard", "looking at his pinboard"),
                    ("tea", "at the window with a cup of tea"), ("sketch", "sketching the view from the window")]
+        options.append(upstairs[slot % 2])
         if o["fine"]:
-            options += [field, field] if crop else [field]
+            if not bare:
+                options += [field, field] if crop else [field]
             if o["warm"]:
                 options.append(("bench", "sitting out by the pond") if o["bench"] else ("porch", "sitting out on the step in the sun"))
             if o["cold"]:
@@ -145,13 +150,14 @@ def _idle(now: datetime, cat_inside: bool) -> tuple[str, str]:
             options.append(("letter", "writing a letter at his desk"))
     else:
         options = [("read", "reading in the armchair by the lamp"), ("tea", "at the window, watching the evening"),
-                   ("shelf", "choosing a book"), ("guitar", "playing his guitar in the armchair")]
+                   ("shelf", "choosing a book"), ("guitar", "playing his guitar in the armchair"), upstairs[0],
+                   ("skylight", "looking out of the skylight at the stars" if not o["day"] else "looking out of the skylight at the evening")]
         if 17.5 <= h < 19.5:
             options += [("cook", "cooking supper on the stove"), ("cook", "cooking supper on the stove")]
         if o["stars"] and h >= 18:
             options += [("stars", "out with his telescope, looking at the stars"), ("stars", "out with his telescope, looking at the stars")]
         if o["fine"] and o["warm"] and o["day"]:
-            options.append(("bench", "watching the evening from the bench by the pond") if o["bench"] else field)
+            options.append(("bench", "watching the evening from the bench by the pond") if o["bench"] or bare else field)
     if cat_inside:
         options.append(("cat", "sitting with the cat"))
     if o["fish"]:

@@ -2145,7 +2145,7 @@ const h2 = (x: number, y: number) => hash(x * 12.9898 + y * 78.233);
 const FONT: Record<string, string> = {
   A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
   F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010',
-  K: '101110100110101', L: '100100100100111', M: '101111111101101', N: '101111111111101', O: '010101101101010',
+  K: '101110100110101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010',
   P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
   U: '101101101101111', V: '101101101101010', W: '101101101111101', X: '101101010101101', Y: '101101010010010',
   Z: '111001010100111', '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110',
@@ -3344,6 +3344,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     }
   }
   if (w.field && w.field.stage !== 'grass') field(b, w, w.field, night, t, snowCover);
+  farmBoard(b, d, night, t);                         // at the far edge of the field: behind anyone standing in it
   if (w.field?.scarecrow) scarecrow(b, w.field.scarecrow, night, t, sun);
   // whoever is out in the field is behind the fence, the beds, the pine and the greenhouse: drawn now, before them
   const inField = (f: PWorld['delamain'] | undefined | null) => !!f && !f.lying && f.y < 146 && f.x > 84;
@@ -3438,7 +3439,6 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   b.rect(170, 147, 6, 1, [61, 50, 40]);
   b.rect(258 - 84, 127, 1, 30, [55, 55, 60]); b.rect(257 - 84, 125, 3, 3, night ? [253, 230, 138] : [120, 120, 125]); b.rect(256 - 84, 124, 5, 1, [55, 55, 60]);
   signBoard(b, d, night, sun);
-  farmBoard(b, d, night, t);
   // fence, about 1.1 m, in the colour he chose, worn where the paint has gone
   if (d.fence !== 'none') {
     for (let x = 178; x < 246; x += 8) castSpan(b, x, x + 1, 157, 15, sun, 0.72);

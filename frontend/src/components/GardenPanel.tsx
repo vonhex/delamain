@@ -41,7 +41,7 @@ type Garden = {
   field?: PField & { water: number; struggle: string[]; sown: number; gen: number; wants_water?: number | null; note?: string | null;
     harvests: { date: string; crop: string; amount: number; unit: string }[]; crops: Record<string, string>; last_crop?: string | null };
   pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
-  firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
+  firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string; file?: string | null }[];
   money?: number; outfit?: Record<string, string>; owned?: string[];
   language?: { name: string; meaning: string; count: number; recent: { word: string; meaning: string }[]; phrase?: { text: string; means: string } | null } | null;
   ledger?: { t: number; in?: number; out?: number; what: string }[];
@@ -144,7 +144,8 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
           : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
         case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: ['journal', 'letter', 'language'].includes(L.what) ? 'write' : 'study', face: -1 };
-        case 'office': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
+        case 'office': case 'attic_desk': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
+        case 'skylight': return { x: 28, y: LOFT_Y, doing: 'look', face: -1 };          // under the skylight, looking up
         case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : L.what === 'guitar' ? 'guitar' : 'read', face: -1 };
         case 'window': return { x: 50, y: 157, doing: 'tea', face: -1 };
         case 'shelf': return { x: STUDY_STAND.x + 5, y: 157, doing: 'shelf', face: -1 };
@@ -254,7 +255,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
           else del = { x: pl.sit ? pl.sit.x : p.x, y: pl.sit ? pl.sit.y : p.y, walking: false, doing: pl.doing, facing: p.facing,
             speaking: talking || (pl.twin && Math.floor(tt / 7) % 2 === 0) };
           if (pl.twin) twin = { x: 68, y: 154, walking: false, doing: 'therapy', facing: -1, speaking: Math.floor(tt / 7) % 2 === 1 };
-          if (L.where === 'office') office = L.screen || 'text';
+          if (L.where === 'office' || L.where === 'attic_desk') office = L.screen || 'text';
         }
       } else pos.current = null;
       const guest = gs && gs.since ? moveGuest(gpos, gs, gs.since, gs.until, nowS, gg, del, speaker, 0) : (gpos.current = null);
@@ -480,6 +481,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
             </section>
           ))}
           <WorldSections g={g} units={units} />
+          <SketchGallery sketches={(g.sketches || []).filter(x => x.file)} token={token} />
           {g.pond && (
             <section className="space-y-1">
               <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">
@@ -709,6 +711,47 @@ function FieldSection({ g }: { g: Garden }) {
         </p>
       )}
       {!f.crop && <p className="text-[11px] text-gray-500">What he can sow, and when: {Object.entries(f.crops || {}).map(([k, v]) => `${k} ${v}`).join('; ')}.</p>}
+    </section>
+  );
+}
+
+// his sketches: drawn on his visits from what he was looking at (the images need the sign-in, so they are fetched)
+function SketchGallery({ sketches, token }: { sketches: { t: number; what: string; file?: string | null }[]; token: string }) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    sketches.forEach(sk => {
+      const f = sk.file!;
+      if (urls[f]) return;
+      fetch(`/api/garden/sketch/${encodeURIComponent(f)}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+        .then(b => { if (alive) setUrls(u => ({ ...u, [f]: URL.createObjectURL(b) })); })
+        .catch(() => {});
+    });
+    return () => { alive = false; };
+  }, [sketches.map(x => x.file).join('|'), token]);       // eslint-disable-line react-hooks/exhaustive-deps
+  if (!sketches.length) return null;
+  const shown = [...sketches].reverse();
+  const big = open ? shown.find(x => x.file === open) : null;
+  return (
+    <section className="space-y-1.5">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS SKETCHES <span className="text-gray-500 normal-case tracking-normal">· drawn on his visits, from what he was looking at; also in <span className="font-mono">Delamain/Garden/Sketches/</span></span></h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {shown.map(sk => (
+          <button key={sk.file} onClick={() => setOpen(sk.file!)} className="text-left group" title={sk.what}>
+            {urls[sk.file!] ? <img src={urls[sk.file!]} alt={`His sketch of ${sk.what}`} className="w-full rounded-sm border border-white/10 group-hover:border-emerald-300/50" />
+              : <div className="w-full aspect-[4/3] rounded-sm bg-white/5" />}
+            <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sk.what} <span className="text-gray-600">· {ago(sk.t)}</span></div>
+          </button>
+        ))}
+      </div>
+      {big && urls[big.file!] && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black/85 flex flex-col items-center justify-center p-4" onClick={() => setOpen(null)} role="dialog" aria-label="His sketch">
+          <img src={urls[big.file!]} alt={`His sketch of ${big.what}`} className="max-w-full max-h-[85vh] rounded shadow-2xl" />
+          <p className="text-sm text-gray-200 mt-2">{big.what} <span className="text-gray-500">· {new Date(big.t * 1000).toLocaleString()}</span></p>
+        </div>, document.body,
+      )}
     </section>
   );
 }

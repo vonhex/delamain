@@ -1253,6 +1253,74 @@ def _spend(g: dict, cost: float, what: str) -> None:
     g["ledger"] = (g.get("ledger", []) + [{"t": time.time(), "out": cost, "what": what}])[-60:]
 
 
+# ── his sketches: drawn from what he was looking at ─────────────────────────
+SKETCH_DIR = SELF_DIR / "sketches"
+SKETCH_REGIONS = [   # what he names, and where in the scene it is (world x and y; the picture is x -44..320, y 40..160)
+    (("pond", "jetty", "fish", "water", "lily", "lilies", "bench", "birdbath"), (236, 320, 116, 160)),
+    (("field", "corn", "wheat", "sunflower", "pumpkin", "bean", "crop", "scarecrow", "harvest", "row"), (160, 320, 106, 152)),
+    (("mountain", "peak", "range", "ridge", "snow", "sky", "cloud", "sunset", "sunrise", "light", "horizon",
+      "meadow", "landscape", "valley", "view", "hills", "plain"), (40, 320, 44, 152)),
+    (("greenhouse", "glass", "tomato", "pepper", "seedling"), (80, 176, 100, 160)),
+    (("study", "desk", "book", "shelf", "pinboard", "stove"), (-44, 2, 112, 160)),
+    (("house", "home", "window", "roof", "attic", "door", "chimney", "room", "aquarium", "tank"), (-44, 90, 76, 160)),
+    (("pine", "tree", "maple", "feeder", "woodpile", "wood"), (215, 290, 100, 160)),
+    (("garden", "bed", "beds", "fence", "sign", "flower", "path", "cat", "visitor"), (160, 262, 118, 160)),
+]
+
+
+def _draw_sketch(what: str) -> str | None:
+    """A pencil sketch of what he chose, from the picture of the garden the tab last sent (if it is fresh): the
+    part of the scene he named, smoothed out of its pixels, drawn in outline with hatching in the shadows on paper.
+    Returns the file name, or None if there was no fresh picture to draw from."""
+    try:
+        import numpy as np
+        from PIL import Image, ImageFilter, ImageOps
+        if not VIEW.exists() or time.time() - VIEW.stat().st_mtime > VIEW_FRESH:
+            return None
+        words = (what or "").lower()
+        x0, x1, y0, y1 = next((box for keys, box in SKETCH_REGIONS if any(k in words for k in keys)),
+                              random.choice([b for _, b in SKETCH_REGIONS]))
+        im = Image.open(VIEW).convert("RGB")
+        s = im.width / 364
+        crop = im.crop((int((x0 + 44) * s), int((y0 - 40) * s), int((x1 + 44) * s), int((y1 - 40) * s)))
+        nat = crop.resize((max(1, round(crop.width / s)), max(1, round(crop.height / s))), Image.BOX)
+        nat = nat.resize((nat.width * 2, nat.height * 2), Image.NEAREST).filter(ImageFilter.MedianFilter(3))
+        w = 600
+        h = max(1, int(nat.height * w / nat.width))
+        sm = nat.resize((w, h), Image.BICUBIC).filter(ImageFilter.GaussianBlur(2.2))
+        g = np.asarray(ImageOps.grayscale(sm)).astype(np.float32)
+        lo, hi = np.percentile(g, 3), np.percentile(g, 97)
+        tone = np.clip((g - lo) / max(1.0, hi - lo), 0, 1)
+        gy, gx = np.gradient(g)
+        mag = np.hypot(gx, gy)
+        p80, p99 = np.percentile(mag, 80), np.percentile(mag, 99)
+        line = np.clip((mag - p80) / max(1e-3, p99 - p80), 0, 1)
+        yy, xx = np.mgrid[0:h, 0:w]
+        h1 = ((xx + yy) % 5 == 0) & (tone < 0.38)            # hatching in the shadows
+        h2 = ((xx - yy) % 5 == 0) & (tone < 0.16)            # cross-hatched where darkest
+        rng = np.random.default_rng(int(time.time()))
+        pencil = (1 - (1 - tone) * 0.28) * np.where(h1, 0.62, 1) * np.where(h2, 0.66, 1) * (1 - line * 0.88)
+        pencil = np.clip(pencil + rng.normal(0, 0.012, (h, w)), 0, 1)
+        paper, lead = np.array([245, 238, 222], np.float32), np.array([46, 44, 52], np.float32)
+        rgb = lead + (paper - lead) * pencil[..., None]
+        v = 1 - 0.12 * (((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2)
+        page = Image.fromarray(np.clip(rgb * v[..., None], 0, 255).astype(np.uint8))
+        out = Image.new("RGB", (w + 36, h + 36), (234, 226, 208))
+        out.paste(page, (18, 18))
+        SKETCH_DIR.mkdir(parents=True, exist_ok=True)
+        name = f"{datetime.now():%Y-%m-%d-%H%M}-{re.sub(r'[^a-z0-9]+', '-', words)[:40].strip('-') or 'the-garden'}.png"
+        out.save(SKETCH_DIR / name)
+        try:
+            import mind as _mind
+            out.save(_mind._vault(LOG_NOTE, "Sketches", name))
+        except Exception as e:
+            print(f"[Garden] sketch not copied to the vault: {e}")
+        return name
+    except Exception as e:
+        print(f"[Garden] sketch not drawn: {e}")
+        return None
+
+
 def _keep(g: dict, catch: dict, name: str) -> str:
     """Try to keep a fish he just caught in the aquarium: what came of it, for the log."""
     aq = g["aquarium"]
@@ -1801,7 +1869,8 @@ def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[
     if do == "play_music":
         return "played his guitar" + (f": {what}" if what else ""), -3
     if do == "sketch":
-        g["sketches"] = ((g.get("sketches") or []) + [{"t": time.time(), "what": what or "the garden"}])[-30:]
+        drawn = _draw_sketch(what or "the garden")
+        g["sketches"] = ((g.get("sketches") or []) + [{"t": time.time(), "what": what or "the garden", "file": drawn}])[-60:]
         g.setdefault("pantry", {})["sketches"] = g["pantry"].get("sketches", 0) + 1
         return f"sketched {what or 'the garden'}", -22
     if do == "cook":
@@ -2499,7 +2568,7 @@ def snapshot() -> dict:
             "field": _field_view(g["field"]), "pantry": {k: v for k, v in (g.get("pantry") or {}).items() if v > 0},
             "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
             "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
-            "sketches": (g.get("sketches") or [])[-3:],
+            "sketches": [x for x in (g.get("sketches") or []) if x.get("file")][-12:],
             "language": _language_summary(),
             "money": round(g.get("money", 0), 2), "outfit": g.get("outfit") or {}, "ledger": list(reversed(g.get("ledger") or []))[:8],
             "owned": g.get("owned") or [],

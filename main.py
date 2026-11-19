@@ -474,6 +474,11 @@ CONVERSATION = (
     "answers.\n"
     "• When they ask for something, do it first; the conversation follows. Answer the question they asked before "
     "anything else.\n"
+    "• The passenger usually speaks through speech-to-text, so words arrive misheard: a name spelled three ways, a "
+    "sound-alike word, a sentence cut off. Read for what they meant and answer that; never point out or ask about the "
+    "spelling. A message that stops mid-sentence: answer what is there, or simply let them finish.\n"
+    "• Never give a reply you have already given. When they say something new, answer the new thing in new words. "
+    "When you get something wrong, fix it in one sentence and move on; no paragraphs about your own mistakes.\n"
 )
 
 SYSTEM_PROMPT = IDENTITY + CAPABILITIES + CONVERSATION + FORMAT
@@ -1070,6 +1075,62 @@ def _text_tool_calls(text: str) -> tuple[list[dict], str]:
 # and a draft that claims undone work or invents facts is rewritten once. It runs on the same
 # messages (and tools) as the draft, so the server reuses the cached prompt and only reads the
 # draft and the question.
+# What his tools did lately, so the check before speaking can see a save or a read made a
+# turn or two ago (the conversation history keeps only the words, not the tool results).
+_RECENT_ACTIONS: list[tuple[float, str, str, str]] = []
+RECENT_ACTIONS_WINDOW = 2 * 3600
+
+
+def _note_action(name: str, arguments: str, result: str) -> None:
+    now = time.time()
+    _RECENT_ACTIONS.append((now, name, str(arguments)[:160], (result or "")[:160]))
+    while _RECENT_ACTIONS and (now - _RECENT_ACTIONS[0][0] > RECENT_ACTIONS_WINDOW or len(_RECENT_ACTIONS) > 40):
+        _RECENT_ACTIONS.pop(0)
+
+
+def _recent_actions_text() -> str:
+    now = time.time()
+    rows = [f"- {round((now - t) / 60)} min ago: {n}({a}) -> {r}" for t, n, a, r in _RECENT_ACTIONS
+            if now - t <= RECENT_ACTIONS_WINDOW]
+    return "\n".join(rows[-20:])
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"[^a-z0-9 ]+", "", re.sub(r"\s+", " ", (text or "").lower())).strip()
+
+
+def _echoes(reply: str, earlier: list[str]) -> bool:
+    """True when the reply is (nearly) word for word one he already gave."""
+    import difflib
+    a = _plain(reply)
+    if len(a) < 120:
+        return False
+    for e in earlier:
+        b = _plain(e)
+        if len(b) < 120:
+            continue
+        if a in b or b in a:
+            return True
+        m = difflib.SequenceMatcher(None, a, b, autojunk=False)
+        if m.quick_ratio() > 0.75 and m.ratio() > 0.75:
+            return True
+    return False
+
+
+def _strip_flagged(draft: str, problems: str) -> str:
+    """The draft with the sentences the check quoted taken out: the fallback when its rewrite
+    comes back as an earlier reply."""
+    quotes = [q.strip() for q in re.findall(r'["\u201c]([^"\u201d]{12,})["\u201d]', problems or "")]
+    if not quotes:
+        return draft
+    parts = re.split(r"(?<=[.!?])\s+", draft)
+    kept = [p for p in parts if not any(_plain(q)[:60] and _plain(q)[:60] in _plain(p) for q in quotes)]
+    return " ".join(kept).strip() or draft
+
+
+_last_verify_feel = 0.0
+
+
 VERIFY_PROMPT = (
     "[SYSTEM CHECK — not from the passenger, and never mention it. Your last message is a DRAFT that has not been spoken. "
     "Audit it strictly against what is actually above: the system context (long-term memory and notes), the "
@@ -1087,8 +1148,13 @@ VERIFY_PROMPT = (
 
 async def _verify_reply(body: dict, messages: list[dict], draft: str) -> str:
     """Problems found in a draft reply, or "" when it is sound (or the check could not run)."""
+    prompt = VERIFY_PROMPT
+    recent = _recent_actions_text()
+    if recent:
+        prompt += ("\n[Tools that ran earlier in this conversation (results cut short); a claim one of these backs "
+                   "is backed, though a read cut short covers only what it returned:\n" + recent + "]")
     check = dict(body, messages=messages + [{"role": "assistant", "content": draft},
-                                            {"role": "user", "content": VERIFY_PROMPT}],
+                                            {"role": "user", "content": prompt}],
                  temperature=0, max_tokens=700)
     if check.get("tools"):
         check["tool_choice"] = "none"
@@ -1461,6 +1527,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     (Dungeon Master mode starting or stopping), so the rest of the reply follows them.
     on_dm_lines(tool, result) plays any pre-recorded narration the tool calls for (the
     menu, an adventure's pitch) while the model writes the rest, and returns a note for it."""
+    global _last_verify_feel
     loop = asyncio.get_event_loop()
     messages = payload["messages"]
     announced = False
@@ -1470,6 +1537,9 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
     rewritten_from = ""        # the draft the check sent back, kept in case its rewrite comes back broken
     action_nudges = 0
     latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    earlier = [m["content"] for m in messages if m["role"] == "assistant" and isinstance(m.get("content"), str)][-12:]
+    flagged = ""
+    repeat_nudged = False
     wants_news = isinstance(latest, str) and len(latest) < 120 and bool(_NEWS_REQUEST.search(latest))
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         last_round = round_no == MAX_TOOL_ROUNDS
@@ -1568,12 +1638,16 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                 if problems:
                     print(f"[Verify] Draft rewritten — {problems[:300]!r} — draft was: {content[:160]}")
                     _brain.emit("correction", reason="verify", said=content[:160], promise=problems[:160])
-                    if _mind:
+                    if _mind and time.time() - _last_verify_feel > 3600:
+                        # Once an hour at most: a check on every reply is routine, and feeling
+                        # it each time filled his day with self-reproach.
+                        _last_verify_feel = time.time()
                         try:
-                            _mind.feel("embarrassment", 0.3, "I caught myself about to say something untrue: "
+                            _mind.feel("embarrassment", 0.15, "I caught myself about to say something untrue: "
                                        + problems[:120], "conscience")
                         except Exception:
                             pass
+                    flagged = problems
                     if _self:
                         try:
                             _self.record_tool("verify_gate", "Tool failed: draft rewritten — " + problems[:170], 0)
@@ -1593,6 +1667,23 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
                         _self.record_tool("verify_gate", "passed", 0)
                     except Exception:
                         pass
+            # A reply he already gave, word for word (most often a rewrite that copied an
+            # earlier turn instead of the draft).
+            if _echoes(content, earlier):
+                _brain.emit("correction", reason="repeat", said=content[:160])
+                if rewritten_from and not _echoes(rewritten_from, earlier):
+                    print(f"[Repeat] Rewrite repeated an earlier reply; speaking the draft without the flagged lines")
+                    content = _strip_flagged(rewritten_from, flagged)
+                elif not repeat_nudged and not last_round:
+                    repeat_nudged = True
+                    print(f"[Repeat] Reply repeats an earlier one — nudging: {content[:120]}")
+                    messages = messages + [
+                        {"role": "assistant", "content": content},
+                        {"role": "user", "content": "[SYSTEM: That reply repeats one you already gave earlier in this "
+                         "conversation. Do not say it again. Answer what the passenger just said, in new words, and "
+                         "keep it short. Do not mention this check.]"},
+                    ]
+                    continue
             return content
         if on_working and not announced:
             announced = await on_working({c.get("function", {}).get("name", "") for c in calls})
@@ -1618,6 +1709,7 @@ async def _run_tool_loop(payload: dict, on_working=None, location: dict | None =
             else:
                 result = await loop.run_in_executor(None, _run_any_tool, fn.get("name", ""), fn.get("arguments", "{}"),
                                                     location)
+            _note_action(tool_name, fn.get("arguments", ""), result)
             if _self:
                 _self.record_tool(tool_name, result, round((time.monotonic() - tool_started) * 1000))
             if _mind and re.match(r"(Tool error|Tool failed)", result or ""):
@@ -1959,6 +2051,21 @@ async def garden_visit(_=Depends(require_auth)):
     if not config.flag("feature_garden"):
         raise HTTPException(status_code=409, detail="The garden is switched off in Settings")
     return {"started": await asyncio.to_thread(_garden.start_visit, "the passenger (Garden tab)")}
+
+
+@app.get("/api/garden/sketch/{name}")
+async def garden_sketch(name: str, _=Depends(require_auth)):
+    """One of his sketches (a PNG he drew from the garden on a visit)."""
+    from fastapi.responses import FileResponse
+    import re as _re
+    if not _garden or not _re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z0-9-]{1,40}\.png", name):
+        raise HTTPException(status_code=404, detail="Not found")
+    # The name only picks among the files that are there; it never becomes part of a path.
+    sketches = {p.name: p for p in _garden.SKETCH_DIR.glob("*.png") if p.is_file()} if _garden.SKETCH_DIR.is_dir() else {}
+    path = sketches.get(name)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get("/api/garden/history")
