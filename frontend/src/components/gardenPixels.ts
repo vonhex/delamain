@@ -46,6 +46,16 @@ function windAt(w: PWorld, t: number): number {
   const g = sp + (gu - sp) * Math.max(0, Math.sin(t * 0.7) * Math.sin(t * 1.9 + 1));
   return Math.sin(((w.windDir ?? 270) * Math.PI) / 180) * g;
 }
+// How far the wind has carried things since the page opened. Gusts change the wind every frame, so anything it
+// moves is moved by adding up small steps (position = time x speed would jump back and forth with each gust).
+let CLOUDS = 0, DRIFT = 0, RIPPLE = 0, LAST_T = -1;
+function carry(t: number) {
+  const dt = LAST_T < 0 ? 0 : Math.max(0, Math.min(0.25, t - LAST_T));
+  LAST_T = t;
+  CLOUDS += dt * (0.6 + Math.abs(WIND) * 0.05) * (WIND < -1 ? -1 : 1);
+  DRIFT += dt * WIND;
+  RIPPLE += dt * (1.6 + WIND * 0.15);
+}
 const windyNow = () => Math.min(1, Math.abs(WIND) / 50);       // 0 still .. 1 a gale
 
 const hex = (h: string): RGB => {
@@ -163,8 +173,8 @@ function sky(b: Buf, w: PWorld, t: number) {
   // clouds: pixel blobs, lit from above
   const n = Math.round(w.cloud / 14);
   for (let k = 0; k < n; k++) {
-    const speed = (0.5 + hash(k + 3) * 1.2) * (0.6 + Math.abs(WIND) * 0.12) * (WIND < -1 ? -1 : 1);
-    const cx = X0 + ((((hash(k) * (W + 60) + t * speed) % (W + 60)) + W + 60) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
+    const speed = 0.5 + hash(k + 3) * 1.2;
+    const cx = X0 + ((((hash(k) * (W + 60) + CLOUDS * speed) % (W + 60)) + W + 60) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
     const golden = w.isDay && (w.hour < 8.5 || w.hour > 15.3);
     const lit: RGB = w.isDay ? (grey > 0.5 ? [203, 213, 225] : golden ? [255, 214, 170] : [248, 250, 252]) : [71, 85, 105];
     const shade: RGB = w.isDay ? (grey > 0.5 ? [148, 163, 184] : [203, 213, 225]) : [51, 65, 85];
@@ -715,7 +725,7 @@ function pond(b: Buf, w: PWorld, t: number) {
     } else {
       const deep = 1 - d;
       c = night ? mix([14, 22, 44], [26, 40, 74], 1 - deep) : mix(mix(skyC, [26, 86, 104], 0.35 + deep * 0.4), [20, 60, 70], dy > 0 ? 0.15 : 0);
-      const ripple = (((x * 0.5 + y * 3.3 - t * (1.6 + WIND * 0.15)) % 11) + 11) % 11;
+      const ripple = (((x * 0.5 + y * 3.3 - RIPPLE) % 11) + 11) % 11;
       if (ripple < 1 + windyNow() * 2 && dith(x, y, 0.5)) c = mix(c, [255, 255, 255], (night ? 0.12 : 0.3) + windyNow() * 0.25);   // choppier in the wind
       if (night && Math.abs(x - MOON.x - 58) < 2 + (y - cy + ry) * 0.3 && (y + Math.floor(t * 2)) % 2 === 0) c = mix(c, [230, 230, 200], 0.55);
       if (!night && w.cloud < 70 && hash(x * 7 + Math.floor(t * 3) * 13 + y) > 0.985) c = [255, 252, 230];   // glints
@@ -1124,6 +1134,7 @@ function signBoard(b: Buf, d: Design, night: boolean) {
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
   WIND = windAt(w, t);
+  carry(t);
   const d: Design = { ...DESIGN0, ...(w.design || {}) } as Design;
   const u: Upkeep = { ...UPKEEP0, ...(w.upkeep || {}), weeds: { ...(w.upkeep?.weeds || {}) } } as Upkeep;
   const sea = w.season || 'summer', prog = w.seasonProgress ?? 0.5;
@@ -1327,7 +1338,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     for (let k = 0; k < n; k++) {
       const x0 = hash(k) * (W + 40), sp = snowing ? 9 + hash(k + 5) * 6 : 120 + hash(k + 5) * 40;
       const y = YOFF + ((hash(k + 9) * H + t * sp) % (H + 10)) - 5;
-      const x = X0 + ((((x0 + (snowing ? Math.sin(t + k) * 3 + t * WIND * 0.35 : -y * 0.05 + y * WIND / 40)) % W) + W) % W);
+      const x = X0 + ((((x0 + (snowing ? Math.sin(t + k) * 3 + DRIFT * 0.35 : -y * 0.05 + y * WIND / 40)) % W) + W) % W);
       if (x > -50 && x < 82 && y > 90) continue;                    // not through the house
       if (snowing) b.set(x, y, [255, 255, 255], 0.9);
       else { const sl = Math.max(-1.5, Math.min(1.5, WIND / 30)); b.set(x, y, [147, 197, 253], 0.55); b.set(x - sl * 0.5, y + 1, [147, 197, 253], 0.45); b.set(x - sl, y + 2, [147, 197, 253], 0.3); }
@@ -1336,7 +1347,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   if (Math.abs(WIND) > 35 && !raining) {         // a hard wind carries grit and bits of leaf across the yard
     const n = Math.floor((Math.abs(WIND) - 35) / 2);
     for (let k = 0; k < n; k++) {
-      const x = X0 + ((((hash(k) * W + t * WIND * 3) % W) + W) % W), y = 130 + hash(k + 3) * 28 + Math.sin(t * 3 + k) * 2;
+      const x = X0 + ((((hash(k) * W + DRIFT * 3) % W) + W) % W), y = 130 + hash(k + 3) * 28 + Math.sin(t * 3 + k) * 2;
       const c: RGB = snowCover ? [240, 244, 250] : k % 3 ? [170, 150, 110] : [160, 100, 50];
       b.set(x, y, c, 0.7); b.set(x - Math.sign(WIND), y, c, 0.35);
     }
