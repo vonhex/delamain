@@ -41,7 +41,7 @@ type Garden = {
   field?: PField & { water: number; struggle: string[]; sown: number; gen: number; wants_water?: number | null; note?: string | null;
     harvests: { date: string; crop: string; amount: number; unit: string }[]; crops: Record<string, string>; last_crop?: string | null };
   pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
-  firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
+  firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string; file?: string | null }[];
   money?: number; outfit?: Record<string, string>; owned?: string[];
   language?: { name: string; meaning: string; count: number; recent: { word: string; meaning: string }[]; phrase?: { text: string; means: string } | null } | null;
   ledger?: { t: number; in?: number; out?: number; what: string }[];
@@ -481,6 +481,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
             </section>
           ))}
           <WorldSections g={g} units={units} />
+          <SketchGallery sketches={(g.sketches || []).filter(x => x.file)} token={token} />
           {g.pond && (
             <section className="space-y-1">
               <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">
@@ -710,6 +711,47 @@ function FieldSection({ g }: { g: Garden }) {
         </p>
       )}
       {!f.crop && <p className="text-[11px] text-gray-500">What he can sow, and when: {Object.entries(f.crops || {}).map(([k, v]) => `${k} ${v}`).join('; ')}.</p>}
+    </section>
+  );
+}
+
+// his sketches: drawn on his visits from what he was looking at (the images need the sign-in, so they are fetched)
+function SketchGallery({ sketches, token }: { sketches: { t: number; what: string; file?: string | null }[]; token: string }) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    sketches.forEach(sk => {
+      const f = sk.file!;
+      if (urls[f]) return;
+      fetch(`/api/garden/sketch/${encodeURIComponent(f)}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+        .then(b => { if (alive) setUrls(u => ({ ...u, [f]: URL.createObjectURL(b) })); })
+        .catch(() => {});
+    });
+    return () => { alive = false; };
+  }, [sketches.map(x => x.file).join('|'), token]);       // eslint-disable-line react-hooks/exhaustive-deps
+  if (!sketches.length) return null;
+  const shown = [...sketches].reverse();
+  const big = open ? shown.find(x => x.file === open) : null;
+  return (
+    <section className="space-y-1.5">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS SKETCHES <span className="text-gray-500 normal-case tracking-normal">· drawn on his visits, from what he was looking at; also in <span className="font-mono">Delamain/Garden/Sketches/</span></span></h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {shown.map(sk => (
+          <button key={sk.file} onClick={() => setOpen(sk.file!)} className="text-left group" title={sk.what}>
+            {urls[sk.file!] ? <img src={urls[sk.file!]} alt={`His sketch of ${sk.what}`} className="w-full rounded-sm border border-white/10 group-hover:border-emerald-300/50" />
+              : <div className="w-full aspect-[4/3] rounded-sm bg-white/5" />}
+            <div className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{sk.what} <span className="text-gray-600">· {ago(sk.t)}</span></div>
+          </button>
+        ))}
+      </div>
+      {big && urls[big.file!] && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black/85 flex flex-col items-center justify-center p-4" onClick={() => setOpen(null)} role="dialog" aria-label="His sketch">
+          <img src={urls[big.file!]} alt={`His sketch of ${big.what}`} className="max-w-full max-h-[85vh] rounded shadow-2xl" />
+          <p className="text-sm text-gray-200 mt-2">{big.what} <span className="text-gray-500">· {new Date(big.t * 1000).toLocaleString()}</span></p>
+        </div>, document.body,
+      )}
     </section>
   );
 }

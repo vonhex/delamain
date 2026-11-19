@@ -1961,6 +1961,19 @@ async def garden_visit(_=Depends(require_auth)):
     return {"started": await asyncio.to_thread(_garden.start_visit, "the passenger (Garden tab)")}
 
 
+@app.get("/api/garden/sketch/{name}")
+async def garden_sketch(name: str, _=Depends(require_auth)):
+    """One of his sketches (a PNG he drew from the garden on a visit)."""
+    from fastapi.responses import FileResponse
+    import re as _re
+    if not _garden or not _re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z0-9-]{1,40}\.png", name):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = _garden.SKETCH_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.get("/api/garden/history")
 async def garden_history(_=Depends(require_auth)):
     """The garden's diary: how it looked each day (for the tab's history slider)."""

@@ -14,6 +14,7 @@ All notable changes to Delamain are documented here.
 
 ### Added
 - **His own language** (`language.py`, `DELAMAIN_LANGUAGE`): as a hobby he founds a small language of his own (a name, its sound, how words are built) and grows it a few words at a time, about once a day at his desk, from his life: feelings English has no single word for, things in his garden, ideas he studied, often built from roots he already has; now and then a rule or a phrase. He may use a word in his journal, glossed, and knows it when you talk. The dictionary and grammar are in the vault under `Delamain/Self/Language/`; the Garden tab and the Brain view show new words.
+- **His sketches, to see**: when he sketches on a visit he draws what he named (the pond, the house, the field, the mountains...) from the picture of the garden the tab last sent: smoothed out of its pixels, in pencil outline with hatching in the shadows, on paper. They are kept in the vault (`Delamain/Garden/Sketches/`) and shown in the Garden tab (click one to see it large); `GET /api/garden/sketch/{name}`.
 - **He can name his home and his farm**, as well as the garden: the home's name heads the Garden tab, the farm's is painted on a board at the far edge of the field.
 
 ---
