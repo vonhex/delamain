@@ -23,7 +23,7 @@ export type PWorld = {
   guest: (NonNullable<PWorld['delamain']> & { name: string; kind: string }) | null;
   guest2?: (NonNullable<PWorld['delamain']> & { name: string; kind: string }) | null;
   twin?: NonNullable<PWorld['delamain']> | null;        // the other Delamain, in a session with him
-  season?: string; seasonProgress?: number; wind?: number;
+  season?: string; seasonProgress?: number; wind?: number; gust?: number; windDir?: number;
   design?: Partial<Design>;
   upkeep?: Partial<Upkeep>;
   tree?: { species: string; size: number } | null;
@@ -37,6 +37,15 @@ const DESIGN0: Design = { house_wall: 'timber', roof: 'terracotta', trim: 'red',
   room_wall: 'plaster', rug: 'rust', blanket: 'teal', lamp: 'on', lights: 'none', feeder: 'none', bench: 'none', sign: '', art: '' };
 const UPKEEP0: Upkeep = { weeds: {}, path_weeds: 0, lawn: 0.2, leaves: 0, windows: 0, dust: 0, house_paint: 0, fence_paint: 0, snow_path: 0, snow_ground: 0 };
 type RGB = [number, number, number];
+// The wind this frame, along the screen (km/h; + blows to the right, which is west: the sun rises on the left),
+// rising and falling between the steady wind and its gusts. Set at the start of each frame.
+let WIND = 0;
+function windAt(w: PWorld, t: number): number {
+  const sp = w.wind || 0, gu = Math.max(sp, w.gust || sp);
+  const g = sp + (gu - sp) * Math.max(0, Math.sin(t * 0.7) * Math.sin(t * 1.9 + 1));
+  return Math.sin(((w.windDir ?? 270) * Math.PI) / 180) * g;
+}
+const windyNow = () => Math.min(1, Math.abs(WIND) / 50);       // 0 still .. 1 a gale
 
 const hex = (h: string): RGB => {
   const n = parseInt(h.replace('#', ''), 16);
@@ -153,8 +162,8 @@ function sky(b: Buf, w: PWorld, t: number) {
   // clouds: pixel blobs, lit from above
   const n = Math.round(w.cloud / 14);
   for (let k = 0; k < n; k++) {
-    const speed = 1.2 + hash(k + 3) * 1.5;
-    const cx = X0 + ((hash(k) * (W + 60) + t * speed) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
+    const speed = (0.5 + hash(k + 3) * 1.2) * (0.6 + Math.abs(WIND) * 0.12) * (WIND < -1 ? -1 : 1);
+    const cx = X0 + ((((hash(k) * (W + 60) + t * speed) % (W + 60)) + W + 60) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
     const golden = w.isDay && (w.hour < 8.5 || w.hour > 15.3);
     const lit: RGB = w.isDay ? (grey > 0.5 ? [203, 213, 225] : golden ? [255, 214, 170] : [248, 250, 252]) : [71, 85, 105];
     const shade: RGB = w.isDay ? (grey > 0.5 ? [148, 163, 184] : [203, 213, 225]) : [51, 65, 85];
@@ -204,7 +213,7 @@ function sky(b: Buf, w: PWorld, t: number) {
     }
   }
   // birds by day, a shooting star now and then by night
-  if (w.isDay && w.cloud < 85) for (let k = 0; k < 3; k++) {
+  if (w.isDay && w.cloud < 85 && Math.abs(WIND) < 45) for (let k = 0; k < 3; k++) {
     const bx = X0 + ((t * (6 + k) + k * 70) % (W + 40)) - 20, by = 60 + k * 6 + Math.sin(t * 0.8 + k) * 2;
     const up = Math.floor(t * 5 + k) % 2 === 0;
     const c: RGB = [30, 41, 59];
@@ -243,7 +252,8 @@ function plant(b: Buf, s: PSpot, bx: number, by: number, scale: number, t: numbe
   const petal = hex(s.petal || '#ffffff'), centre = hex(s.centre || '#facc15');
   const fruitC = s.fruit ? hex(s.fruit) : null;
   const k = (s.stage === 'young' ? 0.6 : s.dormant ? 0.55 : 1) * scale;
-  const sway = windy && !dead ? Math.sin(t * 1.6 + seed) * 0.9 : Math.sin(t * 0.7 + seed) * 0.25;
+  const sway = windy && !dead ? Math.sin(t * (1.6 + windyNow() * 2) + seed) * (0.4 + windyNow() * 1.6) + Math.max(-2, Math.min(2, WIND / 25))
+    : Math.sin(t * 0.7 + seed) * 0.25;
   const droop = wilt || dead ? 1 : 0;
   const P = (x: number, y: number, c: RGB) => b.set(bx + x + Math.round(sway * (-y) / 16), by + y, c);
   if (s.stage === 'seed') { b.set(bx, by - 1, [120, 90, 60]); b.set(bx - 1, by, [96, 70, 48]); b.set(bx + 1, by, [96, 70, 48]); b.set(bx, by, [214, 199, 161]); return; }
@@ -682,8 +692,8 @@ function pond(b: Buf, w: PWorld, t: number) {
     } else {
       const deep = 1 - d;
       c = night ? mix([14, 22, 44], [26, 40, 74], 1 - deep) : mix(mix(skyC, [26, 86, 104], 0.35 + deep * 0.4), [20, 60, 70], dy > 0 ? 0.15 : 0);
-      const ripple = (x * 0.5 + y * 3.3 + t * 1.6) % 11;
-      if (ripple < 1 && dith(x, y, 0.5)) c = mix(c, [255, 255, 255], night ? 0.12 : 0.3);
+      const ripple = (((x * 0.5 + y * 3.3 - t * (1.6 + WIND * 0.15)) % 11) + 11) % 11;
+      if (ripple < 1 + windyNow() * 2 && dith(x, y, 0.5)) c = mix(c, [255, 255, 255], (night ? 0.12 : 0.3) + windyNow() * 0.25);   // choppier in the wind
       if (night && Math.abs(x - MOON.x - 58) < 2 + (y - cy + ry) * 0.3 && (y + Math.floor(t * 2)) % 2 === 0) c = mix(c, [230, 230, 200], 0.55);
       if (!night && w.cloud < 70 && hash(x * 7 + Math.floor(t * 3) * 13 + y) > 0.985) c = [255, 252, 230];   // glints
     }
@@ -923,7 +933,7 @@ function lawn(b: Buf, w: PWorld, u: Upkeep, night: boolean, t: number) {
   const base: RGB = sea === 'autumn' ? [140, 140, 60] : sea === 'winter' ? [130, 120, 80] : [86, 140, 40];
   for (const [x0, x1] of spans) for (let x = x0; x <= x1; x++) {
     const hgt = Math.round(len * (3 + h2(x, 2) * 4));
-    const sway = Math.round(Math.sin(t * 1.5 + x * 0.4) * Math.min(1, (w.wind || 0) / 20));
+    const sway = Math.round(Math.sin(t * 2 + x * 0.4) * windyNow() * 1.5 + Math.max(-2, Math.min(2, WIND / 20)));
     for (let j = 1; j <= hgt; j++) b.set(x + (j > hgt - 2 ? sway : 0), 157 - j, nightc(j === hgt ? mix(base, [255, 255, 200], 0.2) : base, night, 0.6));
     if (len > 0.45 && (sea === 'spring' || sea === 'summer') && h2(x, 9) > 0.9) b.set(x, 157 - hgt - 1, nightc(h2(x, 4) > 0.5 ? [250, 204, 21] : [250, 250, 245], night, 0.6));
     if (len > 0.45 && sea === 'autumn' && h2(x, 9) > 0.93) b.set(x, 157 - hgt - 1, nightc([235, 235, 225], night, 0.6));   // seed heads
@@ -954,10 +964,10 @@ function leaves(b: Buf, w: PWorld, u: Upkeep, night: boolean, t: number) {
     b.set(x, y, nightc(cols[k % 4], night, 0.55));
   }
   if (w.season === 'autumn') {
-    const m = 6 + Math.floor((w.wind || 0) / 4);
+    const m = 6 + Math.floor(Math.abs(WIND) / 4);
     for (let k = 0; k < m; k++) {
       const life = (t * (0.08 + hash(k) * 0.06) + hash(k + 5)) % 1;
-      const x = X0 + hash(k + 11) * W + Math.sin(t * 2 + k) * 4 + life * (w.wind || 4) * 2, y = 112 + life * 46;
+      const x = X0 + hash(k + 11) * W + Math.sin(t * 2 + k) * 4 + life * (WIND || 4) * 2, y = 112 + life * 46 * (1 - windyNow() * 0.5);
       b.set(x, y, nightc(cols[k % 4], night, 0.55), 1 - life * 0.3);
     }
   }
@@ -980,7 +990,7 @@ function hisTree(b: Buf, tr: NonNullable<PWorld['tree']>, w: PWorld, night: bool
     if (w.snow > 0) for (let k = 0; k < 6; k++) b.set(x - r + hash(k) * r * 2, cy - r * 0.6 + hash(k + 1) * r * 0.5, [248, 250, 252]);
     return;
   }
-  const sway = Math.sin(t * 0.9) * Math.min(1, (w.wind || 0) / 25);
+  const sway = Math.sin(t * (0.9 + windyNow() * 2)) * windyNow() * 1.5 + Math.max(-2.5, Math.min(2.5, WIND / 20));
   for (let j = -r; j <= r; j++) for (let i = -r - 1; i <= r + 1; i++) {
     const d = (i * i) / ((r + 1) * (r + 1)) + (j * j) / (r * r);
     if (d > 1 || h2(i + 40, j) < (sea === 'autumn' ? prog * 0.5 : 0) * d) continue;
@@ -997,11 +1007,11 @@ const TREE_META: Record<string, { blossom?: string; fruit?: string }> = { apple:
 
 function feeder(b: Buf, w: PWorld, night: boolean, t: number) {
   // hung from a low branch of the pine, with birds coming and going by day
-  const fx = 241, fy = 131;
-  b.line(fx, 124, fx, fy, [200, 200, 200], 0.6);
+  const fx = 241 + Math.round(Math.sin(t * 2.5) * windyNow() * 2 + WIND / 30), fy = 131;
+  b.line(241, 124, fx, fy, [200, 200, 200], 0.6);
   b.rect(fx - 3, fy, 7, 1, nightc([150, 40, 30], night)); b.rect(fx - 2, fy + 1, 5, 3, nightc([139, 90, 43], night)); b.rect(fx - 3, fy + 4, 7, 1, nightc([96, 60, 28], night));
   b.set(fx, fy + 2, nightc([214, 190, 120], night));
-  if (!w.isDay || w.snow > 0 && w.wind && w.wind > 30) return;
+  if (!w.isDay || Math.abs(WIND) > 40) return;
   for (let k = 0; k < 3; k++) {
     const ph = (t * 0.15 + k * 0.37) % 1;
     if (ph > 0.7) continue;                                  // away for a while
@@ -1023,7 +1033,7 @@ function stringLights(b: Buf, d: Design, w: PWorld, t: number) {
   const x0 = fence ? 178 : 86, x1 = fence ? 246 : 168, base = fence ? 141 : 124;
   const night = !w.isDay;
   for (let x = x0; x <= x1; x++) {
-    const seg = (x - x0) % 16, y = base + Math.round(Math.sin((seg / 16) * Math.PI) * 2);
+    const seg = (x - x0) % 16, y = base + Math.round(Math.sin((seg / 16) * Math.PI) * (2 + Math.sin(t * 3 + Math.floor((x - x0) / 16)) * windyNow() * 1.5));
     b.set(x, y, [60, 60, 60], 0.5);
     if (seg % 4 === 2) {
       const k = Math.floor((x - x0) / 4);
@@ -1047,6 +1057,7 @@ function signBoard(b: Buf, d: Design, night: boolean) {
 // ── the whole frame ────────────────────────────────────────────────────────
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
+  WIND = windAt(w, t);
   const d: Design = { ...DESIGN0, ...(w.design || {}) } as Design;
   const u: Upkeep = { ...UPKEEP0, ...(w.upkeep || {}), weeds: { ...(w.upkeep?.weeds || {}) } } as Upkeep;
   const sea = w.season || 'summer', prog = w.seasonProgress ?? 0.5;
@@ -1068,12 +1079,21 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (night) c = mix(c, [24, 30, 52], 0.55);          // moonlight, not daylight
     b.set(x, y, c);
   }
+  // wind running through the field: lighter bands of bent grass moving across it
+  if (!snowCover && Math.abs(WIND) > 12) {
+    const sp = WIND * 0.6, band = 26;
+    for (let y = 118; y < 150; y++) for (let x = X0; x < X1; x++) {
+      const ph = (((x - t * sp + y * 0.8) % band) + band) % band;
+      if (ph < 3 + windyNow() * 4 && dith(x, y, 0.5)) b.set(x, y, night ? [60, 70, 90] : sea === 'winter' || sea === 'autumn' ? [196, 180, 120] : [150, 190, 90], 0.25 + windyNow() * 0.25);
+    }
+  }
   if (w.tree) hisTree(b, w.tree, w, night, t);
   // a pine, about 3.5 m
   for (let j = 0; j < 44; j++) {
     const half = Math.floor(j / 3.4);
-    for (let i = -half; i <= half; i++) b.set(250 + i, 110 + j, dith(250 + i, 110 + j, 0.3) ? [21, 83, 45] : [20, 60, 38]);
-    if ((snowing || snowCover) && j % 7 === 0) for (let i = -half; i <= half; i++) b.set(250 + i, 110 + j, [241, 245, 249]);
+    const lean = Math.round((1 - j / 44) * (WIND / 25 + Math.sin(t * 2.2) * windyNow()));     // the top bends with the wind
+    for (let i = -half; i <= half; i++) b.set(250 + i + lean, 110 + j, dith(250 + i, 110 + j, 0.3) ? [21, 83, 45] : [20, 60, 38]);
+    if ((snowing || snowCover) && j % 7 === 0) for (let i = -half; i <= half; i++) b.set(250 + i + lean, 110 + j, [241, 245, 249]);
   }
   b.rect(249, 154, 3, 4, [87, 60, 36]);
   if (d.feeder === 'yes') feeder(b, w, night, t);
@@ -1130,7 +1150,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   b.rect(58, 92, 6, 10, [87, 83, 78]); b.rect(57, 91, 8, 2, [68, 64, 60]);       // chimney
   for (let k = 0; k < 8; k++) {                                                   // and its smoke, drifting
     const age = ((t * 0.18 + k / 8) % 1), r = 1 + age * 3.2;
-    const px = 61 + age * (18 + (w.wind || 0) * 0.6) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 89 - age * 30;
+    const px = 61 + age * (4 + WIND * 0.9) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 89 - age * 30 * (1 - windyNow() * 0.7);
     for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) b.set(px + xx, py + yy, night ? [70, 75, 90] : [226, 232, 240], (1 - age) * 0.32);
   }
   b.rect(0, ceil, hx1, 2, [74, 50, 34]);                                          // ceiling beam
@@ -1233,10 +1253,18 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     for (let k = 0; k < n; k++) {
       const x0 = hash(k) * (W + 40), sp = snowing ? 9 + hash(k + 5) * 6 : 120 + hash(k + 5) * 40;
       const y = YOFF + ((hash(k + 9) * H + t * sp) % (H + 10)) - 5;
-      const x = X0 + ((((x0 - (snowing ? Math.sin(t + k) * 3 : y * 0.25)) % W) + W) % W);
+      const x = X0 + ((((x0 + (snowing ? Math.sin(t + k) * 3 + t * WIND * 0.35 : -y * 0.05 + y * WIND / 40)) % W) + W) % W);
       if (x > -50 && x < 82 && y > 90) continue;                    // not through the house
       if (snowing) b.set(x, y, [255, 255, 255], 0.9);
-      else { b.set(x, y, [147, 197, 253], 0.55); b.set(x - 0.5, y + 1, [147, 197, 253], 0.45); b.set(x - 1, y + 2, [147, 197, 253], 0.3); }
+      else { const sl = Math.max(-1.5, Math.min(1.5, WIND / 30)); b.set(x, y, [147, 197, 253], 0.55); b.set(x - sl * 0.5, y + 1, [147, 197, 253], 0.45); b.set(x - sl, y + 2, [147, 197, 253], 0.3); }
+    }
+  }
+  if (Math.abs(WIND) > 35 && !raining) {         // a hard wind carries grit and bits of leaf across the yard
+    const n = Math.floor((Math.abs(WIND) - 35) / 2);
+    for (let k = 0; k < n; k++) {
+      const x = X0 + ((((hash(k) * W + t * WIND * 3) % W) + W) % W), y = 130 + hash(k + 3) * 28 + Math.sin(t * 3 + k) * 2;
+      const c: RGB = snowCover ? [240, 244, 250] : k % 3 ? [170, 150, 110] : [160, 100, 50];
+      b.set(x, y, c, 0.7); b.set(x - Math.sign(WIND), y, c, 0.35);
     }
   }
   post(b.d, skyCopy, glass, w, sunX, sunY - YOFF, sunVis);

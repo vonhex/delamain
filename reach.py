@@ -115,7 +115,7 @@ def pick() -> dict | None:
         today = _said_today(st)
         last = max([x["t"] for x in st["said"]] or [0])
         best = max(st["offers"], key=lambda o: o["w"] + (0.2 if o["kind"] == "meeting" else 0))
-        urgent = best["kind"] in ("meeting", "frost") and best["w"] >= 0.7
+        urgent = best["kind"] in ("meeting", "frost", "wind") and best["w"] >= 0.7
         if len(today) >= MAX_A_DAY + (1 if urgent else 0):
             return None
         if now - last < (20 * 60 if urgent else MIN_GAP):
@@ -227,6 +227,13 @@ def scan() -> None:
                     offer("frost", f"Frost tonight in your garden: the low is forecast at {low:.0f} °C, colder than these "
                                    f"outdoor plants survive: {', '.join(tender)}.", 0.75,
                           f"frost-{datetime.now():%Y%m%d}")
+            gust = max(float(w.get("gust_today") or 0), float(w.get("gust_tomorrow") or 0))
+            exposed = [s["plant"]["species"] for s in g["spots"] if s["place"] == "outdoors" and s.get("plant")
+                       and not s["plant"].get("dead") and _garden.SPECIES[s["plant"]["species"]]["form"] in ("tall", "vine", "flower", "herb", "lily")]
+            if gust >= 75 and 8 <= hour < 21:
+                offer("wind", f"A strong wind is coming through where you live: gusts to {gust:.0f} km/h"
+                              + (f"; in your garden the {', '.join(exposed)} outside will take a beating" if exposed else "")
+                              + ". Worth tying down anything loose.", 0.7, f"wind-{datetime.now():%Y%m%d}")
     except Exception as e:
         print(f"[Reach] garden not read: {e}")
     try:

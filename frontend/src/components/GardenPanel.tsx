@@ -18,7 +18,7 @@ type Step = { do: string; spot: number; text: string; at: number };
 type Garden = {
   enabled: boolean;
   weather: { temp: number; rain: number; snow: number; cloud: number; code: number; is_day: boolean; real: boolean;
-    wind?: number; low_tonight?: number | null; high_tomorrow?: number | null; snow_tomorrow?: number };
+    wind?: number; gust?: number; wind_dir?: number; gust_tomorrow?: number | null; low_tonight?: number | null; high_tomorrow?: number | null; snow_tomorrow?: number };
   daylight: number; units: string; spots: Spot[]; grow_light: boolean;
   cat: { name?: string; here: boolean; where?: string; doing?: string };
   here: boolean; visit: { since: number; until: number; steps: Step[]; noticed?: string } | null;
@@ -157,7 +157,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         temp: gg.weather.temp, growLight: gg.grow_light, spots: gg.spots,
         cat: gg.cat.here ? { here: true, where: gg.cat.where, doing: gg.cat.doing } : null, delamain: del,
         pond: { ice: gg.pond?.ice ?? 0, waterT: gg.pond?.water_t ?? 10 },
-        guest, guest2, twin, season: gg.season, seasonProgress: gg.season_progress, wind: gg.weather.wind,
+        guest, guest2, twin, season: gg.season, seasonProgress: gg.season_progress, wind: gg.weather.wind, gust: gg.weather.gust, windDir: gg.weather.wind_dir,
         design: gg.design, upkeep: gg.upkeep, tree: gg.tree ? { species: gg.tree.species, size: gg.tree.size } : null,
         room: gg.room ? { books: gg.room.books, pins: gg.room.pins } : undefined,
       }, tt);
@@ -184,7 +184,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const [days, setDays] = useState<DiaryPage[] | null>(null);
   const [dayIdx, setDayIdx] = useState<number | null>(null);    // null: now; else a page of the garden's diary
   useGardenSound(sound, { isDay: g?.weather.is_day ?? true, rain: g?.weather.rain ?? 0, snow: g?.weather.snow ?? 0, temp: g?.weather.temp ?? 10,
-    wind: g?.weather.wind ?? 5, season: g?.season || 'summer' });
+    wind: g?.weather.wind ?? 5, gust: g?.weather.gust ?? g?.weather.wind ?? 5, season: g?.season || 'summer' });
   const openHistory = () => {
     if (dayIdx !== null) { setDayIdx(null); return; }
     fetch('/api/garden/history', { headers: { Authorization: `Bearer ${token}` } })
@@ -330,7 +330,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               </div>
             )}
             <p className="text-gray-500">
-              Outside {deg(g.weather.temp, units)}{g.weather.snow > 0 ? ', snowing' : g.weather.rain > 0 ? ', raining' : g.weather.cloud > 70 ? ', overcast' : ''}, {g.daylight} h of daylight today{g.weather.real ? '' : ' (no home address set: a mild default sky)'}
+              Outside {deg(g.weather.temp, units)}{g.weather.snow > 0 ? ', snowing' : g.weather.rain > 0 ? ', raining' : g.weather.cloud > 70 ? ', overcast' : ''}{windText(g.weather, units)}, {g.daylight} h of daylight today{g.weather.real ? '' : ' (no home address set: a mild default sky)'}
               {' · '}grow light {g.grow_light ? 'on (6am–8pm)' : 'off'}
               {g.cat.here ? <> · {g.cat.name || 'a cat'} is here, {g.cat.doing}</> : <> · no cat about</>}
             </p>
@@ -520,4 +520,14 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
       </section>
     )}
   </>);
+}
+
+// the wind, as on a forecast: speed, gusts and where it comes from (mph or km/h, by the units setting)
+function windText(w: Garden['weather'], units: string): string {
+  const sp = w.wind ?? 0, gu = w.gust ?? sp;
+  if (sp < 3 && gu < 10) return ', still';
+  const v = (k: number) => (units === 'metric' ? `${Math.round(k)} km/h` : `${Math.round(k / 1.609)} mph`);
+  const pts = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const from = pts[Math.floor((((w.wind_dir ?? 0) + 22.5) % 360) / 45)];
+  return `, wind ${from} ${v(sp)}${gu > sp + 8 ? `, gusts ${v(gu)}` : ''}${(w.gust_tomorrow ?? 0) >= 60 ? ` (gusts to ${v(w.gust_tomorrow ?? 0)} tomorrow)` : ''}`;
 }

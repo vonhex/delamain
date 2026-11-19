@@ -3,7 +3,7 @@
 // pond lapping now and then. Off until the viewer turns it on; quiet by design.
 import { useEffect, useRef } from 'react';
 
-type Sky = { isDay: boolean; rain: number; snow: number; temp: number; wind: number; season: string };
+type Sky = { isDay: boolean; rain: number; snow: number; temp: number; wind: number; gust: number; season: string };
 
 function noiseBuffer(ctx: AudioContext, seconds = 2): AudioBuffer {
   const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
@@ -65,11 +65,13 @@ export function useGardenSound(on: boolean, sky: Sky) {
     };
     const tick = () => {
       const s = skyRef.current, now = ctx.currentTime;
-      const w = Math.min(1, s.wind / 40);
-      wind.g.gain.setTargetAtTime(0.05 + w * 0.35, now, 1.5);
-      wind.f.frequency.setTargetAtTime(250 + w * 700 + Math.random() * 120, now, 1);
+      // the wind rises and falls between its steady speed and its gusts, and howls higher as it strengthens
+      const gusting = s.wind + (Math.max(s.gust, s.wind) - s.wind) * Math.max(0, Math.sin(now * 0.7) * Math.sin(now * 1.9 + 1));
+      const w = Math.min(1, gusting / 60);
+      wind.g.gain.setTargetAtTime(0.04 + w * 0.5, now, 0.6);
+      wind.f.frequency.setTargetAtTime(220 + w * 1100 + Math.random() * 150, now, 0.5);
       rain.g.gain.setTargetAtTime(s.rain > 0 ? Math.min(0.35, 0.1 + s.rain * 0.08) : 0, now, 1);
-      const birds = s.isDay && s.season !== 'winter' && s.rain <= 0 && s.snow <= 0 && s.temp > 2;
+      const birds = s.isDay && s.season !== 'winter' && s.rain <= 0 && s.snow <= 0 && s.temp > 2 && s.gust < 45;
       if (birds && Math.random() < (s.season === 'spring' ? 0.5 : 0.25)) chirp(2200 + Math.random() * 1800);
       if (!s.isDay && s.temp > 14 && s.season !== 'winter' && Math.random() < 0.7) cricket();
       if (Math.random() < 0.08 && s.snow <= 0) lap();

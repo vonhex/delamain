@@ -341,15 +341,20 @@ def weather() -> dict:
         if where.get("lat") is not None:
             d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
                 "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 2,
-                "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day,wind_speed_10m",
-                "daily": "sunrise,sunset,temperature_2m_min,temperature_2m_max,snowfall_sum"}).json()
+                "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day,wind_speed_10m,"
+                           "wind_gusts_10m,wind_direction_10m",
+                "daily": "sunrise,sunset,temperature_2m_min,temperature_2m_max,snowfall_sum,wind_gusts_10m_max"}).json()
             c, daily = d["current"], d.get("daily") or {}
             w = {"temp": float(c["temperature_2m"]), "rain": float(c.get("rain") or 0), "snow": float(c.get("snowfall") or 0),
                  "cloud": int(c.get("cloud_cover") or 0), "code": int(c.get("weather_code") or 0),
                  "is_day": bool(c.get("is_day")), "sunrise": (daily.get("sunrise") or [None])[0],
                  "sunset": (daily.get("sunset") or [None])[0], "real": True,
                  "offset": int(d.get("utc_offset_seconds") or 0), "source": source,
-                 "wind": float(c.get("wind_speed_10m") or 0),
+                 "wind": float(c.get("wind_speed_10m") or 0),            # km/h, sustained
+                 "gust": float(c.get("wind_gusts_10m") or c.get("wind_speed_10m") or 0),
+                 "wind_dir": float(c.get("wind_direction_10m") or 270),     # where it blows from, degrees
+                 "gust_today": (daily.get("wind_gusts_10m_max") or [None, None])[0],
+                 "gust_tomorrow": (daily.get("wind_gusts_10m_max") or [None, None])[-1],
                  # tonight's low is (near enough) tomorrow's minimum, which comes before dawn
                  "low_tonight": (daily.get("temperature_2m_min") or [None, None])[-1],
                  "high_tomorrow": (daily.get("temperature_2m_max") or [None, None])[-1],
@@ -372,7 +377,7 @@ def history(start_ts: float, w: dict) -> dict[int, dict]:
         days = min(CATCH_UP_DAYS, int((time.time() - start_ts) / 86400) + 2)
         d = requests.get(_tools.OPEN_METEO_URL, timeout=20, params={
             "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "past_days": days,
-            "forecast_days": 1, "hourly": "temperature_2m,rain,snowfall,weather_code,cloud_cover,is_day",
+            "forecast_days": 1, "hourly": "temperature_2m,rain,snowfall,weather_code,cloud_cover,is_day,wind_speed_10m,wind_gusts_10m",
             "daily": "sunrise,sunset"}).json()
         off = int(d.get("utc_offset_seconds") or 0)
         hourly, daily = d["hourly"], d.get("daily") or {}
@@ -389,6 +394,8 @@ def history(start_ts: float, w: dict) -> dict[int, dict]:
                 "rain": float(hourly["rain"][i] or 0), "snow": float(hourly["snowfall"][i] or 0),
                 "cloud": int(hourly["cloud_cover"][i] or 0), "code": int(hourly["weather_code"][i] or 0),
                 "is_day": bool(hourly["is_day"][i]), "sunrise": rise or w.get("sunrise"), "sunset": set_ or w.get("sunset"),
+                "wind": float((hourly.get("wind_speed_10m") or [0] * (i + 1))[i] or 0),
+                "gust": float((hourly.get("wind_gusts_10m") or [0] * (i + 1))[i] or 0),
                 "real": True, "offset": off, "source": w.get("source")}
         return out
     except Exception as e:
@@ -481,8 +488,10 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         t = c["temp"]
         before = stage(p)
         # water: drying with warmth (frozen soil does not dry); rain and melting snow water the outdoor beds
+        wind, gust = float(w.get("wind") or 0), float(w.get("gust") or w.get("wind") or 0)
         if spot["place"] == "outdoors":
-            dry_rate = 0.0 if t < 0 else 0.003 * (1 + max(0.0, t - 10) * 0.06)
+            # warmth dries the soil, and so does the wind (a dry Front Range wind can halve how long a bed stays moist)
+            dry_rate = 0.0 if t < 0 else 0.003 * (1 + max(0.0, t - 10) * 0.06) * (1 + min(1.5, wind / 30))
             gain = w["rain"] * 0.05 + (0.004 if snowy and t > -1 else 0.0)
         else:
             dry_rate = (0.0065 if spot["place"] == "greenhouse" else 0.0055) * (1 + max(0.0, t - 15) * 0.05)
@@ -501,6 +510,12 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         if t < s["hardy"]:
             health -= hours * min(0.5, 0.03 * (s["hardy"] - t + 1))
             why.append("cold")
+        # strong gusts batter what grows outdoors: tall, staked and flowering plants worst, low ones hardly
+        if spot["place"] == "outdoors" and gust > 55 and before not in ("seed", "sprout") and not p.get("dormant"):
+            exposed = {"tall": 1.0, "vine": 0.9, "flower": 0.5, "herb": 0.5, "shrub": 0.3, "lily": 0.5}.get(s["form"], 0.15)
+            health -= hours * 0.012 * exposed * (gust - 55) / 20
+            if exposed >= 0.5:
+                why.append("wind")
         elif t > s["temp"][3]:
             health -= hours * 0.006
             why.append("heat")
@@ -522,7 +537,7 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         if p["health"] <= 0:
             p["dead"] = time.time()
             cause = {"thirst": "of thirst", "cold": "of the cold", "heat": "of the heat", "wet roots": "of root rot",
-                     "too little light": "for want of light",
+                     "too little light": "for want of light", "wind": "battered by the wind",
                      "weeds": "choked by weeds"}.get(why[0] if why else "", "")
             text = f"the {p['species']}{_named(spot)} {_where(spot)} died" + (f" {cause}" if cause else "")
             g["unseen"].append({"t": time.time(), "spot": spot["id"], "what": "died", "text": text})
@@ -549,7 +564,8 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
     elif not cat.get("here"):
         chance = hours * (0.22 if now.hour in (6, 7, 8, 17, 18, 19) else 0.1)
         if random.random() < chance:
-            places = ["inside", "greenhouse"] + (["outdoors"] if w["temp"] > 2 and not w["rain"] and not w["snow"] else [])
+            places = ["inside", "greenhouse"] + (["outdoors"] if w["temp"] > 2 and not w["rain"] and not w["snow"]
+                                                 and float(w.get("gust") or 0) < 45 else [])
             where = random.choice(places)
             cat.update(here=True, where=where, since=t_now, until=t_now + random.uniform(1, 3.5) * 3600,
                        doing=random.choice(CAT_DOINGS[where]))
@@ -692,8 +708,9 @@ def _upkeep_step(g: dict, hours: float, w: dict, now: datetime) -> None:
     # leaves: in autumn they come down from the treeline (and his own tree, if it is big enough)
     tree = g.get("tree")
     big = _tree_size(tree) if tree else 0.0
+    gusty = max(0.0, (float(w.get("gust") or w.get("wind") or 0) - 25) / 40)   # a strong wind blows more in
     if sea == "autumn":
-        u["leaves"] = round(min(1.0, u.get("leaves", 0) + hours * (0.0025 + 0.004 * big)), 4)
+        u["leaves"] = round(min(1.0, u.get("leaves", 0) + hours * (0.0025 + 0.004 * big) * (1 + gusty)), 4)
     elif u.get("leaves", 0) > 0:
         u["leaves"] = round(max(0.0, u["leaves"] - hours * 0.0006), 4)      # they rot down, slowly
     u["windows"] = round(min(1.0, u.get("windows", 0) + hours * (0.0006 + (0.0006 if w["rain"] > 0 else 0))), 4)
@@ -1195,6 +1212,8 @@ def _world_words(g: dict, w: dict) -> str:
                   and not s["plant"].get("dead") and SPECIES[s["plant"]["species"]]["hardy"] > w["low_tonight"]]
         rows.append(f"FORECAST: tonight's low {w['low_tonight']:.0f} °C, tomorrow's high {w.get('high_tomorrow') or 0:.0f} °C"
                     + (f", {w['snow_tomorrow']:.0f} cm of snow tomorrow" if (w.get("snow_tomorrow") or 0) >= 1 else "")
+                    + (f", gusts to {w['gust_tomorrow']:.0f} km/h tomorrow (tall plants and anything loose outside suffer "
+                       "in that)" if (w.get("gust_tomorrow") or 0) >= 60 else "")
                     + (f"; that is colder than these outdoor plants survive: {', '.join(tender)} (you could harvest them, "
                        "or clear them and grow them on indoors next time)" if tender else ""))
     rows.append(f"HOW THE PLACE IS KEPT: {_upkeep_words(g)}")
@@ -1225,6 +1244,18 @@ def _catalogue() -> str:
                      for n, s in SPECIES.items())
 
 
+def wind_words(w: dict) -> str:
+    """The wind as someone standing in it would put it (km/h), with where it comes from."""
+    sp, gu = float(w.get("wind") or 0), float(w.get("gust") or w.get("wind") or 0)
+    pts = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]
+    frm = pts[int(((float(w.get("wind_dir") or 0) + 22.5) % 360) // 45)]
+    feel = ("still" if sp < 5 else "a light breeze" if sp < 15 else "a steady breeze" if sp < 28 else "windy" if sp < 45
+            else "a strong wind" if sp < 65 else "a gale")
+    if sp < 5 and gu < 15:
+        return "still air"
+    return f"{feel} from the {frm} ({sp:.0f} km/h" + (f", gusting {gu:.0f}" if gu > sp + 8 else "") + ")"
+
+
 def _describe(g: dict, w: dict) -> str:
     rows = []
     now = local_now(w)
@@ -1253,6 +1284,7 @@ def _describe(g: dict, w: dict) -> str:
                else "not around")
     sky = (f"{'day' if w['is_day'] else 'night'}, {w['temp']:.0f}°C outside, "
            f"{'snowing' if w['snow'] > 0 else 'raining' if w['rain'] > 0 else 'overcast' if w['cloud'] > 70 else 'clear'}, "
+           f"{wind_words(w)}, "
            f"{day_length(w):.1f} hours of daylight today")
     return ("\n".join(rows) + f"\nGrow light: {'on' if g.get('grow_light') else 'off'}.\nThe cat: {cat_txt}.\n"
             f"Outside: {sky}.")
