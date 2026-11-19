@@ -32,15 +32,30 @@ export type PWorld = {
   field?: PField | null;
   wood?: number; stoveLit?: boolean; snowman?: { size: number } | null; firepit?: boolean; feederFill?: number;
   aquarium?: { fish: { species: string; cm: number; name?: string; health?: number }[]; clean: number } | null;
+  outfit?: { hat?: string; scarf?: string; coat?: string; boots?: string };
 };
 export type PField = { stage: string; crop: string | null; frac: number; health: number; weeds: number; tilled: number;
   dormant?: boolean; scarecrow?: { name?: string; down?: boolean } | null };
-export type Design = { house_wall: string; roof: string; trim: string; path: string; fence: string; room_wall: string;
-  rug: string; blanket: string; lamp: string; lights: string; feeder: string; bench: string; sign: string; art: string };
+export type Design = {
+  house_wall: string; roof: string; trim: string; door: string; door_colour: string; curtains: string;
+  shutters: string; window_box: string; porch_light: string; doormat: string; weathervane: string; chimney: string;
+  room_wall: string; floor: string; rug: string; blanket: string; lamp: string; wall_piece: string;
+  houseplant: string; attic_lights: string; desk_plant: string;
+  path: string; fence: string; greenhouse_frame: string; lights: string; path_lights: string;
+  feeder: string; bench: string; arch: string; birdbath: string; gnome: string; mailbox: string;
+  wind_chime: string; pond_lilies: string; door_pots: string; sign: string; art: string;
+};
 export type Upkeep = { weeds: Record<string, number>; path_weeds: number; lawn: number; leaves: number; windows: number;
   dust: number; house_paint: number; fence_paint: number; snow_path: number; snow_ground: number };
-const DESIGN0: Design = { house_wall: 'timber', roof: 'terracotta', trim: 'red', path: 'gravel', fence: 'weathered',
-  room_wall: 'plaster', rug: 'rust', blanket: 'teal', lamp: 'on', lights: 'none', feeder: 'none', bench: 'none', sign: '', art: '' };
+const DESIGN0: Design = {
+  house_wall: 'timber', roof: 'terracotta', trim: 'red', door: 'plank', door_colour: 'match the trim', curtains: 'match the trim',
+  shutters: 'none', window_box: 'none', porch_light: 'none', doormat: 'none', weathervane: 'none', chimney: 'stone',
+  room_wall: 'plaster', floor: 'oak', rug: 'rust', blanket: 'teal', lamp: 'on', wall_piece: 'none',
+  houseplant: 'none', attic_lights: 'none', desk_plant: 'none',
+  path: 'gravel', fence: 'weathered', greenhouse_frame: 'white', lights: 'none', path_lights: 'none',
+  feeder: 'none', bench: 'none', arch: 'none', birdbath: 'none', gnome: 'none', mailbox: 'none',
+  wind_chime: 'none', pond_lilies: 'none', door_pots: 'none', sign: '', art: '',
+};
 const UPKEEP0: Upkeep = { weeds: {}, path_weeds: 0, lawn: 0.2, leaves: 0, windows: 0, dust: 0, house_paint: 0, fence_paint: 0, snow_path: 0, snow_ground: 0 };
 type RGB = [number, number, number];
 // The wind this frame, along the screen (km/h; + blows to the right, which is west: the sun rises on the left),
@@ -129,8 +144,106 @@ export const BENCH_STAND: Record<string, { x: number; y: number }> = {
 export const BED_STAND = { x: 40, y: 157 }, POND_STAND = { x: 271, y: 147 }, TALK_STAND = { x: 172, y: 160 };
 export const GUEST_AT = { x: 192, y: 160 };
 export const GUEST_POND = { x: 313, y: 158 };   // the far bank, casting back across the water
-const BED = { x0: 36, x1: 63, top: 146 };
+const BED = { x0: 39, x1: 63, top: 146 };
 const MOON = { x: 236, y: 54 };
+
+// ── cloud & sun shadow helpers ─────────────────────────────────────────────
+type CloudPatch = { cx: number; cy: number; seed: number };
+type SunShadow = { active: boolean; sx: number; alpha: number; col: RGB };
+function activeClouds(w: PWorld): CloudPatch[] {
+  const n = Math.round(w.cloud / 14);
+  const out: CloudPatch[] = [];
+  for (let k = 0; k < n; k++) {
+    const speed = 0.5 + hash(k + 3) * 1.2;
+    const cx = X0 + ((((hash(k) * (W + 60) + CLOUDS * speed) % (W + 60)) + W + 60) % (W + 60)) - 30;
+    const cy = YOFF + 6 + hash(k + 50) * 30;
+    out.push({ cx, cy, seed: k });
+  }
+  return out;
+}
+function cloudShadowStrength(w: PWorld): number {
+  if (!w.isDay || w.cloud < 7) return 0;
+  const overcastFade = w.cloud <= 74 ? 1 : Math.max(0, 1 - (w.cloud - 74) / 18);
+  return (0.11 + 0.23 * Math.min(1, w.cloud / 74)) * overcastFade;
+}
+function cloudGrid(clouds: CloudPatch[], sunX: number, yStart: number, yEnd: number, isSky: boolean): Float32Array {
+  const hw = W >> 1, hh = H >> 1;
+  const g = new Float32Array(hw * hh);
+  if (!clouds.length) return g;
+  const hy0 = Math.max(0, (yStart - YOFF) >> 1), hy1 = Math.min(hh - 1, (yEnd - YOFF) >> 1);
+  const wrapW = W + 60, halfWrap = wrapW * 0.5;
+  const items = clouds.map(c => {
+    const sx = c.cx + (160 - sunX) * (isSky ? 0.08 : 0.14);
+    const sy = isSky ? 84 + hash(c.seed + 61) * 26 : 119 + ((c.cy - YOFF) / 36) * 35;
+    const pf = isSky ? 0.45 : Math.max(0.25, Math.min(1.15, (sy - 110) / 48));
+    const rx = isSky ? 16 + hash(c.seed + 21) * 12 : (18 + hash(c.seed + 41) * 14) * (0.65 + 0.45 * pf);
+    const ry = isSky ? 2.5 + hash(c.seed + 31) * 1.8 : (3.4 + hash(c.seed + 51) * 2.5) * (0.45 + 0.85 * pf);
+    return { sx, sy, rx, ry, seed: c.seed };
+  });
+  for (let hy = hy0; hy <= hy1; hy++) {
+    const wy = YOFF + hy * 2 + 0.5;
+    for (let hx = 0; hx < hw; hx++) {
+      const wx = X0 + hx * 2 + 0.5;
+      let acc = 0;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const dy = (wy - it.sy) / it.ry;
+        if (dy < -1.1 || dy > 1.1) continue;
+        let dx = wx - it.sx;
+        dx = (((dx + halfWrap) % wrapW) + wrapW) % wrapW - halfWrap;
+        const nx = dx / it.rx;
+        const wob = 1 + 0.1 * Math.sin(nx * 3.1 + it.seed);
+        const d2 = (nx * nx + dy * dy) / (wob * wob);
+        if (d2 < 1) {
+          const s = (1 - d2);
+          acc = 1 - (1 - acc) * (1 - s * s);
+        }
+      }
+      g[hy * hw + hx] = acc;
+    }
+  }
+  return g;
+}
+function sampleCloudGrid(g: Float32Array, x: number, y: number): number {
+  const hw = W >> 1, hh = H >> 1;
+  const fx = Math.max(0, Math.min(hw - 1.001, (x + XOFF) * 0.5));
+  const fy = Math.max(0, Math.min(hh - 1.001, (y - YOFF) * 0.5));
+  const ix = fx | 0, iy = fy | 0, tx = fx - ix, ty = fy - iy;
+  const p = iy * hw + ix;
+  const a = g[p] + (g[p + 1] - g[p]) * tx;
+  const b = g[p + hw] + (g[p + hw + 1] - g[p + hw]) * tx;
+  return a + (b - a) * ty;
+}
+function sunShadow(w: PWorld, snowCover: boolean): SunShadow {
+  if (!w.isDay) return { active: false, sx: 0, alpha: 0, col: [20, 28, 48] };
+  const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
+  const sx = (0.5 - st) * 2;
+  const overcast = Math.max(0, 1 - Math.max(0, w.cloud - 25) / 70);
+  const alpha = (0.28 + 0.08 * Math.abs(sx)) * overcast;
+  const col: RGB = snowCover ? [76, 112, 166] : (w.hour < 8.5 || w.hour > 15.3) ? [28, 30, 58] : [20, 28, 48];
+  return { active: alpha > 0.03, sx, alpha, col };
+}
+function castSpan(b: Buf, x0: number, x1: number, baseY: number, h: number, sun: SunShadow, opacity = 1) {
+  const cy = Math.min(WH - 1, baseY);
+  for (let x = x0; x <= x1; x++) b.set(x, cy, [16, 22, 38], 0.22 * opacity);
+  if (!sun.active) return;
+  const reach = Math.round(sun.sx * h * 0.48);
+  const sx0 = reach >= 0 ? x0 : x0 + reach;
+  const sx1 = reach >= 0 ? x1 + reach : x1;
+  const span = Math.max(1, sx1 - sx0);
+  const rows = Math.max(1, Math.min(2, Math.round(h * 0.09)));
+  for (let j = 0; j < rows; j++) {
+    const yy = baseY + j;
+    if (yy >= WH) continue;
+    for (let x = sx0; x <= sx1; x++) {
+      const f = reach >= 0 ? Math.max(0, (x - x1) / Math.max(1, Math.abs(reach))) : Math.max(0, (x0 - x) / Math.max(1, Math.abs(reach)));
+      if (f > 1 || (j > 0 && Math.abs(reach) < 2)) continue;
+      const a = sun.alpha * opacity * (1 - f * 0.65) * (j > 0 ? 0.65 : 1);
+      if (f > 0.35 && !dith(x, yy, 0.72 - f * 0.35)) continue;
+      if (span > 0 && a > 0.02) b.set(x, yy, sun.col, a);
+    }
+  }
+}
 
 // ── the sky ────────────────────────────────────────────────────────────────
 function skyStops(hour: number): RGB[] {
@@ -143,7 +256,7 @@ function skyStops(hour: number): RGB[] {
   return P('#1b1446', '#3b1f6e', '#7a3474', '#c2575f');
 }
 
-function sky(b: Buf, w: PWorld, t: number) {
+function sky(b: Buf, w: PWorld, t: number, clouds: CloudPatch[], sunX: number) {
   const base = skyStops(w.hour);
   const stops: RGB[] = [];
   for (let i = 0; i < (base.length - 1) * 4; i++) { const f = i / 4, k = Math.floor(f); stops.push(mix(base[k], base[k + 1], f - k)); }
@@ -176,10 +289,8 @@ function sky(b: Buf, w: PWorld, t: number) {
     b.disc(sx - 1, sy - 1, 3, [254, 249, 195], vis);
   }
   // clouds: pixel blobs, lit from above
-  const n = Math.round(w.cloud / 14);
-  for (let k = 0; k < n; k++) {
-    const speed = 0.5 + hash(k + 3) * 1.2;
-    const cx = X0 + ((((hash(k) * (W + 60) + CLOUDS * speed) % (W + 60)) + W + 60) % (W + 60)) - 30, cy = YOFF + 6 + hash(k + 50) * 30;
+  for (const cl of clouds) {
+    const cx = cl.cx, cy = cl.cy, k = cl.seed;
     const golden = w.isDay && (w.hour < 8.5 || w.hour > 15.3);
     const lit: RGB = w.isDay ? (grey > 0.5 ? [203, 213, 225] : golden ? [255, 214, 170] : [248, 250, 252]) : [71, 85, 105];
     const shade: RGB = w.isDay ? (grey > 0.5 ? [148, 163, 184] : [203, 213, 225]) : [51, 65, 85];
@@ -229,6 +340,8 @@ function sky(b: Buf, w: PWorld, t: number) {
   const snowDrk = mix(snowDrk0, skyHaze, (w.isDay ? 0.22 : 0.15) + grey * 0.42);
   const snowLine = sea === 'winter' || w.snow > 0 ? 96 : sea === 'spring' ? 91 : 88;
   const maxSnowDrop = sea === 'winter' || w.snow > 0 ? 21 : 15;
+  const mtnTop = new Int16Array(W);
+  mtnTop.fill(999);
   for (let x = X0; x < X1; x++) {
     let bestE = 1e9;
     for (let i = 0; i < FAR_MASSIFS.length; i++) {
@@ -237,7 +350,9 @@ function sky(b: Buf, w: PWorld, t: number) {
       if (e < bestE) bestE = e;
     }
     const hf = bestE + Math.sin(x * 0.083 + 1.2) * 1.15 + Math.sin(x * 0.175 + 3.7) * 0.55 + Math.sin(x * 0.31 + 0.5) * 0.25;
-    for (let y = Math.floor(hf); y < 122; y++) {
+    const fy = Math.floor(hf);
+    if (fy < mtnTop[x - X0]) mtnTop[x - X0] = fy;
+    for (let y = fy; y < 122; y++) {
       let bE = 1e9, bI = 0, bDx = 0;
       for (let i = 0; i < FAR_MASSIFS.length; i++) {
         const m = FAR_MASSIFS[i], dy = Math.max(0, y - m.py), dx = x - m.cx - m.drift * dy, sl = dx < 0 ? m.ls : m.rs;
@@ -274,7 +389,9 @@ function sky(b: Buf, w: PWorld, t: number) {
       if (e < bestE) bestE = e;
     }
     const hn = bestE + Math.sin(x * 0.07 + 2.1) * 0.9 + Math.sin(x * 0.16) * 0.4;
-    for (let y = Math.floor(hn); y < 122; y++) {
+    const ny = Math.floor(hn);
+    if (ny < mtnTop[x - X0]) mtnTop[x - X0] = ny;
+    for (let y = ny; y < 122; y++) {
       let bE = 1e9, bI = 0, bDx = 0;
       for (let i = 0; i < FOOT_MASSIFS.length; i++) {
         const m = FOOT_MASSIFS[i], dy = Math.max(0, y - m.py), dx = x - m.cx - m.drift * dy, sl = dx < 0 ? m.ls : m.rs;
@@ -291,6 +408,34 @@ function sky(b: Buf, w: PWorld, t: number) {
       if ((sea === 'winter' || w.snow > 0) && y < hn + 2.4 && (gully > 0 || y < hn + 1) && dith(x, y, 0.55)) col = snowDrk;
       const baseMist = y > 106 ? ((y - 106) / 16) * (w.isDay ? 0.24 : 0.16) : 0;
       b.set(x, y, mix(col, skyHaze, baseMist));
+    }
+  }
+  const cloudStr = cloudShadowStrength(w);
+  const skyCloud = cloudStr > 0.005 ? cloudGrid(clouds, sunX, 76, 121, true) : null;
+  if (skyCloud) {
+    for (let y = 76; y < 122; y++) for (let x = X0; x < X1; x++) {
+      if (y < mtnTop[x - X0]) continue;
+      const a = sampleCloudGrid(skyCloud, x, y) * cloudStr * 0.85;
+      if (a > 0.01) b.set(x, y, [24, 34, 62], a);
+    }
+  }
+  // light in the air: toward the sun the air between here and the range scatters it, so the peaks near a low
+  // sun go hazy and bright and the light seems to fill the air (and gives the god rays something to stream from)
+  if (w.isDay) {
+    const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
+    const ssx = 60 + st * 220, ssy = 90 - Math.sin(st * Math.PI) * 36;
+    const low = 1 - Math.sin(st * Math.PI);                                     // 1 at sunrise and sunset, 0 at noon
+    const clear = Math.max(0, 1 - w.cloud / 110);
+    const tint: RGB = goldenSky ? [255, 206, 150] : [255, 244, 222];
+    const strength = (0.18 + 0.4 * low) * clear;
+    if (strength > 0.03) for (let y = 62; y < 120; y++) for (let x = X0; x < X1; x++) {
+      const dx = (x - ssx) / (70 + 40 * low), dy = (y - ssy) / 34;
+      const a = strength * Math.exp(-(dx * dx + dy * dy)) * (y > 100 ? 1 - (y - 100) / 20 : 1);
+      if (a > 0.012) b.set(x, y, tint, a);
+    }
+    if (low > 0.55 && clear > 0.3) {                                            // the sun's own disc, burning through the ridge
+      b.glow(ssx, ssy, 20, [255, 236, 190], 0.35 * clear * low);
+      b.disc(ssx, ssy, 2, [255, 250, 225], 0.8 * clear * (low - 0.4));
     }
   }
   // organic varied treeline along the edge of the field, by the season
@@ -312,16 +457,20 @@ function sky(b: Buf, w: PWorld, t: number) {
     const cMid = mix(c, horizon, 0.25);
     const cDrk = mix(mix(c, [8, 12, 16], 0.22), horizon, 0.25);
     const bare = !conifer && (sea === 'winter' || (sea === 'autumn' && prog > 0.8 && which > 0.55));
+    const treeSh = skyCloud ? sampleCloudGrid(skyCloud, cx, baseY - 2) * cloudStr * 0.75 : 0;
     for (let j = 0; j < h; j++) {
       const f = j / Math.max(1, h - 1);
       const half = conifer ? Math.max(0, Math.round(rw * (1 - f * 0.95))) : Math.max(1, Math.round(rw * Math.sin((0.2 + f * 0.72) * Math.PI)));
       for (let i = -half; i <= half; i++) {
         if (bare && !((i === 0 && j < h - 1) || (j > 1 && j % 2 === 0 && Math.abs(i) === 1 && hash(cx + j + i) > 0.35))) continue;
         if (!bare && Math.abs(i) === half && hash(cx * 3 + j * 7 + i) > 0.75) continue;
-        const col = (j >= h - 2 && i <= 0) ? cLit : (i > 0 && j < h * 0.6) ? cDrk : cMid;
+        const baseCol = (j >= h - 2 && i <= 0) ? cLit : (i > 0 && j < h * 0.6) ? cDrk : cMid;
+        const col = treeSh > 0.01 ? mix(baseCol, [24, 34, 62], treeSh) : baseCol;
         b.set(cx + i, baseY - j, col);
-        if (sea === 'winter' && conifer && j >= h - 2 && i <= 0 && hash(cx + i + j) > 0.45)
-          b.set(cx + i, baseY - j, mix(w.isDay ? [210, 224, 238] : [70, 82, 108], horizon, 0.2));
+        if (sea === 'winter' && conifer && j >= h - 2 && i <= 0 && hash(cx + i + j) > 0.45) {
+          const sc = mix(w.isDay ? [210, 224, 238] : [70, 82, 108], horizon, 0.2);
+          b.set(cx + i, baseY - j, treeSh > 0.01 ? mix(sc, [24, 34, 62], treeSh) : sc);
+        }
       }
     }
   }
@@ -662,7 +811,187 @@ const DEL_LEGS: Legs = {
   ],
 };
 
-function figure(b: Buf, d: Fig, t: number, S: Spec, snowCover = false) {
+function applyOutfit(
+  rows: string[][], d: Fig, isIdle: boolean, pose: string,
+  baseUpperLen: number, upperAt: number, legAt: number,
+  HPAD: number, VPAD: number, outfit: NonNullable<PWorld['outfit']>, t: number,
+): (RGB | null)[][] {
+  const gridH = rows.length, gridW = rows[0].length;
+  const ovr: (RGB | null)[][] = Array.from({ length: gridH }, () => Array<RGB | null>(gridW).fill(null));
+  const setOvr = (gx: number, gy: number, c: RGB) => {
+    if (gy < 0 || gy >= gridH || gx < 0 || gx >= gridW) return;
+    const ch = rows[gy][gx];
+    if (ch === 'v' || ch === 'V' || ch === 'G') return;
+    ovr[gy][gx] = c;
+  };
+
+  let headTop = -1;
+  for (let gy = 0; gy < gridH && headTop < 0; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      const ch = rows[gy][gx];
+      if (ch === 'h' || ch === 'H' || ch === 'v' || ch === 'V' || ch === 'G') { headTop = gy; break; }
+    }
+  }
+  if (headTop < 0) return ovr;
+  const visRow = (d.doing === 'kite' && !d.walking) ? headTop + 1 : headTop + 2;
+  let hx0 = gridW, hx1 = -1;
+  const scanRow = Math.min(gridH - 1, headTop + 1);
+  for (let gx = 0; gx < gridW; gx++) {
+    const ch = rows[scanRow][gx];
+    if (ch === 'h' || ch === 'H' || ch === 'v' || ch === 'V' || ch === 'G') {
+      if (gx < hx0) hx0 = gx;
+      if (gx > hx1) hx1 = gx;
+    }
+  }
+  if (hx1 < hx0) { hx0 = 4 + HPAD; hx1 = 8 + HPAD; }
+  const headMid = Math.round((hx0 + hx1) * 0.5);
+
+  let neckRow = visRow + 2, nx0 = headMid, nx1 = headMid;
+  for (let gy = visRow + 1; gy < gridH; gy++) {
+    let found = false, f0 = gridW, f1 = -1;
+    for (let gx = 0; gx < gridW; gx++) if (rows[gy][gx] === 'n') { found = true; if (gx < f0) f0 = gx; if (gx > f1) f1 = gx; }
+    if (found) { neckRow = gy; nx0 = f0; nx1 = f1; break; }
+  }
+  const torsoTop = Math.min(gridH - 1, neckRow + 1);
+  const torsoBot = Math.min(gridH - 1, upperAt + baseUpperLen - 1 + VPAD);
+  const legTop = Math.min(gridH - 1, legAt + VPAD);
+
+  // 1. Coat (drawn before scarf so scarf sits over collar; navy/teal body & arms remain visible where uncovered)
+  const coat = outfit.coat || 'none';
+  if (coat === 'wax jacket') {
+    const cM: RGB = [88, 96, 56], cL: RGB = [116, 124, 74], cD: RGB = [58, 64, 36], cCol: RGB = [104, 72, 42];
+    const endY = Math.min(gridH - 1, legTop);
+    for (let gy = 0; gy < gridH; gy++) for (let gx = 0; gx < gridW; gx++) {
+      const ch = rows[gy][gx];
+      if (ch === 'a') ovr[gy][gx] = cD;
+      else if (ch === 'A') ovr[gy][gx] = cM;
+      else if (gy >= torsoTop && gy <= endY) {
+        if (ch === 'k') ovr[gy][gx] = gy === torsoTop ? cCol : cM;
+        else if (ch === 'K') ovr[gy][gx] = cD;
+        else if (ch === 'R') ovr[gy][gx] = cL;
+        else if (ch === 't') ovr[gy][gx] = gy === torsoTop + 1 ? [21, 94, 117] : cM;
+      }
+    }
+  } else if (coat === 'wool sweater') {
+    const cM: RGB = [224, 212, 184], cL: RGB = [242, 234, 212], cD: RGB = [174, 160, 132], cRib: RGB = [192, 178, 148];
+    for (let gy = 0; gy < gridH; gy++) for (let gx = 0; gx < gridW; gx++) {
+      const ch = rows[gy][gx];
+      const knit = (gy - torsoTop) % 2 === 0 && gx % 2 === 0;
+      if (ch === 'a') ovr[gy][gx] = cD;
+      else if (ch === 'A') ovr[gy][gx] = cM;
+      else if (gy >= torsoTop && gy <= torsoBot) {
+        if (ch === 'k' || ch === 't') ovr[gy][gx] = gy === torsoBot ? cRib : knit ? cL : cM;
+        else if (ch === 'K') ovr[gy][gx] = cD;
+        else if (ch === 'R') ovr[gy][gx] = cL;
+      }
+    }
+  } else if (coat === 'rain slicker') {
+    const cM: RGB = [242, 192, 28], cL: RGB = [253, 224, 71], cD: RGB = [184, 132, 14], cSnap: RGB = [132, 92, 10];
+    const endY = Math.min(gridH - 1, legTop + (pose === 'sit' ? 0 : 1));
+    for (let gy = 0; gy < gridH; gy++) for (let gx = 0; gx < gridW; gx++) {
+      const ch = rows[gy][gx];
+      if (ch === 'a') ovr[gy][gx] = cD;
+      else if (ch === 'A') ovr[gy][gx] = cM;
+      else if (gy >= torsoTop && gy <= endY) {
+        if (ch === 'k' || ch === 't') ovr[gy][gx] = (gy % 2 === 0 && gx === headMid + 1 && gy <= torsoBot) ? cSnap : cM;
+        else if (ch === 'K') ovr[gy][gx] = cD;
+        else if (ch === 'R') ovr[gy][gx] = cL;
+      }
+    }
+  } else if (coat === 'work apron') {
+    const cM: RGB = [148, 104, 62], cL: RGB = [178, 128, 82], cD: RGB = [104, 70, 40], cPkt: RGB = [196, 152, 98];
+    const endY = Math.min(gridH - 1, legTop + (pose === 'sit' ? 0 : 1));
+    for (let gy = torsoTop; gy <= endY; gy++) {
+      const hw = gy < torsoTop + 3 ? 1 : 2;
+      for (let gx = headMid - hw; gx <= headMid + hw; gx++) {
+        if (gx < 0 || gx >= gridW) continue;
+        if (isIdle && gy >= torsoTop + 3 && gy <= torsoBot - 2 && (gx <= 3 + HPAD || gx >= 10 + HPAD)) continue;
+        const ch = rows[gy][gx];
+        if (ch !== 'k' && ch !== 'K' && ch !== 't' && ch !== 'R') continue;
+        if (gy === torsoTop && gx === headMid) continue; // neck opening shows his suit/tie
+        if (gy === torsoBot - 1 && Math.abs(gx - headMid) <= 1) ovr[gy][gx] = cPkt;
+        else if (gy === endY || gx === headMid - hw) ovr[gy][gx] = cD;
+        else if (gx === headMid + hw) ovr[gy][gx] = cL;
+        else ovr[gy][gx] = cM;
+      }
+    }
+  }
+
+  // 2. Scarf (wraps neckRow and drapes down front chest)
+  const scarf = outfit.scarf || 'none';
+  if (scarf !== 'none') {
+    const pals: Record<string, [RGB, RGB, RGB]> = {
+      red: [[240, 86, 86], [210, 44, 48], [146, 24, 30]],
+      mustard: [[246, 198, 68], [222, 162, 24], [162, 108, 12]],
+      teal: [[56, 206, 194], [20, 164, 156], [12, 112, 110]],
+      plaid: [[188, 42, 46], [36, 98, 56], [236, 224, 196]],
+    };
+    const pal = pals[scarf];
+    if (pal) {
+      const scCol = (gx: number, gy: number, tone: 0 | 1 | 2): RGB =>
+        scarf === 'plaid' ? pal[((gx + gy) % 3 + 3) % 3] : pal[tone];
+      for (let gx = nx0 - 1; gx <= nx1 + 1; gx++) setOvr(gx, neckRow, scCol(gx, neckRow, gx === nx1 + 1 ? 0 : gx === nx0 - 1 ? 2 : 1));
+      const flutter = d.walking && Math.floor(t * 6) % 2 === 0 ? -1 : 0;
+      setOvr(nx0, neckRow + 1, scCol(nx0, neckRow + 1, 2));
+      setOvr(nx1, neckRow + 1, scCol(nx1, neckRow + 1, 0));
+      setOvr(nx1 + 1, neckRow + 1, scCol(nx1 + 1, neckRow + 1, 1));
+      setOvr(nx1, neckRow + 2, scCol(nx1, neckRow + 2, 1));
+      setOvr(nx1 + flutter, neckRow + 3, scCol(nx1, neckRow + 3, 2));
+    }
+  }
+
+  // 3. Hat (always strictly above visRow so dark head & glowing cyan visor stay unobstructed)
+  const hat = outfit.hat || 'none';
+  const brimY = Math.min(headTop + 1, visRow - 1);
+  if (hat === 'chauffeur cap') {
+    const navy: RGB = [24, 34, 58], band: RGB = [14, 20, 38], peak: RGB = [8, 12, 22], gold: RGB = [234, 179, 8];
+    for (let gx = hx0; gx <= hx1; gx++) setOvr(gx, brimY, band);
+    setOvr(hx1 + 1, brimY, peak); setOvr(hx1 + 2, brimY, peak);
+    for (let gx = hx0; gx <= hx1; gx++) setOvr(gx, brimY - 1, gx === hx1 - 1 ? gold : navy);
+    for (let gx = hx0; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 2, navy);
+  } else if (hat === 'flat cap') {
+    const twL: RGB = [132, 98, 64], twM: RGB = [98, 72, 46], twD: RGB = [66, 46, 28];
+    for (let gx = hx0; gx <= hx1; gx++) setOvr(gx, brimY, twM);
+    setOvr(hx1 + 1, brimY, twD);
+    for (let gx = hx0; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 1, gx === hx0 ? twD : twL);
+  } else if (hat === 'beanie') {
+    const kL: RGB = [224, 106, 86], kM: RGB = [192, 64, 52], kD: RGB = [138, 40, 32], pom: RGB = [242, 234, 222];
+    for (let gx = hx0; gx <= hx1; gx++) setOvr(gx, brimY, (gx - hx0) % 2 === 0 ? kL : kM);
+    for (let gx = hx0; gx <= hx1; gx++) setOvr(gx, brimY - 1, gx === hx0 ? kD : gx === hx1 ? kM : kL);
+    for (let gx = hx0 + 1; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 2, kM);
+    setOvr(headMid, brimY - 3, pom);
+  } else if (hat === 'straw hat') {
+    const stL: RGB = [240, 206, 120], stM: RGB = [206, 164, 76], stD: RGB = [158, 118, 48], rib: RGB = [185, 48, 48];
+    for (let gx = hx0 - 1; gx <= hx1 + 2; gx++) setOvr(gx, brimY, (gx === hx0 - 1 || gx === hx1 + 2) ? stM : stL);
+    for (let gx = hx0 + 1; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 1, rib);
+    for (let gx = hx0 + 1; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 2, gx === hx1 - 1 ? stD : stL);
+  } else if (hat === 'wide brim') {
+    const flL: RGB = [148, 100, 62], flM: RGB = [114, 74, 44], flD: RGB = [74, 46, 28], bnd: RGB = [176, 136, 72];
+    for (let gx = hx0 - 2; gx <= hx1 + 2; gx++) setOvr(gx, brimY, (gx === hx0 - 2 || gx === hx1 + 2) ? flD : gx >= hx1 ? flL : flM);
+    for (let gx = hx0 + 1; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 1, bnd);
+    for (let gx = hx0 + 1; gx <= hx1 - 1; gx++) setOvr(gx, brimY - 2, gx === hx1 - 1 ? flD : flL);
+  }
+
+  // 4. Boots
+  const boots = outfit.boots || 'standard';
+  if (boots === 'rubber boots' || boots === 'work boots') {
+    const bL: RGB = boots === 'rubber boots' ? [54, 136, 68] : [172, 108, 52];
+    const bD: RGB = boots === 'rubber boots' ? [32, 88, 44] : [116, 68, 30];
+    const cL: RGB = boots === 'rubber boots' ? [212, 224, 174] : [196, 134, 74];
+    const cD: RGB = boots === 'rubber boots' ? [154, 170, 124] : [136, 84, 42];
+    for (let gy = legTop; gy < gridH; gy++) for (let gx = 0; gx < gridW; gx++) {
+      const ch = rows[gy][gx];
+      if (ch === 'b') ovr[gy][gx] = bL;
+      else if (ch === 'B') ovr[gy][gx] = bD;
+      else if ((ch === 'l' || ch === 'L') && gy + 1 < gridH && (rows[gy + 1][gx] === 'b' || rows[gy + 1][gx] === 'B')) {
+        ovr[gy][gx] = ch === 'l' ? cL : cD;
+      }
+    }
+  }
+  return ovr;
+}
+
+function figure(b: Buf, d: Fig, t: number, S: Spec, snowCover = false, sun?: SunShadow, outfit?: PWorld['outfit']) {
   const total = S.upper.length + S.legs.stand.length;
   const stretchPhase = Math.floor(t * 1.2) % 4;
   const stretchDown = d.doing === 'stretch' && stretchPhase >= 2;
@@ -765,6 +1094,10 @@ function figure(b: Buf, d: Fig, t: number, S: Spec, snowCover = false) {
     const n = (ex: number, ey: number, hx: number, hy: number): { e: [number, number]; h: [number, number] } => ({ e: [nsx + ex, nsy + ey], h: [nsx + hx, nsy + hy] });
     const mk = (fa: { e: [number, number]; h: [number, number] }, na: { e: [number, number]; h: [number, number] }): ArmPose => ({ fe: fa.e, fh: fa.h, ne: na.e, nh: na.h });
     const r = S.w >= 13 ? 1 : 0;
+    if (pose === 'walk' && d.doing === 'climb') {                       // hand over hand on the rungs
+      const k = walkPhase % 2;
+      return mk(f(0, -3, 1, -7 + k * 3), n(1, -3, 2, -4 - k * 3));
+    }
     if (pose === 'walk') {
       const swings: ArmPose[] = [
         mk(f(0, 2, 2, 4 + r), n(1, 3, -1, 5 + r)),
@@ -922,23 +1255,46 @@ function figure(b: Buf, d: Fig, t: number, S: Spec, snowCover = false) {
     }
   }
   if (blinking) rows.forEach(r => r.forEach((c, i) => { if (c === 'v' || c === 'V') r[i] = 'h'; if (c === 'e') r[i] = 'f'; }));   // a blink
-  const x0 = Math.round(d.x) - (S.w >> 1), y0 = Math.round(d.y) - total;
+  const sitDrop = pose === 'sit' ? Math.max(0, S.legs.seat.length - 2) : 0;     // seated: the thighs rest on the seat, the shins hang below it
+  const x0 = Math.round(d.x) - (S.w >> 1), y0 = Math.round(d.y) - total + sitDrop;
   if (S.glow) b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, S.glow, 0.15 * (0.75 + 0.25 * Math.sin(t * 3)));
-  // soft elliptical shadow (suppressed when sitting on elevated furniture)
+  // soft contact AO + sun-aligned cast shadow (suppressed when sitting on elevated furniture)
   if (pose !== 'sit' || d.doing === 'campfire' || d.doing === 'guitar') {
     const sw = pose === 'walk' && walkPhase % 3 === 0 ? (S.w >= 13 ? 9 : 8) : isCrouch ? (S.w >= 13 ? 8 : 7) : (S.w >= 13 ? 7 : 6);
-    const sx0 = Math.round(d.x) - (sw >> 1) + (d.facing < 0 ? 0 : 1);
-    b.rect(sx0 + 1, y0 + total, sw - 2, 1, [0, 0, 0], 0.36);
-    b.set(sx0, y0 + total, [0, 0, 0], 0.16);
-    b.set(sx0 + sw - 1, y0 + total, [0, 0, 0], 0.16);
-    b.rect(sx0 + 2, y0 + total - 1, Math.max(1, sw - 4), 1, [0, 0, 0], 0.1);
+    const footY = Math.min(WH - 1, y0 + total >= WH ? WH - 1 : y0 + total);
+    const aoCol: RGB = snowCover ? [76, 112, 166] : [18, 26, 44];
+    const cx0 = Math.round(d.x) - (sw >> 1);
+    b.rect(cx0 + 1, footY, sw - 2, 1, aoCol, 0.34);
+    b.set(cx0, footY, aoCol, 0.15);
+    b.set(cx0 + sw - 1, footY, aoCol, 0.15);
+    const indoors = (d.x < 81 && d.y <= 158) || (d.x >= 86 && d.x <= 168 && d.y <= 155);
+    if (sun?.active && (!indoors || (d.x >= 26 && d.x <= 70 && d.y >= 145))) {
+      const reach = Math.round(sun.sx * (indoors ? 2.5 : isCrouch ? 6 : 9));
+      const step = reach >= 0 ? 1 : -1;
+      const dist = Math.abs(reach);
+      for (let i = 1; i <= dist; i++) {
+        const f = i / Math.max(1, dist);
+        const px = Math.round(d.x) + step * (1 + i);
+        const a = sun.alpha * (indoors ? 0.45 : 0.9) * (1 - f * 0.65);
+        if (f > 0.35 && !dith(px, footY, 0.72 - f * 0.35)) continue;
+        b.set(px, footY, sun.col, a);
+        if (i < dist * 0.6 && footY > 116) b.set(px, footY - 1, sun.col, a * 0.45);
+      }
+    }
   }
   const fx = (x: number) => x0 + (d.facing < 0 ? S.w - 1 - x : x);
   if (S.pack && pose !== 'sit') {
     const ph = isCrouch ? 4 : 6, py0 = y0 + upperAt + (isCrouch ? 5 : 6);
     for (let j = 0; j < ph; j++) for (let i = 0; i < 3; i++) b.set(fx(i), py0 + j, S.pack);
   }
-  rows.forEach((row, y) => row.forEach((ch, x) => { const c = S.col[ch]; if (ch !== '.' && c) b.set(fx(x - HPAD), y0 + y - VPAD, c); }));
+  const hasOutfit = !!outfit && ((outfit.hat && outfit.hat !== 'none') || (outfit.scarf && outfit.scarf !== 'none') || (outfit.coat && outfit.coat !== 'none') || (outfit.boots && outfit.boots !== 'standard'));
+  const ovr = hasOutfit && outfit ? applyOutfit(rows, d, isIdle, pose, baseUpper.length, upperAt, legAt, HPAD, VPAD, outfit, t) : null;
+  rows.forEach((row, y) => row.forEach((ch, x) => {
+    const oc = ovr?.[y][x];
+    if (oc) { b.set(fx(x - HPAD), y0 + y - VPAD, oc); return; }
+    const c = S.col[ch];
+    if (ch !== '.' && c) b.set(fx(x - HPAD), y0 + y - VPAD, c);
+  }));
   if (S.veil) {
     const vx0 = isCrouch ? 4 : 3;
     for (let i = vx0; i < vx0 + 5; i++) { b.set(fx(i), y0 + upperAt + 2, [120, 113, 108], 0.55); b.set(fx(i), y0 + upperAt + 3, [120, 113, 108], 0.45); }
@@ -1271,7 +1627,9 @@ function delamainSpec(t: number, magenta = false): Spec {
   };
 }
 
-function delamain(b: Buf, d: Fig, t: number, snowCover = false) { figure(b, d, t, delamainSpec(t), snowCover); }
+function delamain(b: Buf, d: Fig, t: number, snowCover = false, sun?: SunShadow, outfit?: PWorld['outfit']) {
+  figure(b, d, t, delamainSpec(t), snowCover, sun, outfit);
+}
 
 function cat(b: Buf, c: NonNullable<PWorld['cat']>, t: number) {
   // a cat about 35 cm high sitting: five pixels, as it should be next to him
@@ -1279,6 +1637,7 @@ function cat(b: Buf, c: NonNullable<PWorld['cat']>, t: number) {
   const fur: RGB = [41, 37, 36], light: RGB = [87, 83, 78], eye: RGB = [250, 204, 21];
   const asleep = /asleep|curled/.test(c.doing || '');
   const x = at.x, y = at.y;
+  b.rect(x - 2, y, 5, 1, [16, 22, 36], 0.22);
   if (asleep) {
     for (let i = -3; i <= 3; i++) for (let j = -2; j <= 0; j++) if (!(Math.abs(i) === 3 && j === -2)) b.set(x + i, y + j, j === -2 ? light : fur);
     b.set(x + 2, y - 3, fur); b.set(x + 4, y - 3, fur); b.rect(x + 2, y - 2, 3, 2, fur);
@@ -1322,8 +1681,7 @@ function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w
         const l = (d[q] * 0.3 + d[q + 1] * 0.59 + d[q + 2] * 0.11) / 255;
         const ddx = cx - src.x, ddy = cy - src.y;
         const near = Math.exp(-(ddx * ddx + ddy * ddy) / (2 * 9 * 9));       // the light and its glow
-        const inHouseWin = cx >= 78 && cx < 111 && cy >= 78 && cy < 95;
-        if (!inHouseWin && d[q] === sky[q] && d[q + 1] === sky[q + 1] && d[q + 2] === sky[q + 2]) v += near * 0.55 * l + Math.max(0, l - 0.95) * 1.5;
+        if (d[q] === sky[q] && d[q + 1] === sky[q + 1] && d[q + 2] === sky[q + 2]) v += near * 0.55 * l + Math.max(0, l - 0.95) * 1.5;
         else if (glass[p]) v += near * 0.5;
       }
       m[y * hw + x] = v / 4;
@@ -1351,7 +1709,7 @@ function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w
   const bw = new Float32Array(hw * hh * 3);
   for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
     const q = ((y * 2) * W + x * 2) * 4, l = (d[q] * 0.3 + d[q + 1] * 0.59 + d[q + 2] * 0.11) / 255;
-    const k = Math.max(0, l - 0.94) / 0.06;
+    const k = Math.max(0, l - 0.92) / 0.08;
     bw[(y * hw + x) * 3] = d[q] * k; bw[(y * hw + x) * 3 + 1] = d[q + 1] * k; bw[(y * hw + x) * 3 + 2] = d[q + 2] * k;
   }
   const blur = (a: Float32Array, horiz: boolean) => {
@@ -1371,7 +1729,7 @@ function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w
   const grade: RGB | null = night ? [70, 90, 160] : (w.hour < 8.5 || w.hour > 15.3) ? [255, 170, 100] : null;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const q = (y * W + x) * 4, bq = ((y >> 1) * hw + (x >> 1)) * 3;
-    let r = d[q] + bl[bq] * 0.38, g = d[q + 1] + bl[bq + 1] * 0.38, bb = d[q + 2] + bl[bq + 2] * 0.38;
+    let r = d[q] + bl[bq] * 0.5, g = d[q + 1] + bl[bq + 1] * 0.5, bb = d[q + 2] + bl[bq + 2] * 0.5;
     if (grade) { const a = night ? 0.1 : 0.08; r += (grade[0] - r) * a; g += (grade[1] - g) * a; bb += (grade[2] - bb) * a; }
     const vx = (x / W - 0.5) * 2, vy = (y / H - 0.5) * 2, v = 1 - 0.2 * Math.min(1, (vx * vx * 0.6 + vy * vy * 0.9));
     d[q] = r * v; d[q + 1] = g * v; d[q + 2] = bb * v;
@@ -1380,9 +1738,9 @@ function post(d: Uint8ClampedArray, sky: Uint8ClampedArray, glass: Uint8Array, w
 
 // ── the pond past the pine, with its jetty ─────────────────────────────────
 const POND = { cx: 295, cy: 151, rx: 24, ry: 4 };
-function pond(b: Buf, w: PWorld, t: number) {
+function pond(b: Buf, w: PWorld, d: Design, t: number) {
   const { cx, cy, rx, ry } = POND;
-  const night = !w.isDay, ice = w.pond.ice, frozen = ice >= 0.6, warm = w.pond.waterT;
+  const night = !w.isDay, ice = w.pond.ice, frozen = ice >= 0.6, warm = w.pond.waterT, sea = w.season || 'summer';
   const top = skyStops(w.hour);
   const skyC = mix(top[top.length - 1], top[1], 0.35);
   const snowBank = w.snow > 0 || (w.upkeep?.snow_ground ?? 0) > 0.25;
@@ -1424,9 +1782,13 @@ function pond(b: Buf, w: PWorld, t: number) {
     }
     b.set(x, y, c);
   }
-  if (!frozen && warm > 14) for (const [lx, ly, fl] of [[302, 152, warm > 18], [311, 150, false], [287, 154, false]] as const) {
-    b.set(lx - 1, ly, [52, 120, 60]); b.set(lx, ly, [74, 150, 70]); b.set(lx + 1, ly, [52, 120, 60]); b.set(lx + 2, ly, [40, 100, 50]);
-    if (fl) { b.set(lx, ly - 1, [249, 168, 212]); b.set(lx + 1, ly - 1, [253, 242, 248]); }
+  if (d.pond_lilies === 'yes' && !frozen && ice < 0.3 && sea !== 'winter') {
+    const summer = sea === 'summer';
+    for (const [lx, ly, fl] of [[302, 152, summer], [310, 150, summer], [287, 154, false], [295, 149, false]] as const) {
+      b.set(lx - 1, ly, nightc([52, 120, 60], night, 0.5)); b.set(lx, ly, nightc([74, 150, 70], night, 0.5));
+      b.set(lx + 1, ly, nightc([52, 120, 60], night, 0.5)); b.set(lx + 2, ly, nightc([40, 100, 50], night, 0.5));
+      if (fl) { b.set(lx, ly - 1, nightc([249, 168, 212], night, 0.45)); b.set(lx + 1, ly - 1, nightc([253, 242, 248], night, 0.45)); }
+    }
   }
   for (const [rx0, n] of [[268, 5], [314, 7]] as const) for (let k = 0; k < n; k++) {      // curved reeds and cattails
     const x = rx0 + k + (k > 2 ? 1 : 0), h = 6 + Math.floor(hash(x) * 6);
@@ -1464,8 +1826,10 @@ function pond(b: Buf, w: PWorld, t: number) {
   for (const px of [265, 275, 285]) for (let y = 150; y < 155; y++) b.set(px, y, y >= 152 ? mix(dark, [10, 20, 30], 0.35) : dark);
 }
 
+const PATCHWORK: RGB[] = [[184, 72, 58], [44, 128, 120], [208, 152, 42], [68, 86, 148], [218, 200, 168]];
+
 // his bed, under the window: a low frame, a pillow, a blanket
-function bedroom(b: Buf, night: boolean, blanket: [RGB, RGB] = [[20, 128, 120], [17, 94, 89]]) {
+function bedroom(b: Buf, night: boolean, blanket: [RGB, RGB] = [[20, 128, 120], [17, 94, 89]], patchwork = false) {
   const { x0, x1, top } = BED;
   const frame: RGB = night ? [62, 44, 32] : [110, 74, 46], dark: RGB = night ? [40, 28, 22] : [76, 50, 32];
   for (let y = top - 4; y < 150; y++) { b.set(x0, y, dark); b.set(x0 + 1, y, frame); }      // headboard
@@ -1475,18 +1839,23 @@ function bedroom(b: Buf, night: boolean, blanket: [RGB, RGB] = [[20, 128, 120], 
   b.set(x0 + 3, 149, dark); b.set(x1 - 1, 149, dark);
   b.rect(x0 + 2, top + 1, x1 - x0 - 2, 2, night ? [170, 170, 176] : [236, 232, 226]);         // sheet
   b.rect(x0 + 2, top - 1, 5, 2, night ? [190, 190, 196] : [250, 248, 244]);                   // pillow
-  for (let x = x0 + 8; x < x1; x++) for (let y = top; y < top + 3; y++)                       // blanket, a woven teal
-    b.set(x, y, nightc((x + y) % 4 === 0 ? blanket[1] : blanket[0], night, 0.35));
+  for (let x = x0 + 8; x < x1; x++) for (let y = top; y < top + 3; y++) {                     // blanket
+    const pc = patchwork ? PATCHWORK[(Math.floor((x - x0 - 8) / 3) + (y - top) * 2) % PATCHWORK.length] : ((x + y) % 4 === 0 ? blanket[1] : blanket[0]);
+    b.set(x, y, nightc(pc, night, 0.35));
+  }
 }
 
-function sleeper(b: Buf, t: number, asleep: boolean) {
+function sleeper(b: Buf, t: number, asleep: boolean, blanket: [RGB, RGB] = [[20, 128, 120], [17, 94, 89]], patchwork = false) {
   // lying on his back, head on the pillow, the blanket over him
-  const { x0, top } = BED, hx = x0 + 3, hy = top - 3;
+  const { x0, x1, top } = BED, hx = x0 + 3, hy = top - 3;
   const pulse = asleep ? 0.35 + 0.2 * Math.sin(t * 0.9) : 0.8;
   b.rect(hx, hy, 4, 3, [15, 23, 42]);
   for (let i = 0; i < 4; i++) b.set(hx + i, hy, mix([34, 211, 238], [207, 250, 254], pulse - 0.3), asleep ? 0.6 : 1);   // his visor, dimmed
   b.glow(hx + 2, hy, 6, [34, 211, 238], 0.12 * pulse);
-  for (let x = x0 + 8; x < x0 + 24; x++) b.set(x, top - 1, (x + Math.floor(t)) % 5 === 0 ? [14, 116, 110] : [20, 128, 120]);   // him, under the blanket
+  for (let x = x0 + 8; x < x1; x++) {                                                        // him, under the blanket
+    const pc = patchwork ? PATCHWORK[Math.floor((x - x0 - 8) / 3) % PATCHWORK.length] : ((x + Math.floor(t)) % 5 === 0 ? blanket[1] : blanket[0]);
+    b.set(x, top - 1, pc);
+  }
   b.rect(x0 + 7, top - 1, 1, 2, [21, 94, 117]);
   if (asleep) for (let k = 0; k < 3; k++) {                                               // z z z
     const ph = ((t * 0.35) + k / 3) % 1, zx = hx + 3 + ph * 8 + k, zy = hy - 3 - ph * 12;
@@ -1587,10 +1956,10 @@ const shortWalk = (rows: string[]) => [rows[0], rows[2], rows[4], rows[5], rows[
 const shortSeat = (rows: string[]) => [rows[0], rows[1], rows[2], rows[4]];
 const shortCrouch = (rows: string[]) => [rows[0], rows[1], rows[3], rows[4], rows[5]];
 
-function guest(b: Buf, g: NonNullable<PWorld['guest']>, t: number, snowCover = false) {
+function guest(b: Buf, g: NonNullable<PWorld['guest']>, t: number, snowCover = false, sun?: SunShadow) {
   let seed = 0;
   for (const ch of g.name) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
-  if (g.kind === 'ai') { figure(b, g, t, delamainSpec(t, true), snowCover); return; }     // another of his kind: his shape, another colour
+  if (g.kind === 'ai') { figure(b, g, t, delamainSpec(t, true), snowCover, sun); return; }     // another of his kind: his shape, another colour
   const k = KIND[g.kind] || KIND.gardener;
   const dark = (h: string) => mix(hex(h), [0, 0, 0], 0.35);
   const cHex = hex(k.c), fHex = hex(SKIN[seed % SKIN.length]);
@@ -1618,24 +1987,122 @@ function guest(b: Buf, g: NonNullable<PWorld['guest']>, t: number, snowCover = f
     upper, profileUpper, legs, w: 11, col,
     arm: { near: 'U', far: 'u', nearHand: 'f', farHand: 'F', sy: k.small ? 6 : 7, crouchSy: k.small ? 5 : 6, crouchUpper, leanRows: k.small ? 7 : 8 },
     pack: k.pack ? hex(k.pack) : undefined, veil: g.kind === 'beekeeper',
-  }, snowCover);
+  }, snowCover, sun);
 }
 
 // ── the look of the place (his to choose), and what neglect does to it ────
-const WALLS: Record<string, [RGB, RGB]> = { timber: [[107, 79, 58], [86, 62, 45]], whitewash: [[222, 215, 200], [196, 188, 172]],
-  sage: [[136, 156, 124], [112, 132, 102]], 'slate blue': [[90, 110, 136], [72, 90, 114]], ochre: [[190, 146, 70], [160, 120, 54]] };
-const ROOFS: Record<string, [RGB, RGB, RGB]> = { terracotta: [[127, 52, 40], [92, 38, 30], [160, 72, 54]],
-  slate: [[71, 85, 105], [51, 62, 80], [100, 116, 139]], 'moss green': [[74, 100, 58], [54, 76, 42], [104, 134, 78]],
-  copper: [[170, 96, 52], [134, 70, 36], [208, 136, 86]] };
-const TRIMS: Record<string, [RGB, RGB]> = { red: [[185, 28, 28], [127, 29, 29]], navy: [[37, 64, 143], [23, 37, 84]],
-  mustard: [[202, 138, 4], [150, 98, 7]], teal: [[15, 118, 110], [17, 84, 79]], plum: [[126, 58, 170], [86, 36, 120]] };
-const ROOMW: Record<string, [RGB, RGB]> = { plaster: [[214, 204, 186], [196, 184, 164]], sage: [[150, 170, 140], [130, 150, 120]],
-  'wood panel': [[124, 86, 54], [100, 68, 42]], 'deep blue': [[44, 62, 104], [34, 48, 84]], terracotta: [[176, 96, 66], [150, 78, 52]] };
-const RUGS: Record<string, [RGB, RGB, RGB]> = { rust: [[154, 52, 18], [180, 83, 9], [120, 53, 15]], indigo: [[55, 48, 163], [90, 82, 220], [40, 36, 120]],
-  moss: [[77, 124, 15], [110, 160, 40], [54, 83, 20]], cream: [[224, 214, 190], [246, 236, 214], [196, 184, 158]] };
-const BLANKETS: Record<string, [RGB, RGB]> = { teal: [[20, 128, 120], [17, 94, 89]], mustard: [[202, 138, 4], [161, 98, 7]],
-  grey: [[128, 128, 136], [98, 98, 106]], rose: [[219, 112, 147], [180, 84, 118]] };
+const WALLS: Record<string, [RGB, RGB]> = {
+  timber: [[107, 79, 58], [86, 62, 45]], whitewash: [[222, 215, 200], [196, 188, 172]],
+  sage: [[136, 156, 124], [112, 132, 102]], 'slate blue': [[90, 110, 136], [72, 90, 114]],
+  ochre: [[190, 146, 70], [160, 120, 54]], brick: [[162, 72, 54], [124, 52, 38]],
+  stone: [[136, 134, 128], [96, 94, 88]], log: [[124, 84, 50], [82, 52, 28]],
+  'forest green': [[44, 82, 58], [30, 58, 40]], rose: [[196, 126, 132], [164, 98, 104]],
+};
+const ROOFS: Record<string, [RGB, RGB, RGB]> = {
+  terracotta: [[127, 52, 40], [92, 38, 30], [160, 72, 54]],
+  slate: [[71, 85, 105], [51, 62, 80], [100, 116, 139]],
+  'moss green': [[74, 100, 58], [54, 76, 42], [104, 134, 78]],
+  copper: [[170, 96, 52], [134, 70, 36], [208, 136, 86]],
+  thatch: [[168, 138, 86], [126, 98, 56], [198, 168, 112]],
+  'red tin': [[166, 52, 46], [122, 34, 30], [204, 78, 68]],
+  'charcoal shingle': [[54, 58, 66], [36, 40, 46], [78, 84, 94]],
+};
+const TRIMS: Record<string, [RGB, RGB]> = {
+  red: [[185, 28, 28], [127, 29, 29]], navy: [[37, 64, 143], [23, 37, 84]],
+  mustard: [[202, 138, 4], [150, 98, 7]], teal: [[15, 118, 110], [17, 84, 79]],
+  plum: [[126, 58, 170], [86, 36, 120]], white: [[232, 230, 224], [194, 190, 184]],
+  black: [[42, 44, 50], [22, 24, 28]], 'sky blue': [[96, 165, 224], [58, 118, 176]],
+};
+const ROOMW: Record<string, [RGB, RGB]> = {
+  plaster: [[214, 204, 186], [196, 184, 164]], sage: [[150, 170, 140], [130, 150, 120]],
+  'wood panel': [[124, 86, 54], [100, 68, 42]], 'deep blue': [[44, 62, 104], [34, 48, 84]],
+  terracotta: [[176, 96, 66], [150, 78, 52]], wallpaper: [[206, 198, 178], [184, 172, 150]],
+  'forest green': [[44, 78, 56], [32, 58, 42]], cream: [[234, 224, 204], [212, 200, 178]],
+};
+const RUGS: Record<string, [RGB, RGB, RGB]> = {
+  rust: [[154, 52, 18], [180, 83, 9], [120, 53, 15]], indigo: [[55, 48, 163], [90, 82, 220], [40, 36, 120]],
+  moss: [[77, 124, 15], [110, 160, 40], [54, 83, 20]], cream: [[224, 214, 190], [246, 236, 214], [196, 184, 158]],
+  crimson: [[158, 28, 38], [202, 52, 62], [108, 18, 26]], ochre: [[186, 134, 34], [220, 168, 58], [134, 92, 22]],
+  charcoal: [[58, 62, 70], [88, 94, 104], [38, 40, 46]], striped: [[168, 68, 48], [224, 210, 180], [44, 108, 112]],
+};
+const BLANKETS: Record<string, [RGB, RGB]> = {
+  teal: [[20, 128, 120], [17, 94, 89]], mustard: [[202, 138, 4], [161, 98, 7]],
+  grey: [[128, 128, 136], [98, 98, 106]], rose: [[219, 112, 147], [180, 84, 118]],
+  patchwork: [[184, 72, 58], [52, 124, 116]], navy: [[34, 58, 118], [22, 38, 82]],
+  forest: [[34, 92, 54], [22, 64, 36]],
+};
 const FENCES: Record<string, RGB> = { weathered: [120, 113, 108], white: [236, 236, 232], sage: [134, 160, 120] };
+const GH_FRAMES: Record<string, { edge: RGB; body: RGB; night: RGB }> = {
+  white: { edge: [224, 232, 236], body: [192, 202, 206], night: [98, 114, 136] },
+  green: { edge: [76, 132, 86], body: [46, 94, 58], night: [28, 52, 42] },
+  black: { edge: [68, 74, 84], body: [36, 40, 48], night: [20, 24, 34] },
+};
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+function wallPixel(x: number, y: number, style: string, wc: RGB, wd: RGB, y0 = 112): RGB {
+  if (style === 'brick') {
+    const row = Math.floor(y / 3), bx = x + mod(row, 2) * 3;
+    if (mod(y, 3) === 0 || mod(bx, 6) === 0) return mix(wc, [196, 188, 174], 0.55);
+    const v = h2(Math.floor(bx / 6), row);
+    return v > 0.68 ? wd : v < 0.22 ? mix(wc, [214, 120, 86], 0.25) : wc;
+  }
+  if (style === 'stone') {
+    const row = Math.floor(y / 4), bx = x + row * 3;
+    if (mod(y, 4) === 0 || mod(bx, 6) === 0) return mix(wd, [40, 38, 36], 0.45);
+    const v = h2(Math.floor(bx / 6), row);
+    return v > 0.72 ? mix(wc, [218, 214, 206], 0.28) : v < 0.3 ? wd : wc;
+  }
+  if (style === 'log') {
+    const inLog = mod(y - y0, 4);
+    if (inLog === 0) return mix(wd, [32, 20, 12], 0.45);
+    if (inLog === 1) return mix(wc, [232, 198, 152], 0.22);
+    return inLog === 3 ? wd : wc;
+  }
+  const dy = y - y0;
+  return mod(dy, 6) === 0 || mod(x + Math.floor(dy / 6) * 13, 29) === 0 ? wd : wc;
+}
+function roofPixel(x: number, y: number, style: string, rr: RGB, rd: RGB, re: RGB): RGB {
+  const fy = Math.floor(y);
+  if (style === 'thatch') {
+    if (mod(fy, 4) === 0 && h2(x, fy) > 0.25) return rd;
+    return h2(x, Math.floor(fy / 2)) > 0.72 ? re : h2(x + 9, fy) < 0.28 ? rd : rr;
+  }
+  if (style === 'red tin') {
+    const m = mod(x, 4);
+    return m === 0 ? rd : m === 1 ? re : rr;
+  }
+  if (style === 'charcoal shingle') {
+    const row = Math.floor(fy / 2), bx = x + mod(row, 2) * 2;
+    if (mod(fy, 2) === 1 && mod(bx, 4) === 0) return rd;
+    if (mod(fy, 2) === 0 && h2(Math.floor(bx / 4), row) > 0.68) return re;
+    return mod(fy, 2) === 1 ? mix(rr, rd, 0.45) : rr;
+  }
+  return mod(fy + (mod(x, 4) < 2 ? 0 : 1), 3) === 0 ? rd : rr;
+}
+function drawFloor(b: Buf, x0: number, x1: number, floorY: number, style: string, night: boolean) {
+  for (let y = floorY; y < WH; y++) for (let x = x0; x <= x1; x++) {
+    let c: RGB;
+    if (style === 'pine') {
+      const seam = mod(x, 10) === 0 || y === floorY;
+      c = seam ? [92, 66, 38] : h2(Math.floor(x / 10), Math.floor(y / 3)) > 0.65 ? [162, 120, 74] : [144, 104, 62];
+    } else if (style === 'dark walnut') {
+      const seam = mod(x, 10) === 0 || y === floorY;
+      c = seam ? [34, 22, 16] : h2(Math.floor(x / 10), Math.floor(y / 3)) > 0.65 ? [78, 52, 36] : [62, 40, 28];
+    } else if (style === 'stone') {
+      const row = y >= floorY + 5 ? 1 : 0, bx = x + row * 4;
+      const mortar = y === floorY || y === floorY + 5 || mod(bx, 8) === 0;
+      c = mortar ? [58, 60, 64] : h2(Math.floor(bx / 8), row) > 0.5 ? [108, 110, 114] : [88, 90, 96];
+    } else if (style === 'checkered') {
+      if (y === floorY) c = [64, 58, 52];
+      else {
+        const cell = (Math.floor((x + 48) / 4) + Math.floor((y - floorY) / 2)) & 1;
+        c = cell ? [210, 202, 186] : [48, 50, 56];
+      }
+    } else {
+      c = mod(x, 10) === 0 || y === floorY ? [52, 36, 27] : [92, 64, 45];
+    }
+    b.set(x, y, nightc(c, night, 0.42));
+  }
+}
 const TREE_AT = { x: 128, y: 127 };
 export const TREE_STAND = { x: 121, y: 153 };
 export const STUDY_DESK = { x: -31, y: 145 };          // where he sits to write (on the chair)
@@ -1665,11 +2132,77 @@ function text3(b: Buf, x: number, y: number, str: string, c: RGB) {
 const roofTop = (x: number) => 80 + Math.abs(x - 39) * 0.75;
 export const LADDER_X = 33, LOFT_Y = 112, OFFICE_SEAT = { x: 38, y: 107 };
 export const ARMCHAIR = { x: 67, y: 146 };
+// the front door, in the wall on the garden side: he goes in and out by it (it swings open as someone passes)
+export const DOOR = { x: 79, top: 131, bottom: 157 }, DOOR_IN = { x: 74, y: 157 }, DOOR_OUT = { x: 86, y: 158 };
+function frontDoor(b: Buf, d: Design, night: boolean, open: number) {
+  const [dc, dd] = d.door_colour === 'match the trim' ? (TRIMS[d.trim] || TRIMS.red)
+    : d.door_colour === 'natural wood' ? ([[146, 98, 56], [102, 66, 36]] as [RGB, RGB])
+    : (TRIMS[d.door_colour] || TRIMS[d.trim] || TRIMS.red);
+  const dl = mix(dc, [255, 255, 255], 0.22);
+  const frame: RGB = nightc([74, 50, 34], night, 0.5);
+  const glassC: RGB = night ? [253, 220, 130] : [168, 214, 240];
+  const style = d.door || 'plank';
+  if (style === 'arched') {
+    b.rect(DOOR.x - 1, DOOR.top - 2, 3, 1, frame);
+    b.rect(DOOR.x - 2, DOOR.top - 1, 5, 1, frame);
+  } else {
+    b.rect(DOOR.x - 2, DOOR.top - 1, 5, 1, frame);                                 // the lintel
+  }
+  for (let y = DOOR.top; y <= DOOR.bottom; y++) { b.set(DOOR.x - 2, y, frame); b.set(DOOR.x + 2, y, frame); }
+  const h = DOOR.bottom - DOOR.top;
+  if (open < 0.5) {                                                                // shut: the door in the wall
+    for (let y = DOOR.top; y <= DOOR.bottom; y++) for (let x = DOOR.x - 1; x <= DOOR.x + 1; x++) {
+      const dy = y - DOOR.top;
+      let c = x === DOOR.x + 1 ? dd : dc;
+      if (style === 'arched' && y === DOOR.top && x !== DOOR.x) { b.set(x, y, frame); continue; }
+      if (style === 'arched' && x === DOOR.x && (dy === 2 || dy === 3)) c = dl;
+      else if (style === 'panelled') {
+        if (x === DOOR.x && ((dy >= 2 && dy <= 10) || (dy >= 14 && dy <= 23))) c = (dy === 10 || dy === 23) ? dl : dd;
+      } else if (style === 'glass') {
+        if (x === DOOR.x && dy >= 2 && dy <= 11) { b.set(x, y, dy === 6 ? dc : glassC); continue; }
+        if (x === DOOR.x && dy >= 14 && dy <= 23) c = dy === 23 ? dl : dd;
+      } else if (style === 'barn') {
+        const zx = DOOR.x - 1 + Math.round((Math.max(0, Math.min(19, dy - 3)) / 19) * 2);
+        if (dy === 1 || dy === 2 || dy === h - 2 || dy === h - 1 || (dy >= 3 && dy <= h - 3 && x === zx)) c = dd;
+      } else {
+        if (dy % 9 === 0 || (x === DOOR.x && dy % 2 === 0)) c = dd;
+      }
+      b.set(x, y, nightc(c, night, 0.45));
+    }
+    b.set(DOOR.x - 1, Math.round((DOOR.top + DOOR.bottom) / 2) + 1, [214, 180, 90]);   // the knob
+  } else {                                                                         // open: the doorway, and the door swung out
+    for (let y = DOOR.top; y <= DOOR.bottom; y++) for (let x = DOOR.x - 1; x <= DOOR.x + 1; x++)
+      b.set(x, y, style === 'arched' && y === DOOR.top && x !== DOOR.x ? frame : nightc([60, 42, 30], night, 0.4));
+    for (let y = DOOR.top; y <= DOOR.bottom; y++) for (let i = 0; i < 5; i++) {
+      const dy = y - DOOR.top, px = DOOR.x + 3 + i, py = y + Math.round(i * 0.4);
+      if (style === 'arched' && dy === 0 && (i === 0 || i === 4)) continue;
+      let c = i === 4 ? dd : dc;
+      if (style === 'arched' && dy >= 1 && dy <= 3 && i >= 1 && i <= 3) c = dy === 1 ? dl : dd;
+      else if (style === 'panelled') {
+        if (i >= 1 && i <= 3 && ((dy >= 2 && dy <= 10) || (dy >= 14 && dy <= 23))) c = (dy === 10 || dy === 23 || i === 3) ? dl : dd;
+      } else if (style === 'glass') {
+        if (i >= 1 && i <= 3 && dy >= 2 && dy <= 11) {
+          if (i === 2 || dy === 6) b.set(px, py, nightc(dc, night, 0.45));
+          else b.set(px, py, glassC, 0.85);
+          continue;
+        }
+        if (i >= 1 && i <= 3 && dy >= 14 && dy <= 23) c = (dy === 23 || i === 3) ? dl : dd;
+      } else if (style === 'barn') {
+        const zCol = Math.round((1 - Math.max(0, Math.min(19, dy - 3)) / 19) * 4);
+        if (dy === 1 || dy === 2 || dy === h - 2 || dy === h - 1 || dy === 12 || (dy >= 3 && dy <= h - 3 && i === zCol)) c = i === zCol ? dl : dd;
+      } else {
+        if (i === 2 || dy % 9 === 0) c = dd;
+      }
+      b.set(px, py, nightc(c, night, 0.45));
+    }
+  }
+  b.rect(DOOR.x - 3, DOOR.bottom + 1, 7, 1, nightc([150, 140, 128], night, 0.5));     // the step
+}
 
 // the attic office: his terminal and his work, up the ladder
-function attic(b: Buf, w: PWorld, night: boolean, t: number) {
+function attic(b: Buf, w: PWorld, d: Design, night: boolean, t: number) {
   const wood: RGB = nightc([139, 90, 43], night), dk: RGB = nightc([96, 60, 28], night);
-  b.rect(42, 105, 13, 2, wood); b.rect(43, 107, 1, 5, dk); b.rect(53, 107, 1, 5, dk);        // the desk
+  b.rect(42, 105, 16, 2, wood); b.rect(43, 107, 1, 5, dk); b.rect(55, 107, 1, 5, dk);        // the desk
   b.rect(35, 106, 5, 1, wood); b.rect(39, 99, 1, 13, dk); b.rect(35, 107, 1, 5, dk);          // the chair (its back to the right)
   const screen = w.office?.screen || null;
   for (const [x0, k] of [[44, 0], [49, 1]] as const) {                                         // two screens
@@ -1686,6 +2219,25 @@ function attic(b: Buf, w: PWorld, night: boolean, t: number) {
     if (on) b.glow(x0 + 2, 100, 7, screen === 'voice' ? [34, 211, 238] : screen === 'code' ? [74, 222, 128] : [180, 200, 255], night ? 0.25 : 0.1);
   }
   b.rect(52, 104, 2, 1, [241, 237, 226]);                                                       // a mug
+  if (d.desk_plant === 'cactus') {
+    b.rect(55, 103, 3, 2, nightc([184, 86, 48], night, 0.45));
+    b.rect(56, 99, 1, 4, nightc([64, 152, 74], night, 0.45));
+    b.set(55, 100, nightc([46, 122, 56], night, 0.45)); b.set(55, 101, nightc([64, 152, 74], night, 0.45));
+    b.set(57, 101, nightc([86, 182, 92], night, 0.45));
+    if (w.season === 'spring' || w.season === 'summer') b.set(56, 98, nightc([244, 114, 182], night, 0.4));
+  } else if (d.desk_plant === 'bonsai') {
+    b.rect(54, 103, 4, 2, nightc([88, 106, 124], night, 0.45));
+    b.set(56, 102, nightc([110, 74, 46], night, 0.45)); b.set(55, 101, nightc([96, 62, 36], night, 0.45));
+    b.rect(54, 99, 3, 2, nightc([48, 124, 56], night, 0.45)); b.set(54, 99, nightc([86, 168, 84], night, 0.45));
+    b.rect(56, 100, 3, 2, nightc([56, 138, 64], night, 0.45)); b.set(57, 100, nightc([92, 178, 88], night, 0.45));
+  }
+  if (d.attic_lights === 'fairy lights') {
+    for (let x = 8; x <= 70; x++) {
+      const ly = Math.round(roofTop(x) + 3 + Math.sin((mod(x - 8, 12) / 12) * Math.PI) * 1.4);
+      b.set(x, ly, [68, 62, 56], 0.45);
+      if (mod(x - 8, 4) === 0 && !night) b.set(x, ly + 1, [253, 230, 158], 0.5);
+    }
+  }
 }
 
 function ladder(b: Buf, night: boolean) {
@@ -1708,11 +2260,19 @@ function armchair(b: Buf, w: PWorld, night: boolean, reading: boolean) {
 function study(b: Buf, w: PWorld, d: Design, u: Upkeep, night: boolean, _t: number) {
   const sx0 = -44, sx1 = -1, ceil = 121, floor = 150;
   const [wc, wd] = ROOMW[d.room_wall] || ROOMW.plaster;
-  for (let y = ceil; y < floor; y++) for (let x = sx0; x <= sx1; x++)
-    b.set(x, y, nightc((y - ceil) % 7 === 0 && d.room_wall === 'wood panel' ? wd : (x + y) % 23 === 0 ? wd : wc, night, 0.55));
+  for (let y = ceil; y < floor; y++) for (let x = sx0; x <= sx1; x++) {
+    let col = wc;
+    if (d.room_wall === 'wood panel' && (y - ceil) % 7 === 0) col = wd;
+    else if (d.room_wall === 'wallpaper') {
+      const mx = mod(x, 4), my = mod(y - ceil, 6);
+      if (mx === 0) col = wd;
+      else if (mx === 2 && my === 3) col = mix(wc, [242, 236, 220], 0.4);
+      else if (mx === 2 && (my === 2 || my === 4)) col = mix(wc, wd, 0.5);
+    } else if (mod(x + y, 23) === 0) col = wd;
+    b.set(x, y, nightc(col, night, 0.55));
+  }
   b.rect(sx0, ceil, sx1 - sx0 + 1, 1, nightc([74, 50, 34], night));                         // the ceiling
-  for (let y = floor; y < WH; y++) for (let x = sx0; x <= sx1; x++)
-    b.set(x, y, x % 10 === 0 || y === floor ? [52, 36, 27] : (night ? [58, 42, 31] : [92, 64, 45]));
+  drawFloor(b, sx0, sx1, floor, d.floor, night);
   // the desk, with a drawer, against the left wall, and a lamp on it
   const wood: RGB = nightc([139, 90, 43], night), woodD: RGB = nightc([96, 60, 28], night);
   b.rect(-42, 140, 14, 2, wood); b.rect(-41, 142, 1, 8, woodD); b.rect(-30, 142, 1, 8, woodD); b.rect(-40, 142, 6, 2, woodD);
@@ -1765,7 +2325,7 @@ function exteriorWall(b: Buf, x0: number, x1: number, y0: number, y1: number, d:
   const [c, cd] = WALLS[d.house_wall] || WALLS.timber;
   for (let y = y0; y < y1; y++) for (let x = x0; x <= x1; x++) {
     const bare = h2(x, y) < u.house_paint * 0.7;
-    b.set(x, y, nightc(bare ? [150, 120, 90] : x === x1 ? cd : c, night, 0.5));
+    b.set(x, y, nightc(bare ? [150, 120, 90] : x === x1 ? cd : wallPixel(x, y, d.house_wall, c, cd, y0), night, 0.5));
   }
 }
 
@@ -1773,10 +2333,295 @@ function leanTo(b: Buf, d: Design, snowing: boolean) {
   const [r, rd, re] = ROOFS[d.roof] || ROOFS.terracotta;
   for (let x = -50; x <= 0; x++) {
     const top = 113 + -x * 0.13;
-    for (let y = Math.floor(top); y < 121; y++) b.set(x, y, (y + (((x % 4) + 4) % 4 < 2 ? 0 : 1)) % 3 === 0 ? rd : r);
+    for (let y = Math.floor(top); y < 121; y++) b.set(x, y, roofPixel(x, y, d.roof, r, rd, re));
     b.set(x, Math.floor(top), re);
     if (snowing) { b.set(x, Math.floor(top) - 1, [240, 244, 250]); b.set(x, Math.floor(top), [218, 228, 240]); }
   }
+}
+
+function weathervane(b: Buf, d: Design, night: boolean, t: number) {
+  if (!d.weathervane || d.weathervane === 'none') return;
+  const cx = 39, baseY = 80;
+  const iron: RGB = nightc([62, 66, 76], night, 0.45), brass: RGB = nightc([214, 174, 78], night, 0.4);
+  const dir = Math.abs(WIND) > 0.5 ? (WIND > 0 ? 1 : -1) : (Math.sin(t * 0.5) >= 0 ? 1 : -1);
+  b.rect(cx, baseY - 10, 1, 10, iron);
+  b.rect(cx - 2, baseY - 5, 5, 1, iron);
+  const sy = baseY - 11;
+  if (d.weathervane === 'arrow') {
+    for (let i = -4; i <= 4; i++) b.set(cx + dir * i, sy, brass);
+    b.set(cx + dir * 3, sy - 1, brass); b.set(cx + dir * 3, sy + 1, brass);
+    b.set(cx - dir * 4, sy - 1, iron); b.set(cx - dir * 4, sy + 1, iron);
+  } else if (d.weathervane === 'fish') {
+    b.rect(cx - 1, sy - 1, 3, 2, brass);
+    b.set(cx + dir * 2, sy, brass); b.set(cx + dir * 3, sy, brass);
+    b.set(cx, sy - 2, brass);
+    b.set(cx - dir * 2, sy, brass); b.set(cx - dir * 3, sy - 1, brass); b.set(cx - dir * 3, sy + 1, brass);
+  } else if (d.weathervane === 'rooster') {
+    b.rect(cx - 1, sy - 1, 3, 2, brass);
+    b.set(cx + dir * 1, sy - 2, brass); b.set(cx + dir * 2, sy - 3, brass); b.set(cx + dir * 3, sy - 2, brass);
+    b.set(cx + dir * 2, sy - 4, nightc([196, 54, 48], night, 0.4));
+    b.set(cx - dir * 2, sy - 2, brass); b.set(cx - dir * 3, sy - 3, brass); b.set(cx - dir * 3, sy - 1, brass);
+  }
+}
+
+function chimney(b: Buf, d: Design, night: boolean) {
+  for (let y = 85; y < 98; y++) for (let x = 58; x < 64; x++) {
+    let c: RGB;
+    if (d.chimney === 'brick') {
+      const row = Math.floor(y / 2), bx = x + (row % 2) * 2;
+      c = y % 2 === 0 || bx % 4 === 0 ? [188, 180, 168] : (h2(Math.floor(bx / 4), row) > 0.55 ? [144, 58, 42] : [166, 74, 54]);
+    } else {
+      const row = Math.floor(y / 3), bx = x + row * 2;
+      c = y % 3 === 0 || bx % 4 === 0 ? [68, 64, 60] : (h2(Math.floor(bx / 4), row) > 0.5 ? [116, 112, 106] : [92, 88, 84]);
+    }
+    b.set(x, y, nightc(c, night, 0.45));
+  }
+  b.rect(57, 83, 8, 2, nightc(d.chimney === 'brick' ? [78, 64, 60] : [68, 64, 60], night, 0.45));
+  b.rect(57, 83, 8, 1, nightc([108, 102, 98], night, 0.45));
+}
+
+function shutters(b: Buf, d: Design, night: boolean) {
+  if (d.shutters !== 'yes') return;
+  const [tc, td] = TRIMS[d.trim] || TRIMS.red;
+  const hi = mix(tc, [255, 255, 255], 0.14);
+  for (const [x0, x1] of [[28, 31], [68, 71]] as [number, number][]) {
+    for (let y = 117; y <= 135; y++) for (let x = x0; x <= x1; x++) {
+      const edge = x === x0 || x === x1 || y === 117 || y === 135;
+      const louver = !edge && (y - 117) % 2 === 0;
+      b.set(x, y, nightc(edge ? td : louver ? hi : tc, night, 0.42));
+    }
+  }
+}
+
+function drawCurtains(b: Buf, d: Design, night: boolean) {
+  const cur = d.curtains || 'match the trim';
+  const [cc, cd] = cur === 'match the trim' ? (TRIMS[d.trim] || TRIMS.red) : (TRIMS[cur] || [[220, 220, 214], [180, 180, 174]]);
+  const hasShut = d.shutters === 'yes';
+  const spans: [number, number][] = hasShut ? [[32, 34], [66, 68]] : [[29, 32], [68, 71]];
+  for (const [x0, x1] of spans) for (let y = 115; y < 140; y++) for (let x = x0; x <= x1; x++) {
+    if (cur === 'white lace') {
+      const mesh = (x + y) % 2 === 0;
+      b.set(x, y, nightc(mesh ? [246, 244, 238] : [214, 212, 206], night, 0.35), mesh ? 0.92 : 0.65);
+    } else if (cur === 'green check') {
+      const g = ((x & 1) ^ (y & 1)) === 0;
+      const c: RGB = g ? (y % 2 === 0 ? [58, 128, 72] : [96, 168, 108]) : [234, 238, 228];
+      b.set(x, y, nightc(c, night, 0.4));
+    } else {
+      b.set(x, y, nightc((x + y) % 4 === 0 ? cd : cc, night, 0.4));
+    }
+  }
+}
+
+function windowBox(b: Buf, d: Design, sea: string, snowCover: boolean, night: boolean) {
+  if (!d.window_box || d.window_box === 'none') return;
+  const wood: RGB = nightc([124, 82, 48], night, 0.45), dk: RGB = nightc([82, 52, 28], night, 0.45), rim: RGB = nightc([158, 110, 68], night, 0.45);
+  b.rect(34, 136, 33, 1, nightc([74, 52, 34], night, 0.45));                              // soil line
+  b.rect(34, 137, 33, 1, rim); b.rect(34, 138, 33, 2, wood); b.rect(34, 140, 33, 1, dk);   // planter box on the sill line
+  for (const bx of [38, 49, 61]) b.rect(bx, 137, 1, 3, dk);                                // slats
+  const winter = sea === 'winter';
+  const leafL: RGB = nightc(winter ? [72, 106, 70] : [96, 180, 82], night, 0.45);
+  const leafD: RGB = nightc(winter ? [44, 72, 46] : [48, 126, 52], night, 0.45);
+  const blooms: RGB[] = d.window_box === 'herbs'
+    ? (sea === 'summer' ? [[216, 180, 254], [244, 244, 240]] : [])
+    : winter ? [[196, 54, 62]] : sea === 'autumn' ? [[234, 118, 24], [250, 204, 21], [190, 48, 62]]
+      : [[244, 63, 94], [250, 204, 21], [244, 114, 182], [248, 250, 252]];
+  for (let x = 35; x <= 65; x++) {
+    const k = hash(x * 3.7 + 19);
+    const h = winter ? (k > 0.55 ? 2 : 1) : (d.window_box === 'herbs' ? 3 + Math.floor(k * 3) : 2 + Math.floor(k * 3));
+    for (let j = 1; j <= h; j++) b.set(x, 136 - j, (j === h && k > 0.4) ? leafL : leafD);
+    if (k > 0.62 && (x % 3 !== 0)) { b.set(x, 137, leafD); if (k > 0.8) b.set(x, 138, leafL); }
+    if (blooms.length && k > 0.66) {
+      const bc = nightc(blooms[x % blooms.length], night, 0.4);
+      b.set(x, 136 - h, bc);
+      if (d.window_box === 'flowers' && k > 0.82) b.set(x, 137, bc);
+    }
+    if (snowCover && k > 0.4) b.set(x, 135, nightc([222, 232, 244], night, 0.4));
+  }
+}
+
+function houseplant(b: Buf, d: Design, night: boolean) {
+  if (!d.houseplant || d.houseplant === 'none') return;
+  const cx = 37, yBase = 149;
+  const potC: RGB = nightc([186, 112, 74], night, 0.4), potD: RGB = nightc([132, 72, 44], night, 0.4);
+  b.rect(cx - 2, yBase - 3, 5, 1, nightc([214, 140, 96], night, 0.4));
+  b.rect(cx - 1, yBase - 2, 3, 3, potC); b.set(cx + 1, yBase - 1, potD); b.set(cx + 1, yBase, potD);
+  const gL: RGB = nightc([84, 176, 94], night, 0.42), gM: RGB = nightc([44, 132, 64], night, 0.42), gD: RGB = nightc([24, 88, 44], night, 0.42);
+  if (d.houseplant === 'fern') {
+    for (const [dx, dy, c] of [[-3, -5, gL], [-2, -5, gM], [-1, -4, gD], [0, -4, gM], [1, -4, gD], [2, -5, gM], [3, -5, gL], [-2, -7, gL], [-1, -6, gM], [0, -7, gL], [0, -6, gD], [1, -6, gM], [2, -7, gL]] as const)
+      b.set(cx + dx, yBase + dy, c);
+  } else if (d.houseplant === 'monstera') {
+    for (const [sx, sy] of [[0, -4], [-1, -6], [1, -5], [0, -8]] as const) b.set(cx + sx, yBase + sy, gD);
+    b.rect(cx - 3, yBase - 8, 3, 2, gM); b.set(cx - 2, yBase - 8, gL); b.set(cx - 3, yBase - 7, gD);
+    b.rect(cx + 1, yBase - 7, 3, 2, gM); b.set(cx + 2, yBase - 7, gL);
+    b.rect(cx - 1, yBase - 11, 3, 2, gL); b.set(cx, yBase - 10, gM);
+  } else if (d.houseplant === 'fiddle leaf') {
+    const stem: RGB = nightc([104, 72, 46], night, 0.42);
+    for (let j = 4; j <= 10; j++) b.set(cx, yBase - j, stem);
+    b.rect(cx - 2, yBase - 8, 2, 3, gM); b.set(cx - 2, yBase - 8, gL);
+    b.rect(cx + 1, yBase - 10, 2, 3, gM); b.set(cx + 1, yBase - 10, gL);
+    b.rect(cx - 1, yBase - 13, 3, 3, gL); b.set(cx + 1, yBase - 11, gD);
+  }
+}
+
+function wallPiece(b: Buf, d: Design, w: PWorld, night: boolean, t: number) {
+  const wp = d.wall_piece;
+  if (!wp || wp === 'none') return;
+  if (wp === 'clock') {
+    const wood: RGB = nightc([96, 62, 36], night, 0.42), dk: RGB = nightc([64, 40, 24], night, 0.42);
+    b.rect(73, 120, 3, 1, wood); b.rect(72, 121, 5, 12, wood); b.rect(72, 121, 1, 12, dk);
+    b.rect(73, 122, 3, 3, nightc([242, 236, 220], night, 0.3));
+    const ha = ((w.hour % 12) / 12) * Math.PI * 2 - Math.PI / 2;
+    const ma = (w.hour % 1) * Math.PI * 2 - Math.PI / 2;
+    b.set(74 + Math.round(Math.cos(ma)), 123 + Math.round(Math.sin(ma)), [80, 84, 96]);
+    b.set(74 + Math.round(Math.cos(ha)), 123 + Math.round(Math.sin(ha)), [30, 32, 38]);
+    b.set(74, 123, [20, 22, 28]);
+    b.rect(73, 127, 3, 5, dk);
+    b.set(Math.sin(t * Math.PI) >= 0 ? 74 : 75, 130, nightc([214, 178, 86], night, 0.35));
+  } else if (wp === 'map') {
+    b.rect(72, 121, 6, 9, nightc([102, 68, 40], night, 0.42));
+    b.rect(73, 122, 4, 7, nightc([224, 210, 176], night, 0.4));
+    b.set(73, 123, nightc([122, 162, 194], night, 0.4)); b.set(76, 127, nightc([122, 162, 194], night, 0.4));
+    b.rect(74, 123, 2, 2, nightc([132, 158, 106], night, 0.4));
+    b.rect(73, 126, 2, 2, nightc([180, 144, 90], night, 0.4));
+    b.set(75, 125, nightc([202, 54, 48], night, 0.4));
+  } else if (wp === 'mirror') {
+    const gilt: RGB = nightc([188, 148, 68], night, 0.4), giltD: RGB = nightc([134, 100, 42], night, 0.4);
+    const gl: RGB = nightc([164, 196, 216], night, 0.45), glD: RGB = nightc([124, 160, 184], night, 0.45);
+    b.rect(73, 121, 4, 12, gilt); b.rect(72, 122, 6, 10, gilt);
+    b.rect(76, 122, 1, 10, giltD);
+    b.rect(73, 122, 4, 10, gl); b.rect(75, 127, 2, 4, glD);
+    const glint: RGB = night ? [210, 226, 244] : [248, 252, 255];
+    b.set(74, 123, glint); b.set(73, 124, glint);
+    if ((t % 4.5) < 0.35) { b.set(75, 123, [255, 255, 255]); b.set(74, 125, glint); }
+  } else if (wp === 'plate rack') {
+    const wood: RGB = nightc([110, 74, 46], night, 0.42), dk: RGB = nightc([78, 50, 30], night, 0.42);
+    b.rect(72, 121, 1, 12, dk); b.rect(77, 121, 1, 12, dk);
+    b.rect(72, 126, 6, 1, wood); b.rect(72, 132, 6, 1, wood);
+    const white: RGB = nightc([236, 240, 244], night, 0.38), blue: RGB = nightc([52, 98, 172], night, 0.38), terra: RGB = nightc([196, 96, 68], night, 0.4);
+    b.rect(73, 122, 2, 4, white); b.set(73, 123, blue);
+    b.rect(75, 123, 2, 3, terra); b.set(76, 124, white);
+    b.rect(73, 128, 2, 4, terra); b.set(74, 129, white);
+    b.rect(75, 128, 2, 4, white); b.set(76, 130, blue);
+  }
+}
+
+function porchProps(b: Buf, d: Design, sea: string, night: boolean, t: number, afterDoor: boolean) {
+  if (!afterDoor) {
+    if (d.door_pots === 'yes') {
+      const fl: RGB = sea === 'winter' ? [196, 54, 62] : sea === 'autumn' ? [234, 118, 24] : [244, 63, 94];
+      for (const [px, py, h] of [[82, 157, 3], [85, 156, 4]] as const) {
+        b.rect(px - 1, py - 2, 3, 1, nightc([206, 108, 66], night, 0.45));
+        b.rect(px - 1, py - 1, 3, 2, nightc([164, 72, 40], night, 0.45));
+        b.rect(px - 1, py - 2 - h, 3, h, nightc([46, 124, 56], night, 0.45));
+        b.set(px, py - 2 - h, nightc([84, 172, 92], night, 0.45));
+        if (sea !== 'winter' || px === 85) b.set(px + (px === 82 ? -1 : 1), py - 1 - h, nightc(fl, night, 0.4));
+      }
+    }
+    return;
+  }
+  if (d.doormat === 'yes') {
+    b.rect(79, 158, 5, 2, nightc([142, 98, 48], night, 0.45));
+    b.rect(80, 158, 3, 1, nightc([186, 140, 80], night, 0.45));
+  }
+  if (d.porch_light === 'lantern') {
+    const iron: RGB = nightc([46, 50, 58], night, 0.45);
+    b.set(82, 124, iron); b.rect(82, 125, 3, 1, iron); b.set(82, 126, iron); b.set(84, 126, iron); b.set(82, 127, iron); b.set(84, 127, iron); b.set(83, 128, iron);
+    b.rect(83, 126, 1, 2, night ? [253, 224, 138] : [186, 214, 226]);
+  }
+  if (d.wind_chime === 'yes') {
+    const sw = Math.round(Math.sin(t * 3.5) * (0.3 + windyNow() * 1.5) + Math.max(-2, Math.min(2, WIND / 22)));
+    b.set(84, 114, nightc([110, 74, 46], night, 0.45));
+    b.rect(83, 115, 3, 1, nightc([138, 96, 58], night, 0.45));
+    for (let k = 0; k < 3; k++) {
+      const len = k === 1 ? 5 : 4, cx = 83 + k + sw;
+      for (let j = 0; j < len; j++) b.set(cx, 116 + j, nightc(k === 1 ? [234, 198, 110] : [206, 212, 220], night, 0.42));
+    }
+  }
+}
+
+function gardenArch(b: Buf, d: Design, sea: string, prog: number, snowCover: boolean, night: boolean) {
+  if (!d.arch || d.arch === 'none') return;
+  const wood: RGB = nightc([118, 82, 52], night, 0.5), dk: RGB = nightc([78, 52, 32], night, 0.5);
+  for (let y = 136; y <= 156; y++) { b.set(169, y, wood); b.set(178, y, dk); }
+  for (let x = 169; x <= 178; x++) {
+    const dx = x - 173.5;
+    const ay = 131 + Math.round(dx * dx * 0.25);
+    b.set(x, ay, wood); b.set(x, ay + 1, dk);
+  }
+  const winter = sea === 'winter';
+  const leafC: RGB = nightc(winter ? [88, 66, 48] : sea === 'autumn' ? [156, 120, 50] : [54, 132, 54], night, 0.48);
+  const leafL: RGB = nightc(winter ? [110, 86, 66] : sea === 'autumn' ? [184, 96, 42] : [92, 174, 72], night, 0.48);
+  const flC: RGB = d.arch === 'clematis' ? [147, 51, 234] : [220, 38, 68];
+  const flL: RGB = d.arch === 'clematis' ? [216, 180, 254] : [253, 164, 175];
+  const bloom = !winter && (sea === 'summer' || (sea === 'spring' && prog > 0.45) || (sea === 'autumn' && prog < 0.4));
+  for (let y = 137; y <= 154; y += 2) {
+    for (const px of [169, 178]) {
+      const side = px === 169 ? 1 : -1;
+      b.set(px + side, y, leafC);
+      if (!winter) b.set(px, y - 1, leafL);
+      if (bloom && (y + px) % 4 === 1) b.set(px + side, y - 1, nightc(y % 3 === 0 ? flL : flC, night, 0.42));
+    }
+  }
+  for (let x = 169; x <= 178; x++) {
+    const dx = x - 173.5;
+    const ay = 131 + Math.round(dx * dx * 0.25);
+    b.set(x, ay - 1, x % 2 ? leafL : leafC);
+    if (snowCover) b.set(x, ay - 2, nightc([222, 232, 244], night, 0.45));
+    else if (bloom && x % 2 === 0) b.set(x, ay - 2, nightc(x % 4 === 0 ? flL : flC, night, 0.42));
+  }
+}
+
+const PATH_LAMP_XS = [176, 204, 226, 245] as const;
+function pathLights(b: Buf, night: boolean, glowOnly: boolean) {
+  for (const lx of PATH_LAMP_XS) {
+    if (!glowOnly) {
+      b.rect(lx, 156, 1, 2, nightc([52, 56, 64], night, 0.45));
+      b.rect(lx - 1, 155, 3, 1, nightc([74, 78, 88], night, 0.45));
+    }
+    if (!glowOnly || night) {
+      b.set(lx, 156, night ? [254, 243, 168] : [186, 204, 214]);
+      if (night && glowOnly) b.glow(lx, 156, 5, [253, 224, 138], 0.24);
+    }
+  }
+}
+
+function birdbath(b: Buf, w: PWorld, sea: string, frosty: boolean, snowCover: boolean, night: boolean, t: number, sun: SunShadow) {
+  const cx = 304, yBase = 158;
+  castSpan(b, cx - 2, cx + 2, yBase, 8, sun);
+  const stL: RGB = nightc([184, 182, 176], night, 0.45), stM: RGB = nightc([144, 142, 138], night, 0.45), stD: RGB = nightc([102, 100, 96], night, 0.45);
+  b.rect(cx - 2, yBase, 5, 1, stD); b.rect(cx - 1, yBase - 1, 3, 1, stM);
+  b.rect(cx - 1, yBase - 5, 3, 4, stM); b.rect(cx + 1, yBase - 5, 1, 4, stD);
+  b.rect(cx - 2, yBase - 6, 5, 1, stD); b.rect(cx - 3, yBase - 7, 7, 1, stM); b.set(cx - 3, yBase - 7, stL);
+  const iced = frosty || w.pond.ice >= 0.4 || sea === 'winter';
+  b.rect(cx - 2, yBase - 7, 5, 1, nightc(iced ? [212, 232, 246] : [86, 162, 206], night, 0.4));
+  if (iced) b.set(cx, yBase - 7, nightc([176, 204, 228], night, 0.4));
+  if (snowCover) { b.set(cx - 1, yBase - 8, nightc([224, 234, 244], night, 0.45)); b.set(cx + 1, yBase - 8, nightc([224, 234, 244], night, 0.45)); }
+  if (!iced && w.isDay && w.rain <= 0 && w.snow <= 0 && Math.abs(WIND) < 35 && w.temp > 10) {
+    const hop = Math.floor(t * 4) % 4 === 0 ? 1 : 0;
+    b.set(cx - 2, yBase - 8 - hop, [132, 98, 68]); b.set(cx - 1, yBase - 8 - hop, [132, 98, 68]); b.set(cx - 1, yBase - 9 - hop, [156, 118, 84]);
+    if (hop) { b.set(cx, yBase - 9, [224, 242, 254]); b.set(cx + 1, yBase - 8, [125, 211, 252]); }
+  }
+}
+
+function gnome(b: Buf, snowCover: boolean, night: boolean, sun: SunShadow) {
+  const cx = 248, yBase = 155;
+  castSpan(b, cx - 1, cx + 1, yBase, 6, sun);
+  b.rect(cx - 1, yBase, 3, 1, nightc([48, 34, 24], night, 0.45));
+  b.rect(cx - 1, yBase - 2, 3, 2, nightc([37, 99, 185], night, 0.45));
+  b.rect(cx - 1, yBase - 3, 3, 1, nightc([244, 244, 248], night, 0.45));
+  b.set(cx, yBase - 4, nightc([240, 194, 150], night, 0.45));
+  b.rect(cx - 1, yBase - 5, 3, 1, nightc([210, 42, 42], night, 0.45));
+  b.set(cx, yBase - 6, nightc(snowCover ? [226, 234, 244] : [210, 42, 42], night, 0.45));
+}
+
+function mailbox(b: Buf, snowCover: boolean, night: boolean, sun: SunShadow) {
+  const cx = 270, yBase = 157;
+  castSpan(b, cx - 1, cx + 1, yBase, 7, sun);
+  b.rect(cx, yBase - 4, 1, 5, nightc([110, 74, 46], night, 0.45));
+  b.rect(cx - 1, yBase - 6, 4, 2, nightc([62, 96, 128], night, 0.45));
+  b.rect(cx, yBase - 7, 2, 1, nightc(snowCover ? [226, 234, 244] : [94, 134, 168], night, 0.45));
+  b.set(cx - 1, yBase - 6, nightc([30, 34, 42], night, 0.45));
+  b.set(cx + 2, yBase - 7, nightc([220, 48, 48], night, 0.45));
 }
 
 // the path: from the house to the greenhouse, and on past the beds to the pond
@@ -1845,14 +2690,28 @@ function leaves(b: Buf, w: PWorld, u: Upkeep, night: boolean, t: number) {
 }
 
 // his tree, in the field behind the greenhouse: a sapling that grows over years, by the season
-function hisTree(b: Buf, tr: NonNullable<PWorld['tree']>, w: PWorld, night: boolean, t: number) {
+function hisTree(b: Buf, tr: NonNullable<PWorld['tree']>, w: PWorld, night: boolean, t: number, sun: SunShadow) {
   const sea = w.season || 'summer', prog = w.seasonProgress ?? 0.5, sz = Math.max(0.05, tr.size);
   const { x, y } = TREE_AT, hgt = Math.round(10 + sz * 34), r = Math.round(3 + sz * 11), tw = sz > 0.6 ? 2 : 1;
   const birch = tr.species === 'birch';
   const bark: RGB = birch ? [226, 222, 214] : [92, 64, 44];
+  const bare = sea === 'winter' || (sea === 'autumn' && prog > 0.85);
+  b.rect(x - 1, y, tw + 2, 1, [16, 22, 38], 0.26);
+  if (sun.active) {
+    const trReach = Math.round(sun.sx * (hgt - r) * 0.42);
+    const step = trReach >= 0 ? 1 : -1;
+    for (let i = 1; i <= Math.abs(trReach); i++) b.set(x + step * i, y, sun.col, sun.alpha * 0.65);
+    const cxSh = Math.round(x + sun.sx * hgt * 0.44);
+    const rx = Math.max(2, Math.round(r * (0.78 + Math.abs(sun.sx) * 0.35)));
+    const ry = Math.max(1, Math.round(r * 0.2));
+    for (let j = -ry; j <= ry; j++) for (let i = -rx; i <= rx; i++) {
+      const d = (i * i) / (rx * rx) + (j * j) / (ry * ry);
+      if (d <= 1 && (!bare || dith(cxSh + i, y + j, 0.32)) && (d < 0.65 || dith(cxSh + i, y + j, 0.62)))
+        b.set(cxSh + i, y + j, sun.col, sun.alpha * (1 - d * 0.45) * 0.8);
+    }
+  }
   for (let j = 0; j < hgt - r; j++) for (let i = 0; i < tw; i++) b.set(x + i, y - j, nightc(birch && (j + i) % 4 === 0 ? [40, 36, 34] : bark, night, 0.6));
   const cy = y - hgt + r;
-  const bare = sea === 'winter' || (sea === 'autumn' && prog > 0.85);
   const leafC: RGB = sea === 'spring' ? [120, 176, 70] : sea === 'autumn'
     ? mix([70, 120, 50], hex({ apple: '#d97706', maple: '#dc2626', birch: '#facc15', cherry: '#ea580c' }[tr.species] || '#d97706'), Math.min(1, prog * 1.3))
     : [58, 112, 52];
@@ -1893,7 +2752,8 @@ function feeder(b: Buf, w: PWorld, night: boolean, t: number, fill = 1) {
   }
 }
 
-function benchByPond(b: Buf, night: boolean) {
+function benchByPond(b: Buf, night: boolean, sun: SunShadow) {
+  castSpan(b, 290, 299, 157, 6, sun);
   const wood: RGB = nightc([139, 90, 43], night), dk: RGB = nightc([96, 60, 28], night);
   b.rect(289, 154, 12, 1, wood); b.rect(289, 151, 12, 1, wood); b.rect(290, 152, 1, 2, dk); b.rect(299, 152, 1, 2, dk);
   b.rect(290, 155, 1, 3, dk); b.rect(299, 155, 1, 3, dk);
@@ -1917,10 +2777,11 @@ function stringLights(b: Buf, d: Design, w: PWorld, t: number) {
   }
 }
 
-function signBoard(b: Buf, d: Design, night: boolean) {
+function signBoard(b: Buf, d: Design, night: boolean, sun: SunShadow) {
   const txt = (d.sign || '').slice(0, 14);
   if (!txt) return;
   const wdt = txt.length * 4 + 5, x0 = Math.round(212 - wdt / 2), y0 = 128;
+  castSpan(b, x0 + 1, x0 + wdt - 2, y0 + 14, 15, sun, 0.75);
   b.rect(x0 + 1, y0 + 8, 1, 7, nightc([96, 60, 28], night)); b.rect(x0 + wdt - 2, y0 + 8, 1, 7, nightc([96, 60, 28], night));
   b.rect(x0, y0, wdt, 9, nightc([110, 74, 46], night)); b.rect(x0 + 1, y0 + 1, wdt - 2, 7, nightc([176, 132, 84], night));
   text3(b, x0 + 3, y0 + 2, txt, nightc([60, 36, 20], night));
@@ -1944,12 +2805,19 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
   const sun = w.hour < 12 ? -1 : 1;                                       // sunflower heads turn east to west through the day
   for (let r = 0; r < 8; r++) {
     const y = 121 + r * 3, sc = 0.45 + 0.55 * (r / 7);
+    const depth = 1 - r / 7;
+    const depthC = (c: RGB): RGB => {
+      if (night) return mix(c, [12, 18, 38], depth * 0.22);
+      const cool = mix(c, snowCover ? [164, 188, 222] : [42, 66, 86], depth * 0.24);
+      return snowCover ? cool : mix(cool, [255, 240, 195], (1 - depth) * 0.08);
+    };
+    const rnightc = (c: RGB, k = 0.55): RGB => nightc(depthC(c), night, k);
     // the soil of the row (worked ground left to right as far as he has got)
     for (let x = FIELD_X0; x < FIELD_X0 + span * worked; x++) {
-      if (snowCover) { if (dith(x, y, 0.25)) b.set(x, y, nightc([174, 192, 214], night, 0.5)); continue; }
+      if (snowCover) { if (dith(x, y, 0.25)) b.set(x, y, rnightc([174, 192, 214], 0.5)); continue; }
       const clod = h2(x, r * 3) > 0.65;
-      b.set(x, y, nightc(clod ? [108, 78, 52] : dith(x, y, 0.45) ? [94, 68, 46] : [76, 52, 34], night, 0.55));
-      if (dith(x, y + 1, 0.42)) b.set(x, y + 1, nightc([108, 80, 54], night, 0.55), 0.45);
+      b.set(x, y, rnightc(clod ? [108, 78, 52] : dith(x, y, 0.45) ? [94, 68, 46] : [76, 52, 34]));
+      if (dith(x, y + 1, 0.42)) b.set(x, y + 1, rnightc([108, 80, 54]), 0.45);
     }
     if (!worked) continue;
     const col = f.crop ? CROP_COL[f.crop] || CROP_COL.corn : CROP_COL.corn;
@@ -1963,25 +2831,25 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
       const sway = (z: number, hgt: number) => Math.round((WIND / 28 + Math.sin(t * 2.2 + x * 0.3 + r) * windyNow() * 0.9) * (z / Math.max(1, hgt)) * (1 + hgt / 10));
       if (f.stage === 'stubble' || (!f.crop && f.stage !== 'grass')) {          // stubble, or weeds in bare ground
         if (f.stage === 'stubble' && k > 0.32) {
-          b.set(x, py - 1, nightc([196, 170, 110], night, 0.55));
-          if (sc > 0.65 && k > 0.6) b.set(x + 1, py - 2, nightc([170, 146, 90], night, 0.55));
+          b.set(x, py - 1, rnightc([196, 170, 110]));
+          if (sc > 0.65 && k > 0.6) b.set(x + 1, py - 2, rnightc([170, 146, 90]));
         }
-        if (h2(x, r) < f.weeds * 0.5) b.set(x, py - 1 - Math.round(f.weeds * 2), nightc([86, 140, 46], night, 0.55));
+        if (h2(x, r) < f.weeds * 0.5) b.set(x, py - 1 - Math.round(f.weeds * 2), rnightc([86, 140, 46]));
         continue;
       }
       if (!f.crop) continue;
       const st = f.stage, fr = f.frac;
       if (st === 'sown') {
         if (!snowCover && k > 0.35) {
-          b.set(x, py - 1, nightc([138, 102, 66], night, 0.55));
-          b.set(x + 1, py, nightc([78, 54, 34], night, 0.55));
-          if (k > 0.72) b.set(x + 1, py - 1, nightc([206, 182, 120], night, 0.55));
+          b.set(x, py - 1, rnightc([138, 102, 66]));
+          b.set(x + 1, py, rnightc([78, 54, 34]));
+          if (k > 0.72) b.set(x + 1, py - 1, rnightc([206, 182, 120]));
         }
         continue;
       }
       if (st === 'sprout') {
         if (snowCover) continue;
-        const gL = nightc([134, 239, 172], night, 0.5), gM = nightc([74, 222, 128], night, 0.5);
+        const gL = rnightc([134, 239, 172], 0.5), gM = rnightc([74, 222, 128], 0.5);
         b.set(x, py - 1, gM);
         if (sc > 0.62) { b.set(x - 1, py - 2, gL); b.set(x + 1, py - 2, gM); }
         else b.set(x + (k > 0.5 ? 1 : -1), py - 2, gL);
@@ -1999,9 +2867,9 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
       let hgt = Math.max(1, Math.round((H[f.crop] || H.corn)[Math.min(5, idx)] * sc * (0.8 + k * 0.4)));
       if (st === 'dead') hgt = Math.max(1, Math.round(hgt * 0.45));
       if (snowCover && hgt <= 2) continue;                                     // under the snow
-      const c = nightc(leaf, night, 0.55);
-      const cd = nightc(mix(leaf, [0, 0, 0], 0.28), night, 0.55);
-      const cL = nightc(mix(leaf, [255, 255, 220], 0.22), night, 0.55);
+      const c = rnightc(leaf);
+      const cd = rnightc(mix(leaf, [0, 0, 0], 0.28));
+      const cL = rnightc(mix(leaf, [255, 255, 220], 0.22));
 
       if (f.crop === 'pumpkins') {                                             // broad trailing vines + blossoms + distance-scaled pumpkins
         const spanV = sc > 0.65 ? 2 : 1;
@@ -2011,14 +2879,14 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
           if (st !== 'young' && sc > 0.76 && h2(x + i, r + 5) > 0.72) b.set(x + i, py - 2, cL);
         }
         if (st === 'flower' && k > (sc < 0.6 ? 0.65 : 0.5)) {
-          b.set(x, py - (sc < 0.56 ? 1 : 2), nightc(col.bloom, night, 0.5));
-          if (sc > 0.72) b.set(x + 1, py - 2, nightc([234, 179, 8], night, 0.5));
+          b.set(x, py - (sc < 0.56 ? 1 : 2), rnightc(col.bloom, 0.5));
+          if (sc > 0.72) b.set(x + 1, py - 2, rnightc([234, 179, 8], 0.5));
         }
         const pChance = sc < 0.56 ? 0.74 : sc < 0.74 ? 0.66 : 0.58;
         if ((st === 'ripe' || st === 'spent' || (st === 'flower' && fr > 0.55)) && k > pChance) {
           const baseP: RGB = st === 'flower' ? [116, 150, 56] : st === 'spent' ? [184, 96, 32] : col.ripe;
-          const pM = nightc(baseP, night, 0.5), pL = nightc(mix(baseP, [255, 210, 140], 0.35), night, 0.5), pD = nightc(mix(baseP, [60, 20, 8], 0.4), night, 0.5);
-          const stemC = nightc([64, 112, 42], night, 0.5);
+          const pM = rnightc(baseP, 0.5), pL = rnightc(mix(baseP, [255, 210, 140], 0.35), 0.5), pD = rnightc(mix(baseP, [60, 20, 8], 0.4), 0.5);
+          const stemC = rnightc([64, 112, 42], 0.5);
           if (sc < 0.56) {
             b.set(x, py, pM);
             if (k > 0.85) b.set(x + 1, py, pD);
@@ -2039,7 +2907,7 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
       }
 
       if (f.crop === 'beans') {                                                // wooden bean poles + climbing vine spirals + blossoms & pods
-        const poleC = nightc([120, 84, 50], night, 0.5), poleD = nightc([84, 56, 34], night, 0.5);
+        const poleC = rnightc([120, 84, 50], 0.5), poleD = rnightc([84, 56, 34], 0.5);
         for (let j = 0; j < hgt; j++) {
           const sx = x + sway(j, hgt);
           b.set(sx, py - j, j % 2 ? poleC : poleD);
@@ -2050,11 +2918,11 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
           }
         }
         if (st === 'flower' && hgt > 3) {
-          b.set(x - 1, py - Math.round(hgt * 0.65), nightc(col.bloom, night, 0.45));
-          if (sc > 0.6) b.set(x + 1, py - Math.round(hgt * 0.4), nightc([254, 240, 138], night, 0.45));
+          b.set(x - 1, py - Math.round(hgt * 0.65), rnightc(col.bloom, 0.45));
+          if (sc > 0.6) b.set(x + 1, py - Math.round(hgt * 0.4), rnightc([254, 240, 138], 0.45));
         }
         if ((st === 'ripe' || st === 'spent') && hgt > 3) {
-          const podC = nightc(st === 'ripe' ? [196, 214, 118] : col.dry, night, 0.5);
+          const podC = rnightc(st === 'ripe' ? [196, 214, 118] : col.dry, 0.5);
           const py1 = py - Math.round(hgt * 0.55);
           b.set(x + 1, py1, podC); b.set(x + 1, py1 + 1, podC);
           if (sc > 0.65) { b.set(x - 1, py - Math.round(hgt * 0.35), podC); b.set(x - 1, py - Math.round(hgt * 0.35) + 1, podC); }
@@ -2065,13 +2933,13 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
       if (f.crop === 'winter wheat') {                                         // textured stems + 2px drooping wheat-ear heads + wind waves
         if (k < 0.2) continue;
         const wave = ((((x - DRIFT * 0.8 + r * 3) % 22) + 22) % 22) < 3 + windyNow() * 4;
-        const stalkC = st === 'ripe' ? nightc([156, 134, 68], night, 0.55) : c;
+        const stalkC = st === 'ripe' ? rnightc([156, 134, 68]) : c;
         for (let j = 0; j < hgt - 1; j++) b.set(x + sway(j, hgt), py - j, j === 0 ? cd : stalkC);
         const topX = x + sway(hgt, hgt), lean = st === 'ripe' || st === 'spent' ? (WIND < -5 ? -1 : 1) : 0;
         const headBase: RGB = st === 'flower' ? col.bloom : st === 'ripe' ? [240, 212, 118] : st === 'spent' || st === 'dead' ? col.dry : mix(leaf, [220, 236, 150], 0.3);
-        const headC = nightc(wave ? mix(headBase, [255, 250, 220], 0.4) : headBase, night, 0.55);
+        const headC = rnightc(wave ? mix(headBase, [255, 250, 220], 0.4) : headBase);
         b.set(topX, py - hgt + 1, headC);
-        b.set(topX + lean, py - hgt, wave ? nightc([253, 236, 160], night, 0.5) : headC);
+        b.set(topX + lean, py - hgt, wave ? rnightc([253, 236, 160], 0.5) : headC);
         continue;
       }
 
@@ -2094,24 +2962,24 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
       const top = x + sway(hgt, hgt) + (kink && hgt > 3 ? kink : 0);
       if (f.crop === 'corn') {
         if ((st === 'flower' || st === 'ripe') && k > (st === 'ripe' ? 0.58 : sc < 0.6 ? 0.55 : 0.45)) {
-          const tasC = nightc(st === 'ripe' ? [184, 158, 92] : [212, 192, 114], night, 0.5);
+          const tasC = rnightc(st === 'ripe' ? [184, 158, 92] : [212, 192, 114], 0.5);
           b.set(top, py - hgt, tasC);
           if (sc > 0.65 && hgt > 6) b.set(top, py - hgt - 1, tasC);
           if (sc > 0.78 && k > 0.72) b.set(top + (k > 0.86 ? 1 : -1), py - hgt, tasC);
         }
         if ((st === 'ripe' || st === 'spent' || (st === 'flower' && fr > 0.4)) && hgt > 5) {
           const midY = py - Math.round(hgt * 0.46), midX = x + sway(hgt * 0.46, hgt) + 1;
-          const cobL = nightc(st === 'flower' ? [150, 190, 90] : st === 'spent' ? [196, 170, 96] : [250, 204, 21], night, 0.5);
-          const cobD = nightc(st === 'flower' ? [108, 148, 62] : st === 'spent' ? [146, 120, 68] : [202, 138, 4], night, 0.5);
+          const cobL = rnightc(st === 'flower' ? [150, 190, 90] : st === 'spent' ? [196, 170, 96] : [250, 204, 21], 0.5);
+          const cobD = rnightc(st === 'flower' ? [108, 148, 62] : st === 'spent' ? [146, 120, 68] : [202, 138, 4], 0.5);
           b.set(midX, midY, cobL); b.set(midX, midY - 1, cobL);
           if (sc > 0.65) { b.set(midX + 1, midY - 1, cobD); b.set(midX + 1, midY - 2, cobL); }
         }
       } else if (f.crop === 'sunflowers' && (st === 'flower' || st === 'ripe' || st === 'spent')) {
         const droop = st !== 'flower';
         const hx = top + (droop ? 1 : sun), hy = py - hgt + (droop ? 2 : 0);
-        const pBright = nightc(st === 'flower' ? [250, 204, 21] : st === 'ripe' ? [202, 146, 46] : col.dry, night, 0.5);
-        const pWarm = nightc(st === 'flower' ? [234, 179, 8] : [164, 114, 38], night, 0.5);
-        const disc = nightc([96, 54, 22], night, 0.5);
+        const pBright = rnightc(st === 'flower' ? [250, 204, 21] : st === 'ripe' ? [202, 146, 46] : col.dry, 0.5);
+        const pWarm = rnightc(st === 'flower' ? [234, 179, 8] : [164, 114, 38], 0.5);
+        const disc = rnightc([96, 54, 22], 0.5);
         if (sc > 0.68 && st !== 'spent') {
           b.set(hx - 1, hy - 1, pBright); b.set(hx, hy - 1, pWarm); b.set(hx + 1, hy - 1, pBright);
           b.set(hx - 1, hy, pWarm); b.set(hx + 1, hy, pWarm);
@@ -2120,14 +2988,14 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
         } else if (st !== 'spent') {
           b.set(hx - 1, hy, pBright); b.set(hx + 1, hy, pBright); b.set(hx, hy - 1, pWarm); b.set(hx, hy, disc);
         } else {
-          b.set(hx, hy, disc); b.set(hx + 1, hy, nightc(col.dry, night, 0.5));
+          b.set(hx, hy, disc); b.set(hx + 1, hy, rnightc(col.dry, 0.5));
         }
       }
     }
     // weeds coming up between the rows
     if (f.crop && !snowCover) for (let x = FIELD_X0 + 1; x < FIELD_X1; x += 5) if (h2(x, r * 7) < f.weeds * 0.6) {
       const wh = 1 + Math.round(f.weeds * 2 * sc);
-      for (let j = 1; j <= wh; j++) b.set(x, y - j, nightc([96, 156, 50], night, 0.55));
+      for (let j = 1; j <= wh; j++) b.set(x, y - j, rnightc([96, 156, 50]));
     }
   }
   // crows, when there is seed or ripe grain to steal and nothing to scare them off
@@ -2145,20 +3013,21 @@ function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCove
 }
 
 export const SCARECROW = { x: 300, y: 141 };
-function scarecrow(b: Buf, sc: { name?: string; down?: boolean }, night: boolean, t: number) {
+function scarecrow(b: Buf, sc: { name?: string; down?: boolean }, night: boolean, t: number, sun: SunShadow) {
   const { x, y } = SCARECROW;
   const pole: RGB = nightc([120, 84, 50], night, 0.5), poleD: RGB = nightc([84, 56, 34], night, 0.5);
   const coat: RGB = nightc([96, 64, 120], night, 0.5), coatL: RGB = nightc([126, 88, 154], night, 0.5), coatD: RGB = nightc([66, 42, 86], night, 0.5);
   const straw: RGB = nightc([226, 196, 110], night, 0.5), head: RGB = nightc([204, 172, 120], night, 0.5);
   const hat: RGB = nightc([68, 48, 34], night, 0.5), hatD: RGB = nightc([44, 30, 22], night, 0.5);
   if (sc.down) {                                                            // blown over: lying in the rows
+    b.rect(x - 7, y + 1, 14, 1, [16, 22, 38], 0.22);
     b.rect(x - 7, y, 14, 1, pole); b.rect(x - 4, y - 1, 5, 2, coat); b.set(x - 5, y - 1, straw);
     b.rect(x + 2, y - 1, 2, 2, head); b.rect(x + 4, y - 2, 3, 2, hat);
     return;
   }
   const sway = Math.round(Math.sin(t * 1.6) * windyNow() * 1.2 + WIND / 40);
-  // ground contact shadow
-  b.rect(x - 1, y + 1, 3, 1, [0, 0, 0], 0.3);
+  // ground contact AO + sun cast shadow
+  castSpan(b, x - 1, x + 1, y + 1, 16, sun, 0.85);
   b.rect(x, y - 13, 1, 14, pole); b.set(x, y, poleD);
   // flared coat with highlight & hem
   for (let row = 0; row < 5; row++) {
@@ -2181,17 +3050,21 @@ function scarecrow(b: Buf, sc: { name?: string; down?: boolean }, night: boolean
 }
 
 export const WOODPILE = { x: 256, y: 158 }, CHOP_BLOCK = { x: 264, y: 158 };
-function woodpile(b: Buf, wood: number, night: boolean, chopping: boolean, snowCover: boolean) {
+function woodpile(b: Buf, wood: number, night: boolean, chopping: boolean, snowCover: boolean, sun: SunShadow) {
   const end: RGB = nightc([196, 150, 96], night, 0.5), ring: RGB = nightc([150, 104, 60], night, 0.5), bark: RGB = nightc([96, 64, 40], night, 0.5);
   const crevice: RGB = nightc([48, 30, 18], night, 0.5);
   const rows = Math.round(Math.max(0, Math.min(1, wood)) * 4);
-  if (rows > 0) b.rect(WOODPILE.x - 6, WOODPILE.y - rows * 2, 12, rows * 2, crevice);
+  if (rows > 0) {
+    castSpan(b, WOODPILE.x - 6, WOODPILE.x + 5, WOODPILE.y, rows * 2, sun);
+    b.rect(WOODPILE.x - 6, WOODPILE.y - rows * 2, 12, rows * 2, crevice);
+  }
   for (let r = 0; r < rows; r++) for (let i = 0; i < 4 - (r > 2 ? 1 : 0); i++) {
     const lx = WOODPILE.x - 6 + i * 3 + (r % 2), ly = WOODPILE.y - 2 - r * 2;
     b.set(lx, ly, end); b.set(lx + 1, ly, ring); b.set(lx, ly + 1, ring); b.set(lx + 1, ly + 1, bark);
   }
   if (snowCover && rows) b.rect(WOODPILE.x - 6, WOODPILE.y - 2 - rows * 2, 12, 1, [224, 234, 244]);
   // the chopping block, with the shaded steel axe left in it when he is not using it
+  castSpan(b, CHOP_BLOCK.x - 2, CHOP_BLOCK.x + 2, CHOP_BLOCK.y, 4, sun);
   b.rect(CHOP_BLOCK.x - 2, CHOP_BLOCK.y - 3, 5, 3, nightc([120, 84, 50], night, 0.5));
   b.rect(CHOP_BLOCK.x + 2, CHOP_BLOCK.y - 2, 1, 2, bark);
   b.rect(CHOP_BLOCK.x - 2, CHOP_BLOCK.y - 3, 5, 1, end);
@@ -2218,12 +3091,12 @@ function stove(b: Buf, lit: boolean, night: boolean, cooking: boolean, t: number
 }
 
 export const SNOWMAN_AT = { x: 180, y: 160 };
-function snowman(b: Buf, size: number, night: boolean) {
+function snowman(b: Buf, size: number, night: boolean, sun: SunShadow) {
   const s = Math.max(0.2, Math.min(1, size)), { x, y } = SNOWMAN_AT;
   const white: RGB = nightc([240, 246, 252], night, 0.4), shade: RGB = nightc([156, 178, 206], night, 0.4);
   const r1 = Math.max(1, Math.round(4 * s)), r2 = Math.max(1, Math.round(3 * s)), r3 = Math.max(1, Math.round(2 * s));
   const lean = s < 0.6 ? 1 : 0;
-  b.rect(x - r1, y - 1, r1 * 2 + 1, 1, [0, 0, 0], 0.28);
+  castSpan(b, x - r1, x + r1, y - 1, (r1 + r2 + r3) * 2, sun);
   const ball = (cx: number, cy: number, r: number) => { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r + r * 0.5) b.set(cx + i, cy + j, j > r / 3 || i > r / 2 ? shade : white); };
   ball(x, y - r1, r1); ball(x + lean, y - 2 * r1 - r2 + 1, r2); ball(x + lean * 2, y - 2 * r1 - 2 * r2 - r3 + 2, r3);
   const hy = y - 2 * r1 - 2 * r2 - r3 + 2;
@@ -2236,8 +3109,10 @@ function snowman(b: Buf, size: number, night: boolean) {
 }
 
 export const FIRE_AT = { x: 281, y: 159 };
-function firepit(b: Buf, burning: boolean, night: boolean, t: number) {
+function firepit(b: Buf, burning: boolean, night: boolean, t: number, sun: SunShadow) {
   const { x, y } = FIRE_AT;
+  castSpan(b, x - 4, x + 4, y, 2, sun, 0.85);
+  castSpan(b, x - 11, x - 7, y, 2, sun, 0.85);
   const stL: RGB = nightc([140, 136, 130], night, 0.45), stM: RGB = nightc([96, 92, 88], night, 0.45), stD: RGB = nightc([62, 58, 56], night, 0.45);
   // rounded hearth stone ring
   for (const sx of [-4, -2, 0, 2, 4]) {
@@ -2293,8 +3168,9 @@ function aquarium(b: Buf, aq: NonNullable<PWorld['aquarium']>, night: boolean, t
 }
 
 export const TELESCOPE = { x: 214, y: 160 };
-function telescope(b: Buf, night: boolean) {
+function telescope(b: Buf, night: boolean, sun: SunShadow) {
   const { x, y } = TELESCOPE;
+  castSpan(b, x - 3, x + 3, y - 1, 20, sun, 0.7);
   const legL: RGB = nightc([120, 126, 138], night, 0.3), legD: RGB = nightc([72, 78, 90], night, 0.3);
   const brassL: RGB = [234, 179, 8], brassD: RGB = [180, 110, 24];
   const tubeL: RGB = [241, 245, 249], tubeD: RGB = [148, 163, 184];
@@ -2309,6 +3185,74 @@ function telescope(b: Buf, night: boolean) {
   b.set(x + 6, y - 25, [125, 211, 252]);                                    // objective lens glint
 }
 
+function indoorShade(b: Buf, w: PWorld, d: Design, night: boolean, reading: boolean, lightOn: boolean) {
+  const ao = (x0: number, y0: number, wdt: number, hgt: number, a: number) => b.rect(x0, y0, wdt, hgt, [12, 10, 20], a);
+  // 1. Study interior AO & light falloff (x = -44..-1, y = 121..150)
+  ao(-44, 122, 44, 1, 0.20);
+  ao(-44, 122, 3, 3, 0.14); ao(-3, 122, 3, 3, 0.14);
+  ao(-44, 150, 44, 1, 0.18);
+  ao(-44, 148, 3, 2, 0.16); ao(-3, 148, 3, 2, 0.16);
+  ao(-40, 142, 10, 2, 0.24); ao(-40, 148, 10, 2, 0.22);
+  ao(-26, 149, 4, 1, 0.24);
+  for (const sy of [124, 131, 137, 143]) ao(-18, sy, 14, 1, 0.16);
+
+  const studyLamp = d.lamp === 'on' && (night || w.hour < 8 || w.hour > 17 || w.cloud > 75);
+  for (let y = 121; y <= 150; y++) for (let x = -44; x <= -1; x++) {
+    if (studyLamp && x >= -39 && x <= -36 && y >= 134 && y <= 135) continue;
+    if (w.stoveLit && x >= -25 && x <= -23 && y === 146) continue;
+    let ill = night ? 0.12 : 0.22;
+    if (studyLamp) ill += 0.85 * Math.max(0, 1 - Math.hypot((x + 37) / 22, (y - 136) / 16) * 0.75);
+    if (w.stoveLit) ill += 0.55 * Math.max(0, 1 - Math.hypot((x + 24) / 14, (y - 146) / 10));
+    if (!night) ill += 0.72 * Math.max(0, 1 - Math.hypot((x + 1) / 36, (y - 138) / 22));
+    const dark = (1 - Math.min(1, ill)) * (night ? 0.34 : 0.28);
+    if (dark > 0.015) b.set(x, y, [12, 14, 28], dark);
+  }
+
+  // 2. Main room interior AO & light falloff (x = 0..77, y = 112..150)
+  ao(0, 114, 78, 1, 0.22);
+  ao(0, 114, 3, 3, 0.16); ao(75, 114, 3, 3, 0.16);
+  ao(0, 150, 78, 1, 0.16);
+  ao(0, 148, 3, 2, 0.18); ao(75, 148, 3, 2, 0.18);
+  ao(4, 143, 24, 1, 0.24); ao(6, 149, 21, 1, 0.22);
+  ao(42, 149, 20, 1, 0.26);
+  ao(65, 148, 6, 2, 0.22); ao(74, 144, 4, 1, 0.18); ao(74, 149, 4, 1, 0.22);
+  ao(31, 141, 39, 1, 0.16);
+
+  const winVis = w.isDay ? Math.max(0.25, 1 - w.cloud / 120) * (1 - (w.upkeep?.windows ?? 0) * 0.4) : 0;
+  const readLamp = reading && (!w.isDay || w.hour > 16.5 || w.cloud > 80);
+  for (let y = 112; y <= 150; y++) for (let x = 0; x < 78; x++) {
+    if (x >= 34 && x < 67 && y >= 118 && y < 135) continue;
+    if (readLamp && x >= 75 && x <= 77 && y >= 139 && y <= 140) continue;
+    let ill = night ? 0.14 : 0.22;
+    if (winVis > 0) ill += winVis * Math.max(0, 1 - Math.hypot((x - 50) / 46, (y - 128) / 28) * 0.78);
+    if (lightOn) ill += 0.85 * Math.max(0, 1 - Math.hypot((x - 16) / 20, (y - 128) / 18));
+    if (readLamp) ill += 0.8 * Math.max(0, 1 - Math.hypot((x - 76) / 18, (y - 140) / 14));
+    const dark = (1 - Math.min(1, ill)) * (night ? 0.30 : 0.28);
+    if (dark > 0.015) b.set(x, y, [14, 14, 28], dark);
+  }
+
+  // 3. Attic AO & light falloff (x = 1..77, y = roofTop(x)+3 .. 111)
+  ao(4, 109, 6, 3, 0.18); ao(68, 109, 7, 3, 0.18);
+  ao(1, 111, 77, 1, 0.14);
+  ao(44, 107, 11, 1, 0.20); ao(44, 111, 11, 1, 0.18);
+  ao(36, 111, 3, 1, 0.18); ao(15, 111, 15, 1, 0.18);
+
+  const scrOn = !!w.office?.screen;
+  for (let x = 1; x < 78; x++) {
+    const y0 = Math.ceil(roofTop(x) + 3);
+    for (let y = y0; y <= 111; y++) {
+      if (x >= TANK.x0 && x <= TANK.x1 && y >= TANK.top && y < TANK.base) continue;
+      if (scrOn && ((x >= 45 && x <= 47) || (x >= 50 && x <= 52)) && y >= 99 && y <= 101) continue;
+      let ill = 0.18;
+      if (w.isDay) ill += Math.max(0.2, 1 - w.cloud / 120) * Math.max(0, 1 - Math.hypot((x - 24) / 36, (y - 92) / 22) * 0.75);
+      ill += 0.48 * Math.max(0, 1 - Math.hypot((x - 22) / 18, (y - 104) / 12));
+      if (scrOn) ill += 0.65 * Math.max(0, 1 - Math.hypot((x - 48) / 18, (y - 100) / 12));
+      const dark = (1 - Math.min(1, ill)) * 0.30;
+      if (dark > 0.015) b.set(x, y, [12, 14, 26], dark);
+    }
+  }
+}
+
 // ── the whole frame ────────────────────────────────────────────────────────
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
@@ -2317,26 +3261,37 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const d: Design = { ...DESIGN0, ...(w.design || {}) } as Design;
   const u: Upkeep = { ...UPKEEP0, ...(w.upkeep || {}), weeds: { ...(w.upkeep?.weeds || {}) } } as Upkeep;
   const sea = w.season || 'summer', prog = w.seasonProgress ?? 0.5;
-  sky(b, w, t);
+  const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
+  const sunX = 60 + st * 220, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
+  const clouds = activeClouds(w);
+  sky(b, w, t, clouds, sunX);
   const skyCopy = b.d.slice();
   const glass = new Uint8Array(W * H);
   const snowing = w.snow > 0, raining = w.rain > 0, frosty = w.temp < 0;
   const snowCover = snowing || u.snow_ground > 0.25;
   const night = !w.isDay;
+  const sun = sunShadow(w, snowCover);
   // the field to the foothills, then the ground, by the season
   const grass: [RGB, RGB] = sea === 'spring' ? [[118, 170, 60], [92, 150, 30]] : sea === 'summer' ? [[101, 140, 54], [77, 124, 15]]
     : sea === 'autumn' ? [mix([101, 140, 54], [160, 140, 70], prog), mix([77, 124, 15], [130, 112, 50], prog)] : [[138, 128, 82], [118, 110, 70]];
-  for (let y = 116; y < WH; y++) for (let x = X0; x < X1; x++) {
-    let c: RGB;
-    if (snowCover) {
-      const drift = Math.sin(x * 0.08 + y * 0.35) * 0.5 + 0.5;
-      c = drift > 0.65 && dith(x, y, 0.55) ? [222, 232, 244] : dith(x, y, 0.3) ? [196, 212, 230] : [210, 224, 238];
+  for (let y = 116; y < WH; y++) {
+    const fDepth = Math.max(0, Math.min(1, (150 - y) / 34));
+    for (let x = X0; x < X1; x++) {
+      let c: RGB;
+      if (snowCover) {
+        const drift = Math.sin(x * 0.08 + y * 0.35) * 0.5 + 0.5;
+        c = drift > 0.65 && dith(x, y, 0.55) ? [222, 232, 244] : dith(x, y, 0.3) ? [196, 212, 230] : [210, 224, 238];
+      }
+      else if (frosty) c = dith(x, y, 0.55) ? [196, 204, 196] : grass[1];
+      else c = dith(x, y, 0.4) ? grass[0] : grass[1];
+      if (!night && y < 156) {
+        c = mix(c, snowCover ? [174, 196, 224] : [48, 76, 78], fDepth * 0.2);
+        if (!snowCover) c = mix(c, [248, 234, 178], (1 - fDepth) * 0.06);
+      }
+      if (y >= 156) c = mix(c, [74, 54, 36], snowCover ? 0.15 : 0.45);
+      if (night) c = mix(c, [24, 30, 52], 0.55);          // moonlight, not daylight
+      b.set(x, y, c);
     }
-    else if (frosty) c = dith(x, y, 0.55) ? [196, 204, 196] : grass[1];
-    else c = dith(x, y, 0.4) ? grass[0] : grass[1];
-    if (y >= 156) c = mix(c, [74, 54, 36], snowCover ? 0.15 : 0.45);
-    if (night) c = mix(c, [24, 30, 52], 0.55);          // moonlight, not daylight
-    b.set(x, y, c);
   }
   // wind running through the field: lighter bands of bent grass moving across it
   if (!snowCover && Math.abs(WIND) > 12) {
@@ -2347,8 +3302,23 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     }
   }
   if (w.field && w.field.stage !== 'grass') field(b, w, w.field, night, t, snowCover);
-  if (w.field?.scarecrow) scarecrow(b, w.field.scarecrow, night, t);
-  if (w.tree) hisTree(b, w.tree, w, night, t);
+  if (w.field?.scarecrow) scarecrow(b, w.field.scarecrow, night, t, sun);
+  if (w.tree) hisTree(b, w.tree, w, night, t, sun);
+  castSpan(b, 248, 252, 158, 12, sun, 0.85);
+  if (sun.active) {
+    const tipX = 250 + Math.round(sun.sx * 24);
+    const xStart = Math.min(247, tipX), xEnd = Math.max(253, tipX);
+    for (let x = xStart; x <= xEnd; x++) {
+      const f = sun.sx >= 0 ? Math.max(0, (x - 250) / Math.max(1, tipX - 250)) : Math.max(0, (250 - x) / Math.max(1, 250 - tipX));
+      const ry = Math.max(0.5, (1 - f) * 2.2);
+      for (let dy = -2; dy <= 2; dy++) {
+        if (Math.abs(dy) > ry) continue;
+        const yy = 157 + dy;
+        if (f > 0.35 && !dith(x, yy, 0.72 - f * 0.4)) continue;
+        b.set(x, yy, sun.col, sun.alpha * (1 - f * 0.55) * 0.85);
+      }
+    }
+  }
   // a pine, about 3.5 m: 5 overlapping scalloped bough tiers with lit upper-left rim & dark undersides
   for (let j = 0; j < 44; j++) {
     const tier = Math.floor(j / 8), inTier = j % 8;
@@ -2368,49 +3338,105 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   }
   b.rect(249, 154, 3, 4, nightc([87, 60, 36], night, 0.5));
   b.rect(251, 154, 1, 4, nightc([58, 38, 22], night, 0.5));
-  b.rect(248, 158, 5, 1, [0, 0, 0], 0.25);
+  b.rect(248, 158, 5, 1, [16, 22, 38], 0.24);
   if (d.feeder === 'yes') feeder(b, w, night, t, w.feederFill ?? 1);
-  pond(b, w, t);
-  if (d.bench === 'yes') benchByPond(b, night);
+  pond(b, w, d, t);
+  if (d.bench === 'yes') benchByPond(b, night, sun);
+  if (d.birdbath === 'yes') birdbath(b, w, sea, frosty, snowCover, night, t, sun);
   const doingNow = (x: PWorld['delamain'] | undefined | null) => (x && !x.walking ? x.doing : '');
   const busy = (what: string) => doingNow(w.delamain) === what;
-  woodpile(b, w.wood ?? 0.6, night, busy('chop'), snowCover);
-  if (w.firepit || busy('campfire')) firepit(b, busy('campfire'), night, t);
+  woodpile(b, w.wood ?? 0.6, night, busy('chop'), snowCover, sun);
+  if (w.firepit || busy('campfire')) firepit(b, busy('campfire'), night, t, sun);
   path(b, d, u, night, t);
   if (u.snow_path > 0.1 || snowCover) for (const [x0, x1] of PATHS) for (let x = x0; x <= x1; x++) for (let y = 157; y < 160; y++)
     if (h2(x, y) < Math.max(u.snow_path, snowCover ? 0.6 : 0)) b.set(x, y, nightc([218, 228, 240], night, 0.45));
+  if (sun.active) {
+    if (sun.sx > 0.08) {
+      const reach = Math.round(sun.sx * 22);
+      for (let x = 82; x <= 82 + reach; x++) {
+        const f = (x - 82) / Math.max(1, reach);
+        const topY = Math.round(153 + f * 5);
+        for (let y = topY; y < WH; y++) {
+          if (f > 0.35 && !dith(x, y, 0.72 - f * 0.38)) continue;
+          b.set(x, y, sun.col, sun.alpha * (1 - f * 0.55) * 0.85);
+        }
+      }
+      const gReach = Math.round(sun.sx * 16);
+      for (let x = 169; x <= 169 + gReach; x++) {
+        const f = (x - 169) / Math.max(1, gReach);
+        const topY = Math.round(152 + f * 6);
+        for (let y = topY; y < WH; y++) {
+          if (!dith(x, y, 0.55 - f * 0.28)) continue;
+          b.set(x, y, sun.col, sun.alpha * (1 - f * 0.55) * 0.48);
+        }
+      }
+    } else if (sun.sx < -0.08) {
+      const gReach = Math.round(-sun.sx * 14);
+      for (let x = 85 - gReach; x <= 85; x++) {
+        const f = (85 - x) / Math.max(1, gReach);
+        const topY = Math.round(152 + f * 6);
+        for (let y = topY; y < WH; y++) {
+          if (!dith(x, y, 0.55 - f * 0.28)) continue;
+          b.set(x, y, sun.col, sun.alpha * (1 - f * 0.55) * 0.48);
+        }
+      }
+    }
+  }
+  if (d.path_lights === 'solar') pathLights(b, night, false);
+  if (d.mailbox === 'yes') mailbox(b, snowCover, night, sun);
   // a rain barrel by the greenhouse, and a lamp post on the path
+  castSpan(b, 170, 175, 157, 9, sun);
+  castSpan(b, 174, 174, 157, 28, sun, 0.65);
   for (let j = 0; j < 9; j++) for (let i = 0; i < 6; i++) b.set(170 + i, 148 + j, j === 2 || j === 6 ? [68, 64, 60] : i === 0 || i === 5 ? [96, 60, 28] : [139, 90, 43]);
   b.rect(170, 147, 6, 1, [61, 50, 40]);
   b.rect(258 - 84, 127, 1, 30, [55, 55, 60]); b.rect(257 - 84, 125, 3, 3, night ? [253, 230, 138] : [120, 120, 125]); b.rect(256 - 84, 124, 5, 1, [55, 55, 60]);
-  signBoard(b, d, night);
+  signBoard(b, d, night, sun);
   // fence, about 1.1 m, in the colour he chose, worn where the paint has gone
   if (d.fence !== 'none') {
+    for (let x = 178; x < 246; x += 8) castSpan(b, x, x + 1, 157, 15, sun, 0.72);
+    if (sun.active) {
+      const railShift = Math.round(sun.sx * 4);
+      for (let x = 178; x < 246; x++) if (dith(x + railShift, 156, 0.45)) b.set(x + railShift, 156, sun.col, sun.alpha * 0.35);
+    }
     const fc = FENCES[d.fence] || FENCES.weathered;
     const fcol = (x: number, y: number): RGB => nightc(h2(x, y) < u.fence_paint * 0.8 ? [120, 113, 108] : fc, night, 0.5);
     for (let x = 178; x < 246; x += 8) { for (let y = 143; y < 157; y++) { b.set(x, y, fcol(x, y)); b.set(x + 1, y, fcol(x + 1, y)); } b.set(x, 142, fcol(x, 142)); }
     for (let x = 178; x < 246; x++) { b.set(x, 146, fcol(x, 146)); b.set(x, 151, fcol(x, 151)); }
   }
+  if (d.arch && d.arch !== 'none') {
+    castSpan(b, 169, 169, 156, 22, sun, 0.7);
+    castSpan(b, 178, 178, 156, 22, sun, 0.7);
+    gardenArch(b, d, sea, prog, snowCover, night);
+  }
   if (d.lights !== 'none') stringLights(b, d, w, t);
   // outdoor beds, 25 cm, with whatever weeds have come up in them
-  for (let i = 8; i < 11; i++) { bedLow(b, SPOTS[i].x, SPOTS[i].y, 20, w.spots[i]?.water, snowCover); weedsIn(b, SPOTS[i].x, SPOTS[i].y, 10, u.weeds[String(i)] || 0, night, t, sea); }
+  for (let i = 8; i < 11; i++) {
+    castSpan(b, SPOTS[i].x - 10, SPOTS[i].x + 9, SPOTS[i].y + 5, 6, sun, 0.78);
+    bedLow(b, SPOTS[i].x, SPOTS[i].y, 20, w.spots[i]?.water, snowCover);
+    weedsIn(b, SPOTS[i].x, SPOTS[i].y, 10, u.weeds[String(i)] || 0, night, t, sea);
+  }
+  if (d.gnome === 'yes') gnome(b, snowCover, night, sun);
   lawn(b, w, u, night, t);
-  if (w.snowman) snowman(b, w.snowman.size, night);
-  if (busy('stars')) telescope(b, night);
+  if (w.snowman) snowman(b, w.snowman.size, night, sun);
+  if (busy('stars')) telescope(b, night, sun);
   // ── the greenhouse: 2.2 m walls, a 3.6 m ridge ──
   const gx0 = 86, gx1 = 168, eaveY = 125, peakY = 108, gcx = (gx0 + gx1) / 2;
   const roofAt = (x: number) => (x < gcx ? eaveY - (x - gx0) / (gcx - gx0) * (eaveY - peakY) : peakY + (x - gcx) / (gx1 - gcx) * (eaveY - peakY));
   for (let y = 153; y < WH; y++) for (let x = gx0 + 1; x < gx1; x++) b.set(x, y, dith(x, y, 0.45) ? [168, 162, 158] : [120, 113, 108]);
-  for (let i = 5; i < 8; i++) { bed(b, SPOTS[i].x, SPOTS[i].y, 22, w.spots[i]?.water, false); weedsIn(b, SPOTS[i].x, SPOTS[i].y, 11, u.weeds[String(i)] || 0, night, t, 'summer'); }
+  for (let i = 5; i < 8; i++) {
+    b.rect(SPOTS[i].x - 11, SPOTS[i].y + 9, 22, 1, [16, 22, 38], 0.24);
+    bed(b, SPOTS[i].x, SPOTS[i].y, 22, w.spots[i]?.water, false);
+    weedsIn(b, SPOTS[i].x, SPOTS[i].y, 11, u.weeds[String(i)] || 0, night, t, 'summer');
+  }
+  b.rect(159, 153, 8, 1, [16, 22, 38], 0.22);
   b.rect(158, 144, 10, 2, [139, 90, 43]); b.rect(159, 146, 1, 7, [96, 60, 28]); b.rect(166, 146, 1, 7, [96, 60, 28]);   // bench
   // ── the house: a 3 m room under a pitched roof, his study built on to the left ──
   const hx1 = 78, ceil = 112, floor = 150;
   const [wc, wd] = WALLS[d.house_wall] || WALLS.timber;
-  const wall: RGB = nightc(wc, night, 0.5), plank: RGB = nightc(wd, night, 0.5);
   for (let y = ceil; y < floor; y++) for (let x = 0; x < hx1; x++) {
     if (x >= 34 && x < 67 && y >= 118 && y < 135) continue;          // the window onto the real sky
     const worn = h2(x, y) < u.house_paint * 0.35;
-    b.set(x, y, worn ? nightc([150, 120, 90], night, 0.5) : (y - ceil) % 6 === 0 ? plank : (x + Math.floor((y - ceil) / 6) * 13) % 29 === 0 ? plank : wall);
+    b.set(x, y, nightc(worn ? [150, 120, 90] : wallPixel(x, y, d.house_wall, wc, wd, ceil), night, 0.5));
   }
   // the window, grimy if nobody cleans it
   if (u.windows > 0.1) for (let y = 118; y < 135; y++) for (let x = 34; x < 67; x++) if (dith(x, y, 0.3 + u.windows * 0.5)) b.set(x, y, [130, 112, 80], u.windows * 0.4);
@@ -2420,7 +3446,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     const inside = x > 0 && x < hx1;
     for (let y = Math.floor(top); y < ceil; y++) {
       if (inside && y >= top + 3) { b.set(x, y, nightc((y % 5 === 0) ? [58, 42, 32] : [78, 58, 44], night, 0.5)); continue; }   // the attic's boards
-      b.set(x, y, (Math.floor(y) + (((x % 4) + 4) % 4 < 2 ? 0 : 1)) % 3 === 0 ? rd : rr);
+      b.set(x, y, roofPixel(x, y, d.roof, rr, rd, re));
     }
     if (x >= 21 && x <= 26) for (let y = Math.floor(top); y < top + 3; y++) b.set(x, y, night ? [40, 50, 80] : [170, 210, 240]);   // a skylight
     b.set(x, Math.floor(top), re);
@@ -2432,23 +3458,46 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   stove(b, !!w.stoveLit, night, busy('cook'), t);
   exteriorWall(b, -48, -45, 119, 160, d, u, night);
   exteriorWall(b, hx1, hx1 + 3, ceil, 160, d, u, night);
-  attic(b, w, night, t);
-  if (w.aquarium && w.aquarium.fish.length) aquarium(b, w.aquarium, night, t);
-  b.rect(58, 84, 6, 14, [87, 83, 78]); b.rect(57, 83, 8, 2, [68, 64, 60]);       // chimney
+  porchProps(b, d, sea, night, t, false);
+  {
+    const near = (f: PWorld['delamain'] | undefined | null) => !!f && !f.lying && Math.abs(f.x - DOOR.x) < 7 && f.y > 140;
+    frontDoor(b, d, night, near(w.delamain) || near(w.guest) || near(w.guest2) ? 1 : 0);
+  }
+  porchProps(b, d, sea, night, t, true);
+  attic(b, w, d, night, t);
+  aquarium(b, w.aquarium || { fish: [], clean: 1 }, night, t);            // the tank is always there; empty until he keeps a fish
+  chimney(b, d, night);
+  if (sun.active) {
+    const cr = Math.round(sun.sx * 5);
+    for (let y = 89; y < 98; y++) for (let i = 1; i <= Math.abs(cr); i++) {
+      const cx = (cr >= 0 ? 64 : 57) + (cr >= 0 ? i : -i);
+      if (y >= roofTop(cx) && y < ceil && dith(cx, y, 0.65)) b.set(cx, y, sun.col, sun.alpha * 0.6);
+    }
+  }
+  for (let x = -6; x <= 0; x++) b.set(x, Math.floor(roofTop(x)) + 2, [16, 22, 38], 0.24);
+  for (let x = hx1; x <= hx1 + 6; x++) b.set(x, Math.floor(roofTop(x)) + 2, [16, 22, 38], 0.24);
+  b.rect(-48, 159, 4, 1, [16, 22, 38], 0.26);
+  b.rect(hx1, 159, 4, 1, [16, 22, 38], 0.26);
+  b.rect(76, 159, 7, 1, [16, 22, 38], 0.22);
+  weathervane(b, d, night, t);
   if (w.stoveLit ?? true) for (let k = 0; k < 8; k++) {                         // and its smoke, drifting (when the stove burns)
     const age = ((t * 0.18 + k / 8) % 1), r = 1 + age * 3.2;
     const px = 61 + age * (4 + WIND * 0.9) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 81 - age * 30 * (1 - windyNow() * 0.7);
     for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) b.set(px + xx, py + yy, night ? [70, 75, 90] : [226, 232, 240], (1 - age) * 0.32);
   }
   b.rect(0, ceil, hx1, 2, [74, 50, 34]);                                          // ceiling beam
-  const [tc, td] = TRIMS[d.trim] || TRIMS.red;
-  for (let x = 33; x < 68; x++) { b.set(x, 117, [231, 229, 228]); }
-  for (let y = 117; y < 136; y++) { b.set(33, y, [231, 229, 228]); b.set(67, y, [214, 211, 209]); b.set(50, y, [231, 229, 228]); }
-  for (let x = 33; x < 68; x++) b.set(x, 126, [231, 229, 228]);
-  for (let y = 115; y < 140; y++) for (let x = 29; x < 33; x++) b.set(x, y, nightc((x + y) % 4 === 0 ? td : tc, night, 0.4));   // curtains
-  for (let y = 115; y < 140; y++) for (let x = 68; x < 72; x++) b.set(x, y, nightc((x + y) % 4 === 0 ? td : tc, night, 0.4));
-  b.rect(28, 115, 45, 1, [87, 60, 36]);
+  // the window frames: painted cream, as the house came, until he chooses a trim of his own (red is the old default)
+  const [tc, td]: [RGB, RGB] = d.trim && d.trim !== 'red' ? (TRIMS[d.trim] || TRIMS.red) : [[231, 229, 228], [214, 211, 209]];
+  const fc = nightc(tc, night, 0.42), fd = nightc(td, night, 0.42);
+  for (let x = 33; x < 68; x++) b.set(x, 117, fc);
+  for (let y = 117; y < 136; y++) { b.set(33, y, fc); b.set(67, y, fd); b.set(50, y, fc); }
+  for (let x = 33; x < 68; x++) b.set(x, 126, fc);
+  shutters(b, d, night);
+  drawCurtains(b, d, night);
+  b.rect(28, 115, 45, 1, nightc([87, 60, 36], night, 0.4));
   b.rect(31, 138, 39, 2, [214, 211, 209]); b.rect(31, 140, 39, 1, [160, 156, 152]);   // the sill, 95 cm
+  windowBox(b, d, sea, snowCover, night);
+  wallPiece(b, d, w, night, t);
   if (u.dust > 0.7) for (let k = 0; k < 6; k++) b.line(hx1 - 1, ceil + 2 + k, hx1 - 7 + k, ceil + 2, [220, 220, 220], 0.3);
   // the grow-light table, 90 cm, with the lamp hanging from the ceiling
   const lightOn = w.growLight && w.hour >= 6 && w.hour < 20;
@@ -2457,15 +3506,35 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   b.rect(8, 114, 1, 8, [68, 64, 60]); b.rect(24, 114, 1, 8, [68, 64, 60]);
   b.rect(5, 122, 23, 2, lightOn ? [245, 208, 254] : [87, 83, 78]); b.rect(5, 121, 23, 1, [68, 64, 60]);
   // the floor and the rug he chose
-  for (let y = floor; y < WH; y++) for (let x = 0; x < hx1; x++) b.set(x, y, x % 10 === 0 || y === floor ? [52, 36, 27] : (night ? [58, 42, 31] : [92, 64, 45]));
+  drawFloor(b, 0, hx1 - 1, floor, d.floor, night);
   const [ra, rb, rc] = RUGS[d.rug] || RUGS.rust;
-  for (let y = 151; y < 154; y++) for (let x = 44; x < 74; x++) b.set(x, y, nightc((x + y) % 3 === 0 ? rb : (y === 151 || y === 153) ? rc : ra, night, 0.35));
-  bedroom(b, night, BLANKETS[d.blanket] || BLANKETS.teal);
+  // the rug, lying on the floor in perspective: narrower at the back, a border, a pattern, fringe at the ends
+  const RUG_Y0 = 151, RUG_Y1 = 158;
+  for (let y = RUG_Y0; y <= RUG_Y1; y++) {
+    const f = (y - RUG_Y0) / (RUG_Y1 - RUG_Y0), xl = Math.round(41 - f * 4), xr = Math.round(73 + f * 3);
+    for (let x = xl; x <= xr; x++) {
+      const border = y === RUG_Y0 || y === RUG_Y1 || x === xl || x === xr, inner = y === RUG_Y0 + 1 || y === RUG_Y1 - 1 || x === xl + 1 || x === xr - 1;
+      const u = (x - xl) / (xr - xl), v = f;
+      let col: RGB;
+      if (d.rug === 'striped') col = border ? rc : Math.floor(u * 9) % 3 === 0 ? ra : Math.floor(u * 9) % 3 === 1 ? rb : rc;
+      else {
+        const dm = Math.abs(u - 0.5) * 2 + Math.abs(v - 0.5) * 2;                      // a medallion in the middle
+        col = border ? rc : inner ? rb : dm < 0.55 ? (dm < 0.25 ? rc : rb) : ((x + y) % 4 === 0 ? mix(ra, rb, 0.4) : ra);
+      }
+      b.set(x, y, nightc(col, night, 0.35));
+    }
+    if (y === RUG_Y1) for (let x = xl; x <= xr; x += 2) b.set(x, y + 1, nightc(mix(rc, [240, 230, 210], 0.5), night, 0.35));   // fringe
+  }
+  for (let x = 41; x <= 73; x += 2) b.set(x, RUG_Y0 - 1, nightc(mix(rc, [240, 230, 210], 0.5), night, 0.35));
+  bedroom(b, night, BLANKETS[d.blanket] || BLANKETS.teal, d.blanket === 'patchwork');
+  houseplant(b, d, night);
   ladder(b, night);
   armchair(b, w, night, !!w.delamain && ['read', 'news'].includes(w.delamain.doing));
   // pots and plants
   for (let i = 0; i < 5; i++) pot(b, SPOTS[i].x, SPOTS[i].y, w.spots[i]?.water);
   w.spots.forEach((s, i) => { if (SPOTS[i]) plant(b, s, SPOTS[i].x, SPOTS[i].y - 1, SPOTS[i].pot ? 0.6 : 0.9, t, s.place === 'outdoors'); });
+  if (d.window_box && d.window_box !== 'none') b.rect(34, 141, 33, 1, [16, 22, 38], 0.22);
+  indoorShade(b, w, d, night, !!w.delamain && ['read', 'news'].includes(w.delamain.doing), lightOn);
   if (lightOn) for (let y = 124; y < 141; y++) {
     const f = (y - 124) / 17, half = 12 + f * 4;
     for (let x = Math.round(16 - half); x <= Math.round(16 + half); x++) {
@@ -2474,13 +3543,14 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     }
   }
   // greenhouse frame and glass, in front of what grows inside (grimy glass lets less through)
+  const gh = GH_FRAMES[d.greenhouse_frame] || GH_FRAMES.white;
   for (let y = peakY; y < 153; y++) for (let x = gx0; x <= gx1; x++) {
     const top = roofAt(x);
     if (y < top) continue;
     const post = x === gx0 || x === gx1 || (x - gx0) % 20 === 0;
     const edge = Math.abs(y - top) < 1;
     if (post || edge || y === eaveY || y === 140)
-      b.set(x, y, night ? [98, 114, 136] : edge ? [224, 232, 236] : [192, 202, 206], post || edge ? 0.95 : 0.78);
+      b.set(x, y, night ? gh.night : edge ? gh.edge : gh.body, post || edge ? 0.95 : 0.78);
     else {
       b.set(x, y, [186, 230, 253], 0.1);
       if (u.windows > 0.15 && dith(x, y, 0.4 + u.windows * 0.4)) b.set(x, y, [150, 140, 110], u.windows * 0.3);
@@ -2492,9 +3562,40 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   if (u.leaves > 0.3) for (let x = gx0; x <= gx1; x++) if (h2(x, 8) < u.leaves * 0.35) b.set(x, roofAt(x), [176, 96, 40]);
   b.rect(gcx, peakY + 1, 1, 6, [87, 83, 78]); b.rect(gcx - 1, peakY + 7, 3, 2, night ? [253, 230, 138] : [168, 162, 158]);
   leaves(b, w, u, night, t);
+  // drifting cloud shadows (computed on a half-resolution grid) across the field, yard, trees, and roofs
+  const cloudStr = cloudShadowStrength(w);
+  const overcastDull = w.isDay && w.cloud > 70 ? ((w.cloud - 70) / 30) * (snowCover ? 0.10 : 0.14) : 0;
+  if (cloudStr > 0.005 || overcastDull > 0.005) {
+    const gndCloud = cloudStr > 0.005 ? cloudGrid(clouds, sunX, 80, 159, false) : null;
+    const shCol: RGB = snowCover ? [88, 122, 174] : [22, 34, 62];
+    const ovCol: RGB = snowCover ? [164, 184, 214] : [128, 142, 162];
+    const buf = b.d;
+    for (let y = 80; y < WH; y++) {
+      const cy = y - YOFF;
+      for (let x = X0; x < X1; x++) {
+        if (x >= -44 && x <= -1 && y >= 121 && y < 154) continue;
+        if (x >= 0 && x < 78 && y >= 112 && y < 154) continue;
+        if (x > 0 && x < 78 && y >= roofTop(x) + 3 && y < 112) continue;
+        if (x >= 87 && x <= 167 && y >= roofAt(x) + 1 && y < 153) continue;
+        const q = (cy * W + x + XOFF) * 4;
+        if (buf[q] === skyCopy[q] && buf[q + 1] === skyCopy[q + 1] && buf[q + 2] === skyCopy[q + 2]) continue;
+        if (overcastDull > 0.005) {
+          buf[q] += (ovCol[0] - buf[q]) * overcastDull;
+          buf[q + 1] += (ovCol[1] - buf[q + 1]) * overcastDull;
+          buf[q + 2] += (ovCol[2] - buf[q + 2]) * overcastDull;
+        }
+        if (gndCloud) {
+          const a = sampleCloudGrid(gndCloud, x, y) * cloudStr;
+          if (a > 0.008) {
+            buf[q] += (shCol[0] - buf[q]) * a;
+            buf[q + 1] += (shCol[1] - buf[q + 1]) * a;
+            buf[q + 2] += (shCol[2] - buf[q + 2]) * a;
+          }
+        }
+      }
+    }
+  }
   // light through the house window: shafts onto the floor, with dust turning in them
-  const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
-  const sunX = 60 + st * 220, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
   const warm: RGB = w.hour < 8.5 || w.hour > 15.3 ? [255, 190, 120] : [255, 236, 190];
   const clean = 1 - u.windows * 0.6;
   if (sunVis > 0.15) {
@@ -2518,7 +3619,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   if (night) {
     const studyLit = d.lamp === 'on' || !!w.stoveLit;
     const houseAwake = w.delamain?.doing !== 'sleep';
-    const atticLit = !!w.office?.screen || !!(w.aquarium && w.aquarium.fish.length) || busy('type') || busy('tank');
+    const atticLit = !!w.office?.screen || !!(w.aquarium && w.aquarium.fish.length) || busy('type') || busy('tank') || d.attic_lights === 'fairy lights';
     for (let y = YOFF; y < WH; y++) {
       const aboveEave = y < 108;
       for (let x = X0; x < X1; x++) {
@@ -2550,6 +3651,18 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (w.delamain && ['read', 'news', 'guitar'].includes(w.delamain.doing)) b.glow(72, 141, 18, [253, 220, 130], 0.26);
     if (d.lamp === 'on') { b.glow(-36, 139, 22, [253, 214, 124], 0.34); cone(b, -37, 136, 150, 11, [253, 220, 130], 0.16); }
     if (lightOn) b.glow(16, 130, 18, [232, 121, 249], 0.24);
+    if (d.attic_lights === 'fairy lights') for (let x = 8; x <= 70; x += 4) {
+      const ly = Math.round(roofTop(x) + 3 + Math.sin((mod(x - 8, 12) / 12) * Math.PI) * 1.4) + 1;
+      const tw = 0.55 + 0.45 * Math.sin(t * 2.6 + x * 0.9);
+      b.set(x, ly, [254, 240, 168], tw);
+      b.glow(x, ly, 4, [253, 224, 138], 0.22 * tw);
+    }
+    if (d.porch_light === 'lantern') {
+      b.rect(83, 126, 1, 2, [254, 240, 168]);
+      b.glow(83, 127, 14, [253, 210, 120], 0.34);
+      cone(b, 83, 128, 157, 7, [253, 210, 120], 0.14);
+    }
+    if (d.path_lights === 'solar') pathLights(b, night, true);
     if (busy('campfire')) {
       b.glow(FIRE_AT.x, FIRE_AT.y - 2, 32, [251, 146, 60], 0.45);
       b.glow(FIRE_AT.x, FIRE_AT.y - 3, 14, [253, 224, 71], 0.24);
@@ -2600,11 +3713,11 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     b.set(dx, dy, [56, 189, 248]); b.set(dx - dDir, dy, [20, 184, 166]);
     if (Math.floor(t * 16) % 2 === 0) b.set(dx, dy - 1, [224, 242, 254], 0.75);
   }
-  if (w.twin) figure(b, w.twin, t, delamainSpec(t, true), snowCover);
-  if (w.guest) guest(b, w.guest, t, snowCover);
-  if (w.guest2) guest(b, w.guest2, t, snowCover);
-  if (w.delamain?.lying) sleeper(b, t, w.delamain.doing === 'sleep');
-  else if (w.delamain) delamain(b, w.delamain, t, snowCover);
+  if (w.twin) figure(b, w.twin, t, delamainSpec(t, true), snowCover, sun);
+  if (w.guest) guest(b, w.guest, t, snowCover, sun);
+  if (w.guest2) guest(b, w.guest2, t, snowCover, sun);
+  if (w.delamain?.lying) sleeper(b, t, w.delamain.doing === 'sleep', BLANKETS[d.blanket] || BLANKETS.teal, d.blanket === 'patchwork');
+  else if (w.delamain) delamain(b, w.delamain, t, snowCover, sun, w.outfit);
   if (raining || snowing) {
     const n = snowing ? 80 : 56 + Math.min(90, w.rain * 40);
     for (let k = 0; k < n; k++) {

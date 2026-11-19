@@ -229,6 +229,13 @@ what he catches instead of letting it go (five fish at most, none longer than 26
 running water, so it goes back), and name it. He feeds them and cleans the tank; left alone the water
 goes murky and the fish sicken and can die. He can carry any of them back down to the pond.
 
+**Money of his own.** He earns a little by selling to visitors from his pantry (crops from the field, a
+bunch of something from the beds, his sketches), at fair prices and only as much as each visitor wants,
+and spends it as he likes: clothes (hats, scarves, coats, boots, drawn on him in every pose) and things
+for the house and garden (walls, roofs, doors, curtains, floors, rugs, a clock, houseplants, fairy
+lights, an arch, a birdbath, a weathervane, a wind chime and more). The paints and colours he started
+with stay free; anything else he buys, or saves up for.
+
 **A window into his life.** He lives in the house, so he is always somewhere in the scene, doing what
 he is really doing (`life.py` follows every event in his mind): asleep in bed; in the garden on a visit;
 on the rug with the other Delamain in a session; at his study desk writing his journal or studying (a
