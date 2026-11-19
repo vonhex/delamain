@@ -180,7 +180,51 @@ needs Google's `agy` CLI signed in on the host (`~/.local/bin/agy`, the same one
 what the visitor sees of the garden and what Delamain said to them go to Google, your name does not.
 If agy is missing or fails, his own model speaks for them.
 
+**The year.** The garden follows the seasons where it is (flipped south of the equator): grass greens
+in spring and yellows in autumn, the treeline turns and goes bare, leaves come down on the wind. The
+first frost and first snow of each season are events he notices (backfilled from the weather history
+when the garden is new), and each visit he sees the forecast: tonight's low, and which tender plants
+outdoors it would kill.
+
+**Keeping it up.** Left alone, the place goes wild the way real places do: weeds come up in the beds
+(and, once they are thick, take the water and light from what grows there, so a neglected bed is choked
+in about two weeks of summer), in the path, the grass gets long (about weekly in summer), leaves pile
+up in autumn, windows and greenhouse glass grime over (less light gets through), his study gathers dust
+and cobwebs, paint wears, snow lies on the path. He sees to it on his visits (weed, weed the path, mow,
+rake, clean the windows, tidy, shovel, repaint) if he cares to, and you see all of it in the scene.
+
+**His to shape.** How the place looks is his choice: the house's walls, the roof, the curtains, the
+path, the fence, his study's walls, rug and blanket, a desk lamp, string lights, a bird feeder, a bench
+by the pond, a sign with a name for the garden, and what hangs over his desk. He can plant one tree in
+the field (apple, maple, birch or cherry) that grows for years and changes with the seasons, save seeds
+from what fruited or went to seed (and cuttings from houseplants) and sow his own, generation after
+generation, and name the record fish he lets go (and catch them again).
+
+**His study.** A room built on to the left of the house: a bookshelf with a book for each subject he
+has studied, a pinboard with the pictures he went to look at (each drawn as its own two main colours),
+and a desk where you see him writing his journal at night. When he is in a session with the other
+Delamain, you see the two of them on the rug.
+
+**The tab** has a **history** slider (a page of the garden's diary is kept each day from noon, a year
+of them), and **sound** (made in the browser: wind that follows the real wind, rain, birds by day
+outside winter, crickets on warm nights, the pond). Each evening the first picture of the garden the
+tab sends after five is kept as a postcard in `Delamain/Garden/Postcards/`, and every time at the pond
+goes in `Delamain/Garden/Fishing journal.md`.
+
+Visitors know of each other and the local news (the forecast, the season's firsts), and now and then
+two come together and talk with each other as well as with him.
+
 Turn it off in Settings → Integrations → Features → Delamain's garden.
+
+### Reaching out first
+
+A few times a day at most (three, and never while he sleeps or while you are mid-conversation), he
+tells you something first, because it matters to him: a first fruit or the first frost in his garden, a
+frost warning for tender plants outside, his answer to a message you sent through a visitor, someone
+new who came by, what came of therapy, something he loved studying, or a heads-up 10–45 minutes before a
+meeting on your Google calendar, offering to help you get ready. If the app is closed he says it the
+next time you open it (up to 18 hours later). Settings → Integrations → Features → Reach out first
+(`DELAMAIN_REACH_OUT`).
 
 ### Sleep and dreams
 
@@ -313,6 +357,8 @@ on your phone for three hours.
 | `Delamain/Conversations/` | Therapy sessions with the other Delamain |
 | `Delamain/Self/Dreams/` | His dreams, one per night |
 | `Delamain/Garden/` | His account of each visit to his garden, one note a month |
+| `Delamain/Garden/Postcards/` | A picture of the garden each evening, with a line from his day |
+| `Delamain/Garden/Fishing journal.md` | Every time at the pond |
 | `Delamain/Garden/Visitors/` | One note for each person who has come by: everything said, gifts and messages |
 | `Delamain/Briefings/` | Morning briefs, with what they were written from |
 | `Delamain/Tasks.md`, `Delamain/Tasks/` | Long tasks, and a working note for each research task |

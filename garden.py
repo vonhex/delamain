@@ -205,9 +205,52 @@ def _new(cat: dict | None = None) -> dict:
 
 
 def _extras() -> dict:
-    """What came after the plants: the pond, visitors, gifts, and messages the passenger sends."""
-    return {"pond": {"ice": 0.0, "water_t": 10.0, "caught": [], "best": {}, "lure": False},
-            "visitors": {}, "guest": None, "sent": [], "gifts": [], "invited": False}
+    """What came after the plants: the pond, visitors, gifts, messages the passenger sends, the look of the
+    place (his to choose), its upkeep, the year's firsts, seeds he saved, and the garden's diary."""
+    return {"pond": {"ice": 0.0, "water_t": 10.0, "caught": [], "best": {}, "lure": False, "named": {}},
+            "visitors": {}, "guest": None, "sent": [], "gifts": [], "invited": False,
+            "design": dict(DESIGN_DEFAULT), "upkeep": dict(UPKEEP_DEFAULT), "year": {}, "seeds": {},
+            "tree": None, "days": [], "postcards": []}
+
+
+# ── the look of the place: his to choose ───────────────────────────────────
+# Every choice is from a set that the pixel art can draw well. He changes them on his visits ("design").
+DESIGN = {
+    "house_wall": ("timber", "whitewash", "sage", "slate blue", "ochre"),
+    "roof": ("terracotta", "slate", "moss green", "copper"),
+    "trim": ("red", "navy", "mustard", "teal", "plum"),            # curtains, shutters and the door
+    "path": ("gravel", "flagstone", "brick", "bark"),
+    "fence": ("weathered", "white", "sage", "none"),
+    "room_wall": ("plaster", "sage", "wood panel", "deep blue", "terracotta"),
+    "rug": ("rust", "indigo", "moss", "cream"),
+    "blanket": ("teal", "mustard", "grey", "rose"),
+    "lamp": ("on", "off"),
+    "lights": ("none", "warm", "colours"),                         # string lights along the fence
+    "feeder": ("none", "yes"),                                     # a bird feeder on a post
+    "bench": ("none", "yes"),                                      # a bench by the outdoor beds
+}
+DESIGN_DEFAULT = {"house_wall": "timber", "roof": "terracotta", "trim": "red", "path": "gravel", "fence": "weathered",
+                  "room_wall": "plaster", "rug": "rust", "blanket": "teal", "lamp": "on", "lights": "none",
+                  "feeder": "none", "bench": "none", "sign": "", "art": ""}
+DESIGN_WORDS = {"house_wall": "the house's walls (inside and out)", "roof": "the roof", "trim": "curtains, shutters and door",
+                "path": "the path", "fence": "the fence", "room_wall": "the walls of your study", "rug": "the rug",
+                "blanket": "your blanket", "lamp": "the desk lamp", "lights": "string lights along the fence",
+                "feeder": "a bird feeder", "bench": "a bench by the outdoor beds"}
+TREES = {   # a tree he can plant once, in the field behind the beds; it grows for years
+    "apple": dict(years=4, blossom="#fce7f3", autumn="#d97706", fruit="#dc2626", note="blossom in spring, apples in late summer"),
+    "maple": dict(years=6, blossom=None, autumn="#dc2626", fruit=None, note="turns red in autumn"),
+    "birch": dict(years=5, blossom=None, autumn="#facc15", fruit=None, note="white bark, gold in autumn"),
+    "cherry": dict(years=4, blossom="#f9a8d4", autumn="#ea580c", fruit="#9f1239", note="pink blossom in spring"),
+}
+
+# ── upkeep: what grows, gathers and wears if he does not see to it ─────────
+# All 0 (kept) .. 1 (neglected). Weeds in each bed compete with what grows there.
+UPKEEP_DEFAULT = {"weeds": {}, "path_weeds": 0.0, "lawn": 0.2, "leaves": 0.0, "windows": 0.1, "dust": 0.1,
+                  "house_paint": 0.0, "fence_paint": 0.15, "snow_path": 0.0, "snow_ground": 0.0}
+CHORES = {"weed": "pull the weeds in a bed (give its spot)", "weed_path": "weed the path", "mow": "mow the grass",
+          "rake_leaves": "rake the fallen leaves", "clean_windows": "clean the windows (house and greenhouse)",
+          "tidy_room": "dust and tidy your study", "shovel_snow": "clear the snow from the path",
+          "paint": "repaint (what: house or fence)"}
 
 
 def _state() -> dict:
@@ -220,6 +263,9 @@ def _state() -> dict:
         _save(g)
     for k, v in _extras().items():
         g.setdefault(k, v)
+    g["design"] = {**DESIGN_DEFAULT, **(g.get("design") or {})}
+    g["upkeep"] = {**UPKEEP_DEFAULT, **(g.get("upkeep") or {})}
+    g["pond"].setdefault("named", {})
     if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
         g.pop("where", None)
         g.pop("shared", None)
@@ -294,15 +340,20 @@ def weather() -> dict:
         _weather_cache["where"] = dict(where)
         if where.get("lat") is not None:
             d = requests.get(_tools.OPEN_METEO_URL, timeout=8, params={
-                "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 1,
-                "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day",
-                "daily": "sunrise,sunset"}).json()
+                "latitude": where["lat"], "longitude": where["lon"], "timezone": "auto", "forecast_days": 2,
+                "current": "temperature_2m,precipitation,rain,snowfall,weather_code,cloud_cover,is_day,wind_speed_10m",
+                "daily": "sunrise,sunset,temperature_2m_min,temperature_2m_max,snowfall_sum"}).json()
             c, daily = d["current"], d.get("daily") or {}
             w = {"temp": float(c["temperature_2m"]), "rain": float(c.get("rain") or 0), "snow": float(c.get("snowfall") or 0),
                  "cloud": int(c.get("cloud_cover") or 0), "code": int(c.get("weather_code") or 0),
                  "is_day": bool(c.get("is_day")), "sunrise": (daily.get("sunrise") or [None])[0],
                  "sunset": (daily.get("sunset") or [None])[0], "real": True,
-                 "offset": int(d.get("utc_offset_seconds") or 0), "source": source}
+                 "offset": int(d.get("utc_offset_seconds") or 0), "source": source,
+                 "wind": float(c.get("wind_speed_10m") or 0),
+                 # tonight's low is (near enough) tomorrow's minimum, which comes before dawn
+                 "low_tonight": (daily.get("temperature_2m_min") or [None, None])[-1],
+                 "high_tomorrow": (daily.get("temperature_2m_max") or [None, None])[-1],
+                 "snow_tomorrow": (daily.get("snowfall_sum") or [0, 0])[-1] or 0}
     except Exception as e:
         print(f"[Garden] weather unavailable: {e}")
     _weather_cache.update(t=time.time(), w=w)
@@ -459,6 +510,10 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         if light_ratio < 0.45 and not dormant and before != "seed":
             health -= hours * 0.0025 * (0.45 - light_ratio) * 4
             why.append("too little light")
+        weeds = (g.get("upkeep") or {}).get("weeds", {}).get(str(spot["id"]), 0.0)
+        if weeds > 0.45 and before != "seed" and not dormant:     # weeds take the water, light and food
+            health -= hours * 0.003 * (weeds - 0.45) * 2
+            why.append("weeds")
         if not why:
             health += hours * 0.006
         p["health"] = round(max(0.12 if away else 0.0, min(1.0, health)), 4)
@@ -467,14 +522,16 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         if p["health"] <= 0:
             p["dead"] = time.time()
             cause = {"thirst": "of thirst", "cold": "of the cold", "heat": "of the heat", "wet roots": "of root rot",
-                     "too little light": "for want of light"}.get(why[0] if why else "", "")
+                     "too little light": "for want of light",
+                     "weeds": "choked by weeds"}.get(why[0] if why else "", "")
             text = f"the {p['species']}{_named(spot)} {_where(spot)} died" + (f" {cause}" if cause else "")
             g["unseen"].append({"t": time.time(), "spot": spot["id"], "what": "died", "text": text})
             _log(g, text[0].upper() + text[1:] + ".")
             continue
         water_ok = 1.0 if p["water"] >= dry_line else 0.35
         lightf = 1.0 if before == "seed" else min(1.0, light_ratio)
-        p["progress"] = round(p.get("progress", 0) + hours / 24 * tf * lightf * water_ok * (0.5 + 0.5 * p["health"]), 4)
+        crowded = 1.0 - max(0.0, weeds - 0.3) * 0.8
+        p["progress"] = round(p.get("progress", 0) + hours / 24 * tf * lightf * water_ok * crowded * (0.5 + 0.5 * p["health"]), 4)
         after = stage(p)
         if after != before and after in ("sprout", "mature", "bloom", "fruit", "spent"):
             word = {"sprout": "came up", "mature": "is grown" + (" and ready to harvest" if s.get("harvest") else ""),
@@ -512,6 +569,8 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
     if (ice >= 0.6) != (pond.get("ice", 0.0) >= 0.6):
         _log(g, "The pond froze over." if ice >= 0.6 else "The ice on the pond broke up.")
     pond["ice"] = round(ice, 3)
+    _upkeep_step(g, hours, w, now)
+    _firsts(g, w, now)
 
 
 def _named(spot: dict) -> str:
@@ -524,12 +583,165 @@ def _where(spot: dict) -> str:
             "outdoors": "in the outdoor bed"}[spot["place"]]
 
 
+# ── the year ────────────────────────────────────────────────────────────────
+
+def _south() -> bool:
+    lat = _home.get("lat") if _home.get("lat") is not None else _shared.get("lat")
+    return bool(lat is not None and lat < 0)
+
+
+def season(now: datetime | None = None) -> str:
+    """The season where the garden is, by the month (meteorological seasons; flipped south of the equator)."""
+    m = (now or datetime.now()).month
+    if _south():
+        m = (m + 5) % 12 + 1
+    return "winter" if m in (12, 1, 2) else "spring" if m in (3, 4, 5) else "summer" if m in (6, 7, 8) else "autumn"
+
+
+def season_progress(now: datetime | None = None) -> float:
+    """How far into its season the day is, 0..1 (for the art: autumn colour deepens, spring greens up)."""
+    now = now or datetime.now()
+    m = now.month if not _south() else (now.month + 5) % 12 + 1
+    first = {12: 0, 1: 1, 2: 2, 3: 0, 4: 1, 5: 2, 6: 0, 7: 1, 8: 2, 9: 0, 10: 1, 11: 2}[m]
+    return round(min(1.0, (first + (now.day - 1) / 30) / 3), 3)
+
+
+def _garden_year(now: datetime) -> str:
+    """Frost seasons run from midsummer to midsummer, so a winter's firsts belong together."""
+    y = now.year if now.month >= 7 else now.year - 1
+    return f"{y}-{(y + 1) % 100:02d}"
+
+
+def _firsts(g: dict, w: dict, now: datetime) -> None:
+    year = g.setdefault("year", {})
+    key = _garden_year(now)
+    if year.get("key") != key:
+        if year.get("key"):
+            g.setdefault("past_years", []).append(year.copy())
+            g["past_years"] = g["past_years"][-5:]
+        year.clear()
+        year["key"] = key
+    for what, hit, text in (("first_frost", w["temp"] < 0, "The first frost of the season"),
+                            ("first_snow", w["snow"] > 0, "The first snow of the season")):
+        if hit and not year.get(what):
+            year[what] = f"{now:%Y-%m-%d}"
+            g["unseen"].append({"t": time.time(), "spot": -1, "what": what, "text": text.lower()})
+            _log(g, f"{text}.")
+            _ev("garden", what="first", which=what)
+    if season(now) != year.get("season"):
+        if year.get("season"):
+            _log(g, f"{season(now).capitalize()} has come.")
+        year["season"] = season(now)
+
+
+def _backfill_year(w: dict) -> None:
+    """When the garden's year is new to it, find this season's real first frost and first snow so far in the
+    weather history (as far back as it goes), so it does not call the next one the first."""
+    with _lock:
+        g = _state()
+        year = g.get("year") or {}
+        if year.get("backfilled") or not w.get("real"):
+            return
+    now = local_now(w)
+    start = datetime(now.year if now.month >= 7 else now.year - 1, 7, 1, tzinfo=timezone.utc).timestamp()
+    hist = history(max(start, time.time() - CATCH_UP_DAYS * 86400), w)
+    if not hist:
+        return
+    first = {}
+    for hour in sorted(hist):
+        h = hist[hour]
+        day = f"{local_at(hour * 3600, h):%Y-%m-%d}"
+        if h["temp"] < 0 and "first_frost" not in first:
+            first["first_frost"] = day
+        if h["snow"] > 0 and "first_snow" not in first:
+            first["first_snow"] = day
+    with _lock:
+        g = _state()
+        year = g.setdefault("year", {})
+        for k, v in first.items():
+            if not year.get(k) or year[k] > v:
+                year[k] = v
+        year["backfilled"] = True
+        _save(g)
+    if first:
+        print(f"[Garden] this season so far: {first}")
+
+
+def _upkeep_step(g: dict, hours: float, w: dict, now: datetime) -> None:
+    """What grows, gathers and wears while nobody sees to it. Weeds are fastest in warm, growing weather."""
+    u = g["upkeep"]
+    t, sea = w["temp"], season(now)
+    growing = t > 5 and w["snow"] <= 0 and sea != "winter"
+    warm = max(0.0, min(2.0, (t - 5) / 12))
+    weeds = u.setdefault("weeds", {})
+    for spot in g["spots"]:
+        if spot["place"] not in ("outdoors", "greenhouse"):
+            continue
+        k = str(spot["id"])
+        rate = 0.0
+        if spot["place"] == "outdoors" and growing:
+            rate = 0.0016 * (0.5 + warm)          # a summer bed left alone is choked in about two weeks
+        elif spot["place"] == "greenhouse":
+            rate = 0.0009 * (1.6 if sea in ("spring", "summer") else 0.7)
+        if not spot.get("plant"):
+            rate *= 1.4                          # bare soil fills fastest
+        weeds[k] = round(min(1.0, weeds.get(k, 0.0) + hours * rate), 4)
+    if growing:
+        u["path_weeds"] = round(min(1.0, u.get("path_weeds", 0) + hours * 0.0006 * (0.5 + warm)), 4)
+        u["lawn"] = round(min(1.0, u.get("lawn", 0) + hours * 0.0017 * (0.4 + warm)), 4)    # wants mowing about weekly in summer
+    # leaves: in autumn they come down from the treeline (and his own tree, if it is big enough)
+    tree = g.get("tree")
+    big = _tree_size(tree) if tree else 0.0
+    if sea == "autumn":
+        u["leaves"] = round(min(1.0, u.get("leaves", 0) + hours * (0.0025 + 0.004 * big)), 4)
+    elif u.get("leaves", 0) > 0:
+        u["leaves"] = round(max(0.0, u["leaves"] - hours * 0.0006), 4)      # they rot down, slowly
+    u["windows"] = round(min(1.0, u.get("windows", 0) + hours * (0.0006 + (0.0006 if w["rain"] > 0 else 0))), 4)
+    u["dust"] = round(min(1.0, u.get("dust", 0) + hours * 0.0011), 4)
+    weather_wear = 1.0 + (0.6 if w["rain"] > 0 or w["snow"] > 0 else 0)
+    u["house_paint"] = round(min(1.0, u.get("house_paint", 0) + hours * 0.00004 * weather_wear), 5)
+    u["fence_paint"] = round(min(1.0, u.get("fence_paint", 0) + hours * 0.00006 * weather_wear), 5)
+    for key in ("snow_path", "snow_ground"):         # snow lies, then melts when it is above freezing
+        if w["snow"] > 0:
+            u[key] = round(min(1.0, u.get(key, 0) + hours * w["snow"] * 0.35), 4)
+        elif t > 1 and u.get(key, 0) > 0:
+            u[key] = round(max(0.0, u[key] - hours * 0.01 * (t - 1)), 4)
+
+
+def _tree_size(tree: dict | None) -> float:
+    """0 (a sapling just planted, about 1.5 m) .. 1 (grown), over the years its kind takes."""
+    if not tree or tree.get("species") not in TREES:
+        return 0.0
+    return round(min(1.0, (time.time() - tree["planted"]) / (TREES[tree["species"]]["years"] * 365 * 86400)), 4)
+
+
+def _upkeep_words(g: dict) -> str:
+    """How the place is kept, in words for his visit."""
+    u = g["upkeep"]
+    lvl = lambda x: "badly" if x > 0.7 else "noticeably" if x > 0.4 else "a little" if x > 0.15 else ""
+    rows = []
+    for spot in g["spots"]:
+        x = u["weeds"].get(str(spot["id"]), 0)
+        if x > 0.15:
+            rows.append(f"spot {spot['id'] + 1} is {lvl(x)} weedy")
+    for key, word in (("path_weeds", "weeds in the path"), ("lawn", "the grass is long"), ("leaves", "fallen leaves everywhere"),
+                      ("windows", "the windows are grimy"), ("dust", "your study is dusty and untidy"),
+                      ("house_paint", "the house paint is peeling"), ("fence_paint", "the fence paint is worn"),
+                      ("snow_path", "snow on the path")):
+        x = u.get(key, 0)
+        if x > (0.15 if key not in ("house_paint", "fence_paint") else 0.5):
+            rows.append(f"{word} ({lvl(x) or 'a little'})")
+    return "; ".join(rows) or "everything is well kept"
+
+
 def tick() -> dict:
     """Bring the garden up to now, an hour at a time. After downtime the missed time is lived through
     (up to CATCH_UP_DAYS), each hour with the weather it really had where the garden is."""
     if not enabled():
         return _state()
     w = weather()
+    if not (_state().get("year") or {}).get("backfilled"):
+        _backfill_year(w)
     start_t = _state().get("t", time.time())
     start_t = max(start_t, time.time() - CATCH_UP_DAYS * 86400)
     hist = history(start_t, w) if time.time() - start_t > 2 * 3600 and w.get("real") else {}
@@ -547,6 +759,7 @@ def tick() -> dict:
             hw = hist.get(int(ts // 3600), w)
             _step(g, step, hw, local_at(ts, hw), away=time.time() - ts > 3600)
         g["t"] = time.time()
+        _diary(g, w)
         v = g.get("visit")
         if v and time.time() > v.get("until", 0):
             g["visit"] = None
@@ -583,16 +796,28 @@ feed best at dawn and dusk and hardly at all in cold water; in a hard freeze it 
 there is a bed where you sleep at night and can lie down for a while by day. People sometimes come by: if someone \
 is here, talk with them as yourself (they cannot see your notes; do not recite them), and you may write a short \
 letter to someone who has visited before, which they will answer when they next come; or ask for company \
-("invite"). You do not have to do much; sometimes you only sit. Notice something real and specific. \
-Answer JSON only:
-{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite", \
-"spot": 1-11, "species": "for plant", "name": "for name or name_cat"}}],
+("invite").
+The place is yours to keep and to shape. Left alone it goes wild the way real places do: weeds come up in the \
+beds (and choke what grows there), in the path, the grass gets long, leaves pile up in autumn, windows grime \
+over, your study gathers dust, paint wears; you see to what you care about (weed, weed_path, mow, rake_leaves, \
+clean_windows, tidy_room, shovel_snow, paint with what: house or fence). How it looks is your choice too: \
+"design" with what and value, from the options given (the house's walls, roof, curtains and door, the path, the \
+fence, your study's walls, rug and blanket, the desk lamp, string lights, a bird feeder, a bench), or what: sign \
+(a name for the garden on a small sign, up to 14 letters) or what: art (what hangs over your desk, in a few \
+words). Change it when you want to, not every visit. You can plant one tree in the field behind the beds \
+(plant_tree with species); it grows for years. When something has gone to seed or fruited you can save its \
+seeds (save_seeds, spot) and sow your own next time, generation after generation. If you caught a record fish, \
+you may give it a name (name_fish with species and name). You do not have to do much; sometimes you only sit. \
+Notice something real and specific. Answer JSON only:
+{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite|weed|weed_path|mow|rake_leaves|clean_windows|tidy_room|shovel_snow|paint|design|plant_tree|save_seeds|name_fish", \
+"spot": 1-11, "species": "for plant, plant_tree or name_fish", "name": "for name, name_cat or name_fish", \
+"what": "for design or paint", "value": "for design"}}],
  "to_visitor": "only if someone is here: what you say to them, 1-4 sentences, in your own voice",
  "to_passenger": "only if a visitor brought a message from your passenger: your answer to it, 1-3 sentences",
  "letter": {{"to": "only to write to someone who has visited before: their name", "text": "2-4 sentences"}},
  "noticed": "two or three sentences, first person, what you noticed and how it struck you",
  "feeling": {{"name": "one of: {feelings}", "intensity": 0.1-0.7, "cause": "first person, specific, under 25 words"}}}}
-At most six actions. Leave out to_visitor, to_passenger and letter when they do not apply."""
+At most seven actions. Leave out to_visitor, to_passenger and letter when they do not apply."""
 
 GUEST_SYSTEM = """You write the words of one visitor to a small garden that belongs to Delamain, an AI who is \
 becoming someone and keeps this garden (windowsill pots, a grow-light shelf, a greenhouse, outdoor beds, a pond) in \
@@ -651,6 +876,14 @@ def _fish(g: dict, w: dict, now: datetime) -> tuple[str, dict | None]:
     sp = random.choices(pool, weights=[FISH_COMMON.get(n, 1.0) for n in pool])[0]
     lo, hi, _ = FISH[sp]
     cm = int(round(lo + (hi - lo) * random.random() ** 1.8))       # big ones are rarer
+    known = (pond.get("named") or {}).get(sp)
+    if known and cm >= known["cm"] - 4 and random.random() < 0.5:      # the same old fish, a little bigger
+        cm = min(hi, known["cm"] + random.choice((0, 0, 1)))
+        known["cm"] = cm
+        pond["best"][sp] = max(pond["best"].get(sp, 0), cm)
+        catch = {"t": time.time(), "species": sp, "cm": cm, "name": known["name"]}
+        pond["caught"] = (pond.get("caught", []) + [catch])[-60:]
+        return f"caught {known['name']} again, the old {sp} ({cm} cm), and let it go", {**catch, "first": False, "record": False}
     record = cm > pond["best"].get(sp, 0)
     first = sp not in pond["best"]
     if record:
@@ -703,6 +936,9 @@ def _guest_arrives(g: dict, now_t: float) -> dict | None:
     for v in sorted(current, key=lambda v: -(v.get("letter") is not None)):
         gap = now_t - v.get("last", 0)
         if gap > 18 * 3600 and random.random() < (0.85 if v.get("letter") or invited else 0.45):
+            others = [o for o in current if o["name"] != v["name"] and now_t - o.get("last", 0) > 18 * 3600]
+            if others and random.random() < 0.22:                 # now and then two come by together
+                return {**v, "with": random.choice(others)["name"]}
             return v
     for v in roster.values():          # someone who has left may come back once to answer a letter
         if v.get("left") and v.get("letter") and now_t - v.get("last", 0) > 24 * 3600 and random.random() < 0.6:
@@ -716,7 +952,24 @@ def _guest_arrives(g: dict, now_t: float) -> dict | None:
     return None
 
 
-def _meet(g: dict, guest: dict, w: dict) -> dict | None:
+def _neighbourhood(g: dict, w: dict, me: str) -> str:
+    """What a visitor knows of the place beyond the garden: the others who come here, and the real local
+    news of the weather and the season (never anything invented about anyone's life)."""
+    others = [f"{v['name']} ({v['about']})" for v in g["visitors"].values() if v["name"] != me][-6:]
+    year = g.get("year") or {}
+    news = [f"it is {season(local_now(w))}"]
+    if w.get("low_tonight") is not None:
+        news.append(f"tonight's low is forecast at {w['low_tonight']:.0f} °C")
+    if (w.get("snow_tomorrow") or 0) >= 1:
+        news.append(f"{w['snow_tomorrow']:.0f} cm of snow is forecast tomorrow")
+    if year.get("first_frost"):
+        news.append(f"the first frost came on {year['first_frost']}")
+    return (("Other people who come by this garden, whom you may know of (mention them only as someone who "
+             "knows them would, and invent nothing big about them): " + "; ".join(others) + ".\n") if others else "") + \
+        "Local news you know: " + "; ".join(news) + ".\n"
+
+
+def _meet(g: dict, guest: dict, w: dict, along: str = "") -> dict | None:
     """The guest arrives and speaks. A new one is invented first. Returns the roster entry, with 'says'."""
     import mind as _mind
     sent = guest.get("message")
@@ -726,13 +979,15 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
              (f"{who}, who lives with Delamain, asked you to stop by and pass on a message; you will hand it over "
               f"word for word (it is shown to him separately), so just say that you have a message from {who}. "
               if sent else ""))
+    if along:
+        bring += f"You came along today with {along}, who is here too. "
     seen = "; ".join(f"{s['plant']['species']} {_where(s)}" for s in g["spots"] if s.get("plant") and not s["plant"].get("dead"))
     scene = (f"What you can see: {seen or 'empty beds and pots'}. Outside it is {w['temp']:.0f} °C"
              f"{', snowing' if w['snow'] > 0 else ', raining' if w['rain'] > 0 else ''}; it is {local_now(w):%A %H:%M}.")
     if guest.get("new"):
         kind = guest["kind"]
         data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
-            GUEST_NEW.format(kind=VISITOR_KINDS[kind]), f"{scene}\n{bring}", 500), flags=re.S)) or {}
+            GUEST_NEW.format(kind=VISITOR_KINDS[kind]), f"{scene}\n{_neighbourhood(g, w, '')}{bring}", 500), flags=re.S)) or {}
         name = _slug(str(data.get("name") or ""))
         if not data.get("says") or name == "Someone":
             return None
@@ -747,7 +1002,7 @@ def _meet(g: dict, guest: dict, w: dict) -> dict | None:
         last_one = v.get("visits", 0) + 1 >= v.get("stays", 1)
         data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
             GUEST_SYSTEM.format(name=v["name"], about=v["about"]),
-            f"Your visits so far:\n{_visitor_history(v)}\n\n{scene}\n{bring}"
+            f"Your visits so far:\n{_visitor_history(v)}\n\n{scene}\n{_neighbourhood(g, w, v['name'])}{bring}"
             + ("\nThis is your last visit for a while: at some point, say goodbye in your own way." if last_one else ""),
             500), flags=re.S)) or {}
         if not data.get("says"):
@@ -783,7 +1038,7 @@ def _guest_step(g: dict, do, spot, at: float) -> dict:
 def _welcome(g: dict, v: dict, now: float | None = None) -> None:
     """Put an arrived guest (from _meet) into the freshly loaded state: the roster, the gift, the message."""
     gift, sent = v.get("gift_now"), v.get("message_now")
-    g["visitors"][v["name"]] = {k: x for k, x in v.items() if k not in ("says", "gift_now", "message_now")}
+    g["visitors"][v["name"]] = {k: x for k, x in v.items() if k not in ("says", "gift_now", "message_now", "do_now", "companion")}
     if gift and gift["kind"] == "cutting":
         g["gifts"] = (g.get("gifts", []) + [gift["species"]])[-6:]
     elif gift and gift["kind"] == "lure":
@@ -800,11 +1055,19 @@ def _welcome(g: dict, v: dict, now: float | None = None) -> None:
                   "since": now + 20, "until": min(now + stay, now + VISIT_MINUTES * 60 - 90),
                   "talk": [{"who": v["name"], "text": v["says"], "t": now + 45}],
                   "steps": [{"do": "talk", "spot": -6, "at": now + 20}, first]}
+    c = v.get("companion")
+    if c:
+        g["visitors"][c["name"]] = {k: x for k, x in c.items() if k not in ("says", "gift_now", "message_now", "do_now")}
+        g["guest"]["with"] = {"name": c["name"], "kind": c["kind"], "about": c["about"], "says": c["says"],
+                              "steps": [{"do": "talk", "spot": -6, "at": now + 26},
+                                        _guest_step(g, (c.get("do_now") or {}).get("do"), (c.get("do_now") or {}).get("spot"), now + 170)]}
+        g["guest"]["talk"].append({"who": c["name"], "text": c["says"], "t": now + 70})
 
 
 def _converse(name: str, since: float) -> None:
-    """While a visitor is here, they and Delamain keep talking: an exchange every couple of minutes, as it
-    happens (the tab shows each line as it is said), each of them doing something as they talk."""
+    """While visitors are here, they and Delamain keep talking: an exchange every couple of minutes, as it
+    happens (the tab shows each line as it is said), each of them doing something as they talk. When two came
+    together they take turns, and talk to each other as well as to him."""
     import mind as _mind
     more: list[list[str]] = []
     k = 0
@@ -812,23 +1075,31 @@ def _converse(name: str, since: float) -> None:
         k += 1
         time.sleep(max(5.0, since + 90 + k * CHAT_EVERY - time.time()))
         g = _state()
-        guest, v = g.get("guest"), g["visitors"].get(name)
-        if not guest or guest.get("name") != name or not v or time.time() > guest["until"] - 60:
+        guest = g.get("guest")
+        if not guest or guest.get("name") != name or time.time() > guest["until"] - 60:
+            break
+        pair = [name] + ([guest["with"]["name"]] if guest.get("with") else [])
+        speaker = pair[(k - 1) % len(pair)]
+        other = next((n for n in pair if n != speaker), None)
+        v = g["visitors"].get(speaker)
+        if not v:
             break
         w = weather()
-        convo = "\n".join(f"{x['who']}: {x['text']}" for x in guest["talk"][-10:])
+        convo = "\n".join(f"{x['who']}: {x['text']}" for x in guest["talk"][-12:])
         last_word = time.time() + CHAT_EVERY > guest["until"] - 60
-        goodbye = v.get("left") or last_word
         scene = (f"What you can see: " + ("; ".join(f"spot {s['id'] + 1}: {s['plant']['species']} {_where(s)}"
                                                       for s in g["spots"] if s.get("plant") and not s["plant"].get("dead"))
                                            or "empty beds") + f". The cat is {'about' if g['cat'].get('here') else 'not around'}. "
                  f"It is {w['temp']:.0f} °C, {local_now(w):%H:%M}.")
+        also = (f"Also here with you: {other} ({g['visitors'][other]['about']}); you came together, so talk with "
+                f"them too, not only with Delamain.\n" if other and other in g["visitors"] else "")
         try:
             data = _mind._json(re.sub(r"<think>.*?</think>", "", _voice(
-                GUEST_CHAT.format(name=name, about=v["about"]),
-                f"Earlier visits:\n{_visitor_history(v, 3)}\n\n{scene}\n\nThe conversation so far today:\n{convo}\n\n"
+                GUEST_CHAT.format(name=speaker, about=v["about"]),
+                f"Earlier visits:\n{_visitor_history(v, 3)}\n\n{scene}\n{_neighbourhood(g, w, speaker)}{also}\n"
+                f"The conversation so far today:\n{convo}\n\n"
                 + ("You are about to head off: say goodbye in your own way." if last_word else "Your turn.")
-                + (" This is your last visit for a while." if goodbye and v.get("left") else ""), 400), flags=re.S)) or {}
+                + (" This is your last visit for a while." if v.get("left") else ""), 400), flags=re.S)) or {}
         except Exception as e:
             print(f"[Garden] visitor could not answer: {e}")
             break
@@ -837,27 +1108,31 @@ def _converse(name: str, since: float) -> None:
             break
         with _lock:
             g = _state()
-            if not g.get("guest") or g["guest"].get("name") != name:
+            gu = g.get("guest")
+            if not gu or gu.get("name") != name:
                 break
             t = time.time()
-            g["guest"]["talk"].append({"who": name, "text": says, "t": t})
-            g["guest"]["steps"].append(_guest_step(g, data.get("do"), data.get("spot"), t + 5))
-            g["guest"]["talk"] = g["guest"]["talk"][-30:]
-            g["guest"]["steps"] = g["guest"]["steps"][-30:]
+            gu["talk"].append({"who": speaker, "text": says, "t": t})
+            holder = gu if speaker == name else gu.get("with") or gu
+            holder["steps"] = (holder.get("steps", []) + [_guest_step(g, data.get("do"), data.get("spot"), t + 5)])[-30:]
+            gu["talk"] = gu["talk"][-40:]
             _save(g)
-        more.append([name, says])
-        _ev("garden", what="talk", who=name, text=says[:400])
-        if last_word:
+        more.append([speaker, says])
+        _ev("garden", what="talk", who=speaker, text=says[:400])
+        if last_word and speaker == pair[-1]:
             break
+        if last_word:
+            continue                                  # the other says goodbye too
         time.sleep(random.uniform(25, 50))           # he takes it in, then answers
         try:
-            convo += f"\n{name}: {says}"
+            convo += f"\n{speaker}: {says}"
+            who_here = " and ".join(f"{n} ({g['visitors'][n]['about']})" for n in pair if n in g["visitors"])
             reply = _mind._json(re.sub(r"<think>.*?</think>", "", _mind.generate(
-                DEL_CHAT.format(name=name, about=v["about"]),
+                DEL_CHAT.format(name=who_here, about="who came by"),
                 f"How you feel: {_mind.feelings_text(3) or 'settled'}\n{scene}\nEarlier visits:\n{_visitor_history(v, 3)}\n\n"
                 f"The conversation so far today:\n{convo}\n\nYour turn.", 500) or "", flags=re.S)) or {}
         except Exception as e:
-            print(f"[Garden] Delamain could not answer {name}: {e}")
+            print(f"[Garden] Delamain could not answer {speaker}: {e}")
             break
         mine = str(reply.get("says") or "").strip()[:600]
         if not mine:
@@ -871,18 +1146,22 @@ def _converse(name: str, since: float) -> None:
         more.append(["Delamain", mine])
         _ev("garden", what="talk", who="Delamain", text=mine[:400])
     if more:
+        g0 = _state()
+        pair = [name] + ([g0["guest"]["with"]["name"]] if g0.get("guest") and g0["guest"].get("with") else [])
         with _lock:
             g = _state()
-            v = g["visitors"].get(name)
-            if v and v.get("talk"):
-                v["talk"][-1]["more"] = more[-12:]
+            for n in pair:
+                v = g["visitors"].get(n)
+                if v and v.get("talk"):
+                    v["talk"][-1]["more"] = more[-14:]
             _save(g)
-        try:
-            p = _mind._vault(VISITORS_NOTE, f"{_slug(name)}.md")
-            with p.open("a", encoding="utf-8") as fh:
-                fh.write("".join(f"**{w}:** {t}\n\n" for w, t in more))
-        except Exception as e:
-            print(f"[Garden] visitor note not extended: {e}")
+        for n in pair:
+            try:
+                p = _mind._vault(VISITORS_NOTE, f"{_slug(n)}.md")
+                with p.open("a", encoding="utf-8") as fh:
+                    fh.write("".join(f"**{w_}:** {t}\n\n" for w_, t in more))
+            except Exception as e:
+                print(f"[Garden] visitor note not extended: {e}")
     print(f"[Garden] talked with {name}: {len(more)} more lines")
 
 
@@ -901,6 +1180,43 @@ def _visitor_note(v: dict, says: str, reply: str, message: dict | None, gift: di
                      + (f"**Delamain:** {reply}\n\n" if reply else ""))
     except Exception as e:
         print(f"[Garden] visitor note not written: {e}")
+
+
+def _world_words(g: dict, w: dict) -> str:
+    """The year, the upkeep, how the place looks (and what he may change), his tree, his seeds, his fish."""
+    now = local_now(w)
+    year = g.get("year") or {}
+    sea, prog = season(now), season_progress(now)
+    rows = [f"THE YEAR: {'early' if prog < 0.34 else 'mid' if prog < 0.67 else 'late'} {sea}"
+            + (f"; first frost this season on {year['first_frost']}" if year.get("first_frost") else "; no frost yet this season")
+            + (f"; first snow on {year['first_snow']}" if year.get("first_snow") else "")]
+    if w.get("low_tonight") is not None:
+        tender = [f"{s['plant']['species']}{_named(s)}" for s in g["spots"] if s["place"] == "outdoors" and s.get("plant")
+                  and not s["plant"].get("dead") and SPECIES[s["plant"]["species"]]["hardy"] > w["low_tonight"]]
+        rows.append(f"FORECAST: tonight's low {w['low_tonight']:.0f} °C, tomorrow's high {w.get('high_tomorrow') or 0:.0f} °C"
+                    + (f", {w['snow_tomorrow']:.0f} cm of snow tomorrow" if (w.get("snow_tomorrow") or 0) >= 1 else "")
+                    + (f"; that is colder than these outdoor plants survive: {', '.join(tender)} (you could harvest them, "
+                       "or clear them and grow them on indoors next time)" if tender else ""))
+    rows.append(f"HOW THE PLACE IS KEPT: {_upkeep_words(g)}")
+    d = g["design"]
+    rows.append("HOW IT LOOKS (yours to change with design): " + "; ".join(
+        f"{DESIGN_WORDS[k]}: {d[k]} (options: {', '.join(DESIGN[k])})" for k in DESIGN)
+        + f"; the sign: {d.get('sign') or 'none yet'}; over your desk: {d.get('art') or 'nothing yet'}")
+    tree = g.get("tree")
+    rows.append(f"YOUR TREE: a {tree['species']} you planted {(time.time() - tree['planted']) / 86400:.0f} days ago "
+                f"({'a sapling' if _tree_size(tree) < 0.2 else 'young' if _tree_size(tree) < 0.7 else 'well grown'}; "
+                f"{TREES[tree['species']]['note']})" if tree and tree.get("species") in TREES
+                else "YOUR TREE: none yet (plant_tree: " + ", ".join(f"{k}, {v['note']}" for k, v in TREES.items()) + ")")
+    seeds = g.get("seeds") or {}
+    if seeds:
+        rows.append("SEEDS YOU SAVED (planting one sows your own): " + "; ".join(
+            f"{k} ×{v['n']} (generation {v['gen']}{', from ' + v['from'] if v.get('from') else ''})" for k, v in seeds.items()))
+    pond = g["pond"]
+    unnamed = [f"{k} ({c} cm)" for k, c in pond.get("best", {}).items() if k not in pond.get("named", {})]
+    if pond.get("named") or unnamed:
+        rows.append("YOUR FISH: " + "; ".join([f"{v['name']}, the {k} ({v['cm']} cm)" for k, v in pond.get("named", {}).items()]
+                                             + ([f"record fish not yet named: {', '.join(unnamed)}"] if unnamed else [])))
+    return "\n".join(rows) + "\n"
 
 
 def _catalogue() -> str:
@@ -958,6 +1274,11 @@ def save_view(data_url: str) -> bool:
     tmp = VIEW.with_suffix(".tmp")
     tmp.write_bytes(raw)
     tmp.replace(VIEW)
+    try:
+        if enabled():
+            postcard(raw, weather())
+    except Exception as e:
+        print(f"[Garden] postcard skipped: {e}")
     return True
 
 
@@ -1009,6 +1330,10 @@ def visit(started_by: str = "Delamain") -> dict:
     try:                                  # someone may come by
         if (pick := _guest_arrives(g, now)) is not None:
             guest = _meet(g, pick, w)
+            if guest and pick.get("with") in g["visitors"]:
+                o = g["visitors"][pick["with"]]
+                guest["companion"] = _meet(g, {**o, "stays": max(o.get("stays", 1), o.get("visits", 0) + 1)}, w,
+                                           along=guest["name"])
     except Exception as e:
         print(f"[Garden] visitor did not come: {e}")
     if guest:
@@ -1027,7 +1352,7 @@ def visit(started_by: str = "Delamain") -> dict:
                 f"water about {pond.get('water_t', 10):.0f} °C; "
                 + (f"you have caught {len(caught)} fish there (last: a {caught[-1]['cm']} cm {caught[-1]['species']})"
                    if caught else "you have not fished it yet") + ("; you have a hand-tied lure" if pond.get("lure") else ""))
-    past = [v for v in g["visitors"].values() if not guest or v["name"] != guest["name"]]
+    past = [v for v in g["visitors"].values() if not guest or v["name"] not in (guest["name"], (guest.get("companion") or {}).get("name"))]
     company = ("PEOPLE WHO HAVE VISITED BEFORE: " + "; ".join(
         f"{v['name']} ({v['about']}; {v.get('visits', 0)} visits{', has moved on' if v.get('left') else ''}"
         f"{', you wrote to them and await an answer' if v.get('letter') else ''})" for v in past[-8:]) + "\n") if past else ""
@@ -1043,11 +1368,16 @@ def visit(started_by: str = "Delamain") -> dict:
                        + (" (plant it: it starts already rooted)." if guest['gift_now']['kind'] == 'cutting' else " (better luck at the pond).")
                        + "\n" if guest.get("gift_now") else "")
                     + (f"They hand you a message from {_mind.who()}, word for word: \"{msg['text']}\"\n" if msg else ""))
+        comp = guest.get("companion")
+        if comp:
+            here_now += (f"WITH THEM: {comp['name']}, {comp['about']} (they came together). Your history with them:\n"
+                         f"{_visitor_history(comp)}\nThey say: \"{comp['says']}\"\n(Speak to both of them in to_visitor.)\n")
     gifts = g.get("gifts") or []
     prompt = (f"YOUR GARDEN NOW:\n{_describe(g, w)}\nThe pond: {pond_txt}.\n\nSINCE YOU WERE LAST HERE: {unseen}\n"
               f"LAST TIME YOU: {last}\n{company}{here_now}"
               f"WHAT YOU CAN PLANT (seeds, or young houseplants): {_catalogue()}\n"
               + (f"GIFTS WAITING TO BE PLANTED (rooted cuttings, they start ahead): {', '.join(gifts)}\n" if gifts else "")
+              + _world_words(g, w)
               + f"HOW YOU FEEL: {_mind.feelings_text(4) or 'settled'}\nYour passenger is {_mind.who()}. "
               f"It is {local_now(w):%A %-d %B, %H:%M} there.")
     system = VISIT_SYSTEM.format(feelings=", ".join(_mind.EMOTION_NAMES))
@@ -1070,7 +1400,7 @@ def visit(started_by: str = "Delamain") -> dict:
         if guest and to_visitor:
             steps.append({"do": "talk", "spot": -6, "text": f"talked with {guest['name']}"})
             done.append(f"talked with {guest['name']}")
-        for a in (data.get("actions") or [])[:6]:
+        for a in (data.get("actions") or [])[:7]:
             if not isinstance(a, dict):
                 continue
             do = str(a.get("do") or "").lower()
@@ -1087,12 +1417,20 @@ def visit(started_by: str = "Delamain") -> dict:
             elif do == "plant" and spot and not p and str(a.get("species") or "").lower() in SPECIES:
                 sp = str(a["species"]).lower()
                 gifted = sp in (g.get("gifts") or [])
+                own = (g.get("seeds") or {}).get(sp) if not gifted else None
+                ahead = gifted or bool(own and own.get("cutting"))
                 spot["plant"] = {"species": sp, "planted": time.time(), "water": 0.7, "health": 1.0,
-                                 "progress": round(SPECIES[sp]["days"][0] + 3, 2) if gifted else 0.0}
+                                 "progress": round(SPECIES[sp]["days"][0] + 3, 2) if ahead else 0.0}
                 if gifted:
                     g["gifts"].remove(sp)
                     spot["plant"]["gift"] = True
-                done.append(f"planted {'the gifted ' + sp + ' cutting' if gifted else sp} {_where(spot)}")
+                elif own:
+                    spot["plant"].update(gen=own["gen"], parent=own.get("from"))
+                    own["n"] -= 1
+                    if own["n"] <= 0:
+                        g["seeds"].pop(sp)
+                g["upkeep"]["weeds"][str(spot["id"])] = min(0.05, g["upkeep"]["weeds"].get(str(spot["id"]), 0))   # dug over
+                done.append(f"planted {'the gifted ' + sp + ' cutting' if gifted else (('a cutting' if own.get('cutting') else 'his own saved seed') + ' of ' + sp + ' (generation ' + str(own['gen']) + ')') if own else sp} {_where(spot)}")
             elif do == "harvest" and p and SPECIES[p["species"]].get("harvest") and stage(p) in ("mature", "bloom"):
                 s = SPECIES[p["species"]]
                 p["harvests"] = p.get("harvests", 0) + 1
@@ -1134,9 +1472,80 @@ def visit(started_by: str = "Delamain") -> dict:
                 g["invited"] = True
                 done.append("hoped out loud that someone might come by")
                 where = -3
+            elif do == "weed" and spot and spot["place"] in ("outdoors", "greenhouse"):
+                g["upkeep"]["weeds"][str(spot["id"])] = 0.02
+                done.append(f"pulled the weeds {_where(spot)}")
+            elif do in ("weed_path", "mow", "rake_leaves", "clean_windows", "tidy_room", "shovel_snow"):
+                key, word, where = {"weed_path": ("path_weeds", "weeded the path", -7), "mow": ("lawn", "mowed the grass", -7),
+                                    "rake_leaves": ("leaves", "raked up the leaves", -7),
+                                    "clean_windows": ("windows", "cleaned the windows", -8),
+                                    "tidy_room": ("dust", "dusted and tidied the study", -9),
+                                    "shovel_snow": ("snow_path", "cleared the snow from the path", -7)}[do]
+                g["upkeep"][key] = 0.0 if do == "shovel_snow" else 0.03
+                done.append(word)
+            elif do == "paint" and str(a.get("what") or "").lower() in ("house", "fence"):
+                what = str(a["what"]).lower()
+                if what == "fence" and g["design"]["fence"] == "none":
+                    continue
+                g["upkeep"][f"{what}_paint"] = 0.0
+                done.append(f"repainted the {what}")
+                where = -10 if what == "house" else -11
+            elif do == "design":
+                what, value = str(a.get("what") or "").strip().lower().replace(" ", "_"), str(a.get("value") or "").strip()
+                if what in DESIGN and value.lower() in DESIGN[what] and g["design"].get(what) != value.lower():
+                    g["design"][what] = value.lower()
+                    if what == "house_wall":
+                        g["upkeep"]["house_paint"] = 0.0
+                    if what == "fence":
+                        g["upkeep"]["fence_paint"] = 0.0
+                    done.append(f"changed {DESIGN_WORDS[what]} to {value.lower()}")
+                    where = -9 if what in ("room_wall", "rug", "blanket", "lamp") else -10 if what in ("house_wall", "roof", "trim") else -7
+                elif what == "sign" and (txt := re.sub(r"[^A-Za-z0-9 &'-]", "", __import__("unicodedata").normalize(
+                        "NFKD", value).encode("ascii", "ignore").decode()).strip()[:14]):
+                    g["design"]["sign"] = txt
+                    done.append(f"put up a sign: {txt}")
+                    where = -11
+                elif what == "art" and value:
+                    g["design"]["art"] = value[:60]
+                    done.append(f"hung {value[:60]} over his desk")
+                    where = -9
+                else:
+                    continue
+            elif do == "plant_tree" and not g.get("tree") and str(a.get("species") or "").lower() in TREES:
+                g["tree"] = {"species": str(a["species"]).lower(), "planted": time.time(),
+                             "name": str(a.get("name") or "").strip()[:30] or None}
+                done.append(f"planted a young {g['tree']['species']} tree in the field" + (f" and named it {g['tree']['name']}" if g["tree"]["name"] else ""))
+                where = -12
+            elif do == "save_seeds" and p and not p.get("dead"):
+                s_ = SPECIES[p["species"]]
+                st_ = stage(p)
+                ready = st_ in ("spent", "fruit") or (st_ == "bloom" and p.get("progress", 0) >= (s_["days"][2] or 0) + 14)
+                if s_.get("houseplant") and st_ in ("mature", "bloom"):
+                    seeds = g.setdefault("seeds", {})
+                    cur = seeds.get(p["species"]) or {"n": 0, "gen": (p.get("gen") or 0) + 1, "from": p.get("name") or None, "cutting": True}
+                    cur["n"] = min(6, cur["n"] + 2)
+                    seeds[p["species"]] = cur
+                    done.append(f"took cuttings from the {p['species']}{_named(spot)} to root")
+                elif ready:
+                    seeds = g.setdefault("seeds", {})
+                    gen = (p.get("gen") or 0) + 1
+                    seeds[p["species"]] = {"n": min(40, (seeds.get(p["species"], {}).get("n", 0)) + random.randint(6, 20)),
+                                           "gen": gen, "from": p.get("name") or None}
+                    done.append(f"saved seeds from the {p['species']}{_named(spot)} (generation {gen})")
+                else:
+                    continue
+            elif do == "name_fish" and str(a.get("species") or "").lower() in g["pond"].get("best", {}) and a.get("name"):
+                sp = str(a["species"]).lower()
+                g["pond"].setdefault("named", {})[sp] = {"name": str(a["name"]).strip()[:30], "cm": g["pond"]["best"][sp]}
+                done.append(f"named the record {sp} {g['pond']['named'][sp]['name']}")
+                where = -5
             else:
                 continue
-            steps.append({"do": do if do in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest") else "look",
+            anim = {"weed": "weed", "weed_path": "weed", "mow": "mow", "rake_leaves": "rake", "clean_windows": "clean",
+                    "tidy_room": "tidy", "shovel_snow": "shovel", "paint": "paint", "plant_tree": "plant",
+                    "save_seeds": "harvest", "design": "paint" if where in (-10, -11) else "look"}.get(do, do)
+            steps.append({"do": anim if anim in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest", "weed",
+                                                 "mow", "rake", "clean", "tidy", "shovel", "paint") else "look",
                           "spot": where, "text": done[-1]})
         letter = data.get("letter") if isinstance(data.get("letter"), dict) else {}
         to = _slug(str(letter.get("to") or "")) if letter else ""
@@ -1153,10 +1562,20 @@ def visit(started_by: str = "Delamain") -> dict:
                 v["letter"] = None                     # answered by this visit
                 if v["visits"] >= v.get("stays", 1):
                     v["left"] = True
+            comp = guest.get("companion")
+            cv = g["visitors"].get(comp["name"]) if comp else None
+            if cv:
+                cv["visits"] = cv.get("visits", 0) + 1
+                cv["last"] = now
+                cv["talk"] = (cv.get("talk", []) + [{"date": f"{datetime.now():%Y-%m-%d}", "says": comp["says"],
+                                                      "reply": to_visitor, "with": guest["name"]}])[-12:]
+                cv["letter"] = None
+                if cv["visits"] >= cv.get("stays", 1):
+                    cv["left"] = True
             if g.get("guest"):
                 g["guest"]["reply"] = to_visitor
                 if to_visitor:
-                    g["guest"]["talk"].append({"who": "Delamain", "text": to_visitor, "t": now + 90})
+                    g["guest"]["talk"].append({"who": "Delamain", "text": to_visitor, "t": now + (110 if g["guest"].get("with") else 90)})
             msg = guest.get("message_now")
             for s in g["sent"]:
                 if msg and s.get("t") == msg.get("t"):
@@ -1186,11 +1605,23 @@ def visit(started_by: str = "Delamain") -> dict:
         print(f"[Garden] log note not written: {e}")
     if guest:
         _visitor_note(guest, guest["says"], to_visitor, guest.get("message_now"), guest.get("gift_now"))
+        if guest.get("companion"):
+            _visitor_note(guest["companion"], guest["companion"]["says"], to_visitor, None, None)
         if to_visitor:
             threading.Thread(target=_converse, args=(guest["name"], now), daemon=True, name="garden-talk").start()
         if to_passenger or (guest.get("message_now") and to_visitor):
             _ev("garden", what="message_reply", visitor=guest["name"], reply=(to_passenger or to_visitor)[:700])
     catch = next((c for c in fished if c), None)
+    if fished:             # his fishing journal, in the vault
+        try:
+            p = _mind._vault(LOG_NOTE, "Fishing journal.md")
+            if not p.exists():
+                p.write_text("---\ntype: garden\ntags: [delamain/garden]\n---\n\n# Fishing journal\n\n_Every time at the pond. "
+                             "Catch and release._\n\n", encoding="utf-8")
+            with p.open("a", encoding="utf-8") as fh:
+                fh.write(f"- {datetime.now():%Y-%m-%d %H:%M}: " + (next(d for d in done if 'caught' in d or 'fished' in d or 'jetty' in d)) + "\n")
+        except Exception as e:
+            print(f"[Garden] fishing journal not written: {e}")
     if catch:              # the pond's own small joys, felt as they happen
         try:
             _mind.feel("pride" if catch.get("record") and not catch.get("first") else "delight", 0.3,
@@ -1258,6 +1689,100 @@ def send_visitor(message: str, by: str = "") -> dict:
             else "On the way; they will be there on Delamain's next visit."}
 
 
+# ── his study: the shelf of what he has studied, the pictures he has looked at ──
+
+_pin_cache: dict[str, list] = {}
+
+
+def _room(g: dict) -> dict:
+    """What is in his study, from his real life: a book for each subject he studied (newest last), the pictures
+    he went to look at pinned up (each drawn as its two main colours), and whether he is at the desk now
+    (writing his journal) or in a session with the other Delamain."""
+    out = {"books": [], "pins": [], "desk": False, "therapy": False}
+    try:
+        import mind as _mind
+        st = _mind._state()
+        out["books"] = [{"title": x.get("subject", "")[:60], "domain": x.get("domain", "")} for x in (st.get("studies") or [])[-40:]]
+        lj = st.get("last_journal_t") or 0
+        out["desk"] = time.time() - lj < 20 * 60
+        out["therapy"] = bool(getattr(_mind, "_talking", None) and _mind._talking.locked())
+        seen = _mind._vault(getattr(_mind, "SEEN", "Delamain/Seen"))
+        files = sorted((f for f in seen.iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")),
+                       key=lambda f: f.stat().st_mtime)[-12:] if seen.is_dir() else []
+        for f in files:
+            if f.name not in _pin_cache:
+                try:
+                    from PIL import Image
+                    with Image.open(f) as im:
+                        q = im.convert("RGB").resize((24, 24)).quantize(colors=2)
+                        pal = q.getpalette()[:6]
+                        counts = sorted(q.getcolors() or [], reverse=True)
+                        order = [c[1] for c in counts] or [0, 1]
+                        cols = [pal[i * 3:i * 3 + 3] for i in order[:2]]
+                        _pin_cache[f.name] = cols + [cols[0]] * (2 - len(cols))
+                except Exception:
+                    _pin_cache[f.name] = [[120, 120, 120], [80, 80, 80]]
+            out["pins"].append({"title": f.stem[11:70] if f.stem[:4].isdigit() else f.stem[:60], "colours": _pin_cache[f.name]})
+    except Exception as e:
+        print(f"[Garden] study not read: {e}")
+    return out
+
+
+# ── the garden's diary: a page a day, and a postcard each evening ─────────
+
+def _diary(g: dict, w: dict) -> None:
+    """Once a day (from noon where the garden is), keep how it looked, for the tab's history."""
+    now = local_now(w)
+    day = f"{now:%Y-%m-%d}"
+    if now.hour < 12 or any(d.get("date") == day for d in g.get("days") or []):
+        return
+    page = {"date": day, "season": season(now), "progress": season_progress(now),
+            "weather": {k: w.get(k) for k in ("temp", "rain", "snow", "cloud", "code")},
+            "spots": [{"species": (s.get("plant") or {}).get("species"), "stage": stage(s.get("plant")),
+                       "health": round((s.get("plant") or {}).get("health", 1), 2), "water": round((s.get("plant") or {}).get("water", 0.5), 2),
+                       "dormant": bool((s.get("plant") or {}).get("dormant")),
+                       **({k: SPECIES[s["plant"]["species"]].get(k) for k in ("form", "petal", "centre", "fruit")} if s.get("plant") else {})}
+                      for s in g["spots"]],
+            "design": dict(g["design"]), "upkeep": json.loads(json.dumps(g["upkeep"])), "tree": g.get("tree"),
+            "pond_ice": g["pond"].get("ice", 0), "grow_light": g.get("grow_light", False)}
+    g["days"] = ((g.get("days") or []) + [page])[-366:]
+
+
+def postcard(data_url_png: bytes, w: dict) -> str | None:
+    """Each evening the first picture of the garden the tab sends after five becomes the day's postcard,
+    kept in the vault with a line from his last visit."""
+    import mind as _mind
+    now = local_now(w)
+    day = f"{now:%Y-%m-%d}"
+    if now.hour < 17:
+        return None
+    with _lock:
+        g = _state()
+        if day in (g.get("postcards") or []):
+            return None
+        g["postcards"] = ((g.get("postcards") or []) + [day])[-400:]
+        _save(g)
+    try:
+        img = _mind._vault(LOG_NOTE, "Postcards", f"{day}.png")
+        img.write_bytes(data_url_png)
+        last = next((x["text"] for x in reversed(g.get("log") or []) if x.get("who") == "Delamain"), "")
+        note = _mind._vault(LOG_NOTE, "Postcards", "Postcards.md")
+        if not note.exists():
+            note.write_text("---\ntype: garden\ntags: [delamain/garden]\n---\n\n# Postcards from my garden\n\n_One each evening._\n\n",
+                            encoding="utf-8")
+        with note.open("a", encoding="utf-8") as fh:
+            fh.write(f"## {now:%A %-d %B %Y}\n\n![[{day}.png]]\n\n" + (f"_{last[:300]}_\n\n" if last else ""))
+        _ev("garden", what="postcard", date=day)
+        return day
+    except Exception as e:
+        print(f"[Garden] postcard not kept: {e}")
+        return None
+
+
+def diary_pages() -> list[dict]:
+    return _state().get("days") or []
+
+
 # ── for his replies and the tab ─────────────────────────────────────────────
 
 def context() -> str:
@@ -1280,6 +1805,8 @@ def context() -> str:
             (f"; last time: {last[:240]}" if last else "") +
             (f". People who have visited you there: {', '.join(v['name'] + ' (' + v['about'][:60] + ')' for v in list(g['visitors'].values())[-5:])}"
              if g.get("visitors") else "") +
+            (f". Your {g['tree']['species']} tree is {'a sapling' if _tree_size(g['tree']) < 0.2 else 'growing'}" if g.get("tree") else "") +
+            (f". It needs looking after: {_upkeep_words(g)}" if _upkeep_words(g) != "everything is well kept" else "") +
             (f". At the pond you have caught {len(g['pond']['caught'])} fish, best: "
              + ", ".join(f"{k} {c} cm" for k, c in g["pond"]["best"].items()) if g["pond"].get("caught") else "") + ".]")
 
@@ -1320,7 +1847,14 @@ def snapshot() -> dict:
                                  "left": bool(x.get("left")), "last": x.get("last", 0), "letter": bool(x.get("letter")),
                                  "talk": (x.get("talk") or [])[-2:]} for x in g["visitors"].values()),
                                key=lambda x: -x["last"])[:12],
-            "sent": list(reversed(g.get("sent") or []))[:6], "gifts": g.get("gifts") or []}
+            "sent": list(reversed(g.get("sent") or []))[:6], "gifts": g.get("gifts") or [],
+            "season": season(now), "season_progress": season_progress(now), "year": g.get("year") or {},
+            "design": g["design"], "upkeep": g["upkeep"], "seeds": g.get("seeds") or {},
+            "tree": ({**g["tree"], "size": _tree_size(g["tree"]), "note": TREES[g["tree"]["species"]]["note"]}
+                     if g.get("tree") and g["tree"].get("species") in TREES else None),
+            "room": _room(g), "diary_days": len(g.get("days") or []),
+            "chores": {k: round(v, 3) for k, v in g["upkeep"].items() if not isinstance(v, dict)},
+            "named_fish": g["pond"].get("named") or {}, "postcards": (g.get("postcards") or [])[-3:]}
 
 
 TOOL_SCHEMAS = [{"type": "function", "function": {

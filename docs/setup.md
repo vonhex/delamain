@@ -171,6 +171,7 @@ All optional. The ones marked ⚙ can also be set in Settings → Integrations, 
 | `DELAMAIN_SLEEP` ⚙ | `23:30-07:00` | His bedtime (`HH:MM-HH:MM`), or `off` ([mind.md](mind.md#sleep-and-dreams)) |
 | `DELAMAIN_JOURNAL` ⚙ | `true` | The nightly journal |
 | `DELAMAIN_BRIEF` ⚙ | `true` | The morning brief |
+| `DELAMAIN_REACH_OUT` ⚙ | `true` | Reach out first: a few times a day he tells you something that matters (his garden, therapy, a meeting coming up) |
 | `DELAMAIN_SELF_REVIEW` ⚙ | `true` | The nightly self-review and code proposals |
 | `DELAMAIN_BACKGROUND_EFFORT` | `high` | `reasoning_effort` for background work (study, journal, reviews, reports); empty for a server that rejects the field |
 | `DELAMAIN_SELF_DIR` | `<repo>/self` | His working state: mood, feelings, interests, tasks, proposals ([mind.md](mind.md), [self-improvement.md](self-improvement.md)) |

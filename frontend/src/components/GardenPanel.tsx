@@ -4,8 +4,9 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, type PWorld } from './gardenPixels';
-import { X, Sprout, Maximize2, Minimize2, Send } from 'lucide-react';
+import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, TREE_STAND, STUDY_DESK, STUDY_STAND, BENCH_SEAT, type PWorld, type Design, type Upkeep } from './gardenPixels';
+import { X, Sprout, Maximize2, Minimize2, Send, Volume2, VolumeX, History } from 'lucide-react';
+import { useGardenSound } from './gardenSound';
 
 type Spot = {
   id: number; place: 'window' | 'shelf' | 'greenhouse' | 'outdoors'; temp: number; light: number; daily_light: number;
@@ -16,14 +17,22 @@ type Spot = {
 type Step = { do: string; spot: number; text: string; at: number };
 type Garden = {
   enabled: boolean;
-  weather: { temp: number; rain: number; snow: number; cloud: number; code: number; is_day: boolean; real: boolean };
+  weather: { temp: number; rain: number; snow: number; cloud: number; code: number; is_day: boolean; real: boolean;
+    wind?: number; low_tonight?: number | null; high_tomorrow?: number | null; snow_tomorrow?: number };
   daylight: number; units: string; spots: Spot[]; grow_light: boolean;
   cat: { name?: string; here: boolean; where?: string; doing?: string };
   here: boolean; visit: { since: number; until: number; steps: Step[]; noticed?: string } | null;
   last_visit: number; log: { t: number; who: string; text: string }[]; hour: number;
   asleep?: boolean;
   guest?: { name: string; kind: string; about: string; says: string; gift?: string | null; message?: string | null; reply?: string;
-    since?: number; until?: number; steps?: { do: string; spot: number; at: number }[]; talk?: { who: string; text: string; t: number }[] } | null;
+    since?: number; until?: number; steps?: { do: string; spot: number; at: number }[]; talk?: { who: string; text: string; t: number }[];
+    with?: { name: string; kind: string; about: string; says: string; steps?: { do: string; spot: number; at: number }[] } } | null;
+  season?: string; season_progress?: number; year?: { first_frost?: string; first_snow?: string; season?: string };
+  design?: Partial<Design>; upkeep?: Partial<Upkeep>; chores?: Record<string, number>;
+  seeds?: Record<string, { n: number; gen: number; from?: string | null; cutting?: boolean }>;
+  tree?: { species: string; planted: number; name?: string | null; size: number; note: string } | null;
+  room?: { books: { title: string; domain?: string }[]; pins: { title: string; colours: number[][] }[]; desk: boolean; therapy: boolean };
+  named_fish?: Record<string, { name: string; cm: number }>; diary_days?: number; postcards?: string[];
   pond?: { ice: number; water_t: number; lure: boolean; caught: { t: number; species: string; cm: number }[]; best: Record<string, number>; total: number };
   visitors?: { name: string; kind: string; about: string; visits: number; left: boolean; last: number; letter: boolean; talk: { date: string; says: string; reply?: string }[] }[];
   sent?: { t: number; text: string; by?: string; delivered?: number | null; visitor?: string | null; reply?: string | null }[];
@@ -50,6 +59,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
   gRef.current = g;
   const pos = useRef<{ x: number; y: number; facing: number; dist: number } | null>(null);
   const gpos = useRef<{ x: number; y: number; facing: number; dist: number; name: string } | null>(null);
+  const gpos2 = useRef<{ x: number; y: number; facing: number; dist: number; name: string } | null>(null);
   useEffect(() => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
@@ -64,71 +74,93 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
       if (Math.abs(dx) > 0.6) p.facing = dx > 0 ? 1 : -1;
       return true;
     };
+    const rnd = (at: number) => { const h = Math.sin(at * 12.9898) * 43758.5453; return h - Math.floor(h); };
+    // where he stands (his middle) for each place he goes; face: which way to turn when he gets there
+    const placeOf = (spot: number, at: number, gg: Garden): { x: number; y: number; face: number } => {
+      if (spot >= 0 && spot < SPOTS.length) return { x: SPOTS[spot].stand.x + 7, y: SPOTS[spot].stand.y, face: -1 };
+      switch (spot) {
+        case -4: return { x: BED_STAND.x + 7, y: BED_STAND.y, face: 0 };
+        case -5: return { x: POND_STAND.x + 7, y: POND_STAND.y, face: 1 };
+        case -6: return { x: TALK_STAND.x + 7, y: TALK_STAND.y, face: 1 };
+        case -7: return { x: 184 + rnd(at) * 56, y: 160, face: 0 };          // about the yard
+        case -8: return { x: 50, y: 157, face: -1 };                         // at the window
+        case -9: return { x: STUDY_STAND.x, y: STUDY_STAND.y, face: -1 };    // in his study
+        case -10: return { x: 86, y: 159, face: -1 };                        // outside the house
+        case -11: return { x: 212, y: 160, face: -1 };                       // at the fence and the sign
+        case -12: return { x: TREE_STAND.x, y: TREE_STAND.y, face: 1 };      // by his tree
+        default: { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; return { x: bs.x + 7, y: bs.y, face: 0 }; }
+      }
+    };
+    // a visitor: walks in from the lane past the pond, goes about what they are doing, and walks off again
+    const moveGuest = (ref_: typeof gpos, info: { name: string; kind: string; steps?: { do: string; spot: number; at: number }[] },
+                       since: number, until: number | undefined, nowS: number, gg: Garden, del: PWorld['delamain'], speaker: string, side: number) => {
+      if (nowS < since) { ref_.current = null; return null; }
+      if (!ref_.current || ref_.current.name !== info.name) ref_.current = { x: 330 + side * 8, y: 160, facing: -1, dist: 0, name: info.name };
+      const q = ref_.current;
+      const leaving = !!until && nowS >= until;
+      const st = (info.steps || []).filter(s => s.at <= nowS).pop();
+      let tx = GUEST_AT.x + side * 12, ty = GUEST_AT.y, doing = st?.do || 'talk', face = 0;
+      if (leaving) { tx = 334; ty = 160; doing = 'look'; }
+      else if (st) {
+        const sp = st.spot;
+        if (sp >= 0 && sp < SPOTS.length) { tx = SPOTS[sp].stand.x - 4 - side * 6; ty = SPOTS[sp].stand.y; face = 1; }
+        else if (sp === -2) { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; tx = bs.x - 4 - side * 6; ty = bs.y; face = 1; }
+        else if (sp === -3) { if (gg.design?.bench === 'yes') { tx = BENCH_SEAT.x + 4 + side * 6; ty = BENCH_SEAT.y; } else { tx = 202 + side * 10; ty = 160; } }
+        else if (sp === -5) { tx = GUEST_POND.x - side * 9; ty = GUEST_POND.y; face = -1; }
+        else if (sp === -7) { tx = 184 + rnd(st.at) * 60; ty = 160; }
+        else if (del && !del.lying) { tx = del.x + (del.x > 290 ? -13 : 13) * (side ? -1 : 1); ty = Math.max(del.y, 147); }     // beside him
+      }
+      const walking = walk(q, tx, ty, 1.2);
+      if (!walking) q.facing = speaker && del && Math.abs(del.x - q.x) < 30 ? (del.x > q.x ? 1 : -1) : face || q.facing;
+      if (leaving && q.x > 326) return null;
+      return { name: info.name, kind: info.kind, x: q.x, y: q.y, walking, doing: walking ? 'look' : doing, facing: q.facing, stride: q.dist,
+        speaking: speaker === info.name };
+    };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (now - last < 90) return;          // about ten frames a second, like the pixel art it is
       last = now;
-      const gg = gRef.current, nowS = Date.now() / 1000;
+      const gg = gRef.current, nowS = Date.now() / 1000, tt = (now - t0) / 1000;
       const gs = gg.here ? gg.guest : null;
       const said = (gs?.talk || []).filter(l => l.t <= nowS).pop();
       const speaker = said && nowS - said.t < 9 ? said.who : '';
-      let del: PWorld['delamain'] = null;
+      let del: PWorld['delamain'] = null, twin: PWorld['twin'] = null;
       if (gg.here && gg.visit) {
         const st = (gg.visit.steps || []).filter(s => s.at <= nowS).pop();
-        let target = { x: 170, y: 152 }, doing = 'look';
-        let face = 0;
-        if (st) {
-          doing = st.do;
-          target = st.spot >= 0 && st.spot < SPOTS.length ? SPOTS[st.spot].stand
-            : st.spot === -4 ? BED_STAND : st.spot === -5 ? POND_STAND : st.spot === -6 ? TALK_STAND
-            : (BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside);
-          face = st.spot === -5 || st.spot === -6 ? 1 : 0;
-        }
-        if (!pos.current) pos.current = { x: 170, y: 152, facing: -1, dist: 0 };     // he comes in by the greenhouse door
+        let target = { x: 177, y: 152, face: 0 }, doing = 'look';
+        if (st) { doing = st.do; target = placeOf(st.spot, st.at, gg); }
+        if (['mow', 'rake', 'shovel'].includes(doing)) target = { ...target, x: target.x + Math.sin(tt * 0.35) * 10 };   // working his way along
+        if (!pos.current) pos.current = { x: 177, y: 152, facing: -1, dist: 0 };     // he comes in by the greenhouse door
         const p = pos.current;
-        const walking = walk(p, target.x + 7, target.y, 1.4);
+        const walking = walk(p, target.x, target.y, ['mow', 'rake', 'shovel'].includes(doing) ? 0.6 : 1.4);
+        const working = ['mow', 'rake', 'shovel'].includes(doing) && Math.abs(target.x - p.x) < 12;
         if (!walking) {
           const g2 = gpos.current;                                                   // turn to whoever he is talking with
-          p.facing = speaker && g2 && Math.abs(g2.x - p.x) < 30 ? (g2.x > p.x ? 1 : -1)
-            : face || (SPOTS.some(s => Math.abs(s.stand.x + 7 - p.x) < 1) ? -1 : p.facing);
+          p.facing = speaker && g2 && Math.abs(g2.x - p.x) < 30 ? (g2.x > p.x ? 1 : -1) : target.face || p.facing;
         }
-        del = { x: p.x, y: p.y, walking, doing: walking ? 'look' : speaker === 'Delamain' && doing === 'look' ? 'talk' : doing, facing: p.facing,
-          lying: !walking && doing === 'rest', stride: p.dist, speaking: speaker === 'Delamain' };
+        del = { x: p.x, y: p.y, walking: walking && !working, doing: walking && !working ? 'look' : speaker === 'Delamain' && doing === 'look' ? 'talk' : doing,
+          facing: p.facing, lying: !walking && doing === 'rest', stride: p.dist, speaking: speaker === 'Delamain' };
       } else {
         pos.current = null;
-        if (gg.asleep) del = { x: 0, y: 0, walking: false, doing: 'sleep', facing: 1, lying: true };   // asleep in his bed
+        if (gg.room?.therapy) {                       // in a session with the other Delamain, sitting on the rug
+          const turn = Math.floor(tt / 7) % 2;
+          del = { x: 52, y: 154, walking: false, doing: 'therapy', facing: 1, speaking: turn === 0 };
+          twin = { x: 68, y: 154, walking: false, doing: 'therapy', facing: -1, speaking: turn === 1 };
+        } else if (gg.room?.desk) del = { x: STUDY_DESK.x, y: STUDY_DESK.y, walking: false, doing: 'write', facing: -1 };   // writing his journal
+        else if (gg.asleep) del = { x: 0, y: 0, walking: false, doing: 'sleep', facing: 1, lying: true };   // asleep in his bed
       }
-      // a visitor: walks in from the lane past the pond, goes about what they are doing, and walks off again
-      let guest: PWorld['guest'] = null;
-      if (gs && gs.since && nowS >= gs.since) {
-        if (!gpos.current || gpos.current.name !== gs.name) gpos.current = { x: 330, y: 160, facing: -1, dist: 0, name: gs.name };
-        const q = gpos.current;
-        const leaving = !!gs.until && nowS >= gs.until;
-        const st = (gs.steps || []).filter(s => s.at <= nowS).pop();
-        let tx = GUEST_AT.x, ty = GUEST_AT.y, doing = st?.do || 'talk', face = 0;
-        if (leaving) { tx = 334; ty = 160; doing = 'look'; }
-        else if (st) {
-          const sp = st.spot;
-          if (sp >= 0 && sp < SPOTS.length) { tx = SPOTS[sp].stand.x - 4; ty = SPOTS[sp].stand.y; face = 1; }
-          else if (sp === -2) { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; tx = bs.x - 4; ty = bs.y; face = 1; }
-          else if (sp === -3) { tx = 202; ty = 160; }
-          else if (sp === -5) { tx = GUEST_POND.x; ty = GUEST_POND.y; face = -1; }
-          else if (sp === -7) { const h = Math.sin(st.at * 12.9898) * 43758.5453; tx = 184 + (h - Math.floor(h)) * 60; ty = 160; }
-          else if (del && !del.lying) { tx = del.x + (del.x > 300 ? -13 : 13); ty = Math.max(del.y, 147); }     // beside him
-        }
-        const walking = walk(q, tx, ty, 1.2);
-        if (!walking) q.facing = speaker && del && Math.abs(del.x - q.x) < 30 ? (del.x > q.x ? 1 : -1) : face || q.facing;
-        if (!(leaving && q.x > 326))
-          guest = { name: gs.name, kind: gs.kind, x: q.x, y: q.y, walking, doing: walking ? 'look' : doing, facing: q.facing, stride: q.dist,
-            speaking: speaker === gs.name };
-      } else gpos.current = null;
+      const guest = gs && gs.since ? moveGuest(gpos, gs, gs.since, gs.until, nowS, gg, del, speaker, 0) : (gpos.current = null);
+      const g2i = gs?.with;
+      const guest2 = gs && g2i && gs.since ? moveGuest(gpos2, g2i, gs.since + 25, gs.until, nowS, gg, del, speaker, 1) : (gpos2.current = null);
       render(ctx, {
         hour: gg.hour, isDay: gg.weather.is_day, cloud: gg.weather.cloud, rain: gg.weather.rain, snow: gg.weather.snow,
         temp: gg.weather.temp, growLight: gg.grow_light, spots: gg.spots,
         cat: gg.cat.here ? { here: true, where: gg.cat.where, doing: gg.cat.doing } : null, delamain: del,
         pond: { ice: gg.pond?.ice ?? 0, waterT: gg.pond?.water_t ?? 10 },
-        guest,
-      }, (now - t0) / 1000);
+        guest, guest2, twin, season: gg.season, seasonProgress: gg.season_progress, wind: gg.weather.wind,
+        design: gg.design, upkeep: gg.upkeep, tree: gg.tree ? { species: gg.tree.species, size: gg.tree.size } : null,
+        room: gg.room ? { books: gg.room.books, pins: gg.room.pins } : undefined,
+      }, tt);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -148,6 +180,18 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   const [msg, setMsg] = useState('');
   const [by, setBy] = useState('');
   const [msgNote, setMsgNote] = useState('');
+  const [sound, setSound] = useState(false);
+  const [days, setDays] = useState<DiaryPage[] | null>(null);
+  const [dayIdx, setDayIdx] = useState<number | null>(null);    // null: now; else a page of the garden's diary
+  useGardenSound(sound, { isDay: g?.weather.is_day ?? true, rain: g?.weather.rain ?? 0, snow: g?.weather.snow ?? 0, temp: g?.weather.temp ?? 10,
+    wind: g?.weather.wind ?? 5, season: g?.season || 'summer' });
+  const openHistory = () => {
+    if (dayIdx !== null) { setDayIdx(null); return; }
+    fetch('/api/garden/history', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(d => { setDays(d.days || []); setDayIdx(Math.max(0, (d.days || []).length - 1)); })
+      .catch(() => setError('Could not read the garden diary.'));
+  };
   const fullRef = useRef<HTMLDivElement>(null);
   const shot = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -229,6 +273,8 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
       <div className="flex items-center justify-between px-4 py-2 border-b border-emerald-400/30 bg-emerald-400/5 shrink-0">
         <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> DELAMAINS_GARDEN</span>
         <div className="flex items-center gap-3">
+          <button onClick={openHistory} className={dayIdx !== null ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title="Look back through the garden's diary" aria-label="History"><History size={16} /></button>
+          <button onClick={() => setSound(v => !v)} className={sound ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title={sound ? 'Sound off' : 'Hear the garden'} aria-label="Sound">{sound ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
           <button onClick={() => setFull(true)} className="text-gray-400 hover:text-emerald-300" title="Fill the screen with the garden (F)" aria-label="Full screen"><Maximize2 size={16} /></button>
           <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close"><X size={18} /></button>
         </div>
@@ -253,7 +299,15 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
         {!g ? <p className="text-xs text-gray-500 font-mono">Walking down to the garden…</p> : !g.enabled ? (
           <p className="text-xs text-gray-400">Delamain's garden is switched off (Settings → Integrations → Features → Delamain's garden).</p>
         ) : (<>
-          <PixelScene g={g} capture={shot} />
+          {dayIdx !== null && days && days.length > 0 ? (
+            <div className="space-y-1">
+              <PixelScene g={fromDiary(g, days[dayIdx])} />
+              <input type="range" min={0} max={days.length - 1} value={dayIdx} onChange={e => setDayIdx(Number(e.target.value))} className="w-full accent-emerald-400" aria-label="Day" />
+              <p className="text-xs text-gray-400 flex justify-between"><span>{new Date(days[dayIdx].date + 'T12:00').toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}, midday · {days[dayIdx].season}</span>
+                <button onClick={() => setDayIdx(null)} className="text-emerald-300 hover:underline">Back to now</button></p>
+            </div>
+          ) : dayIdx !== null ? <p className="text-xs text-gray-500">The diary starts today: a page is kept each day from noon.</p> : null}
+          {dayIdx === null && <PixelScene g={g} capture={shot} />}
           <div className="text-xs text-gray-300 space-y-1">
             {g.here && g.visit ? (
               <p className="text-cyan-200"><b>Delamain is in the garden now</b>{step ? `: ${step.text}` : ', looking around'}. Here until {new Date(g.visit.until * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</p>
@@ -315,6 +369,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
               </ul>
             </section>
           ))}
+          <WorldSections g={g} units={units} />
           {g.pond && (
             <section className="space-y-1">
               <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">
@@ -325,6 +380,14 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
                   {g.pond.total} caught and let go. Best: {Object.entries(g.pond.best).map(([k, v]) => `${k} ${units === 'metric' ? `${v} cm` : `${(v / 2.54).toFixed(1)} in`}`).join(' · ')}.
                   <span className="text-gray-500"> Last: {g.pond.caught[g.pond.caught.length - 1].species}, {ago(g.pond.caught[g.pond.caught.length - 1].t)}.</span>
                 </p>
+              )}
+              {g.named_fish && Object.keys(g.named_fish).length > 0 && (
+                <p className="text-xs text-gray-300">Fish he knows by name: {Object.entries(g.named_fish).map(([k, v]) => `${v.name} the ${k} (${units === 'metric' ? `${v.cm} cm` : `${(v.cm / 2.54).toFixed(1)} in`})`).join(' · ')}</p>
+              )}
+              {g.pond.caught.length > 0 && (
+                <ul className="text-[11px] text-gray-400 space-y-0.5">
+                  {[...g.pond.caught].reverse().map(c => <li key={c.t}><span className="font-mono text-gray-500">{ago(c.t)}</span> {(c as { name?: string }).name ? `${(c as { name?: string }).name}, ` : ''}{c.species}, {units === 'metric' ? `${c.cm} cm` : `${(c.cm / 2.54).toFixed(1)} in`}</li>)}
+                </ul>
               )}
             </section>
           )}
@@ -383,4 +446,78 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
       </div>
     </div>
   );
+}
+
+type DiaryPage = { date: string; season: string; progress: number; weather: { temp: number; rain: number; snow: number; cloud: number; code: number };
+  spots: { species: string | null; stage: string; health: number; water: number; dormant: boolean; form?: string; petal?: string; centre?: string; fruit?: string | null }[];
+  design: Partial<Design>; upkeep: Partial<Upkeep>; tree: { species: string; planted: number } | null; pond_ice: number; grow_light: boolean };
+
+// a page of the diary, as a garden the scene can draw (at midday, nobody there)
+function fromDiary(g: Garden, d: DiaryPage): Garden {
+  const years = (sp: string) => ({ apple: 4, maple: 6, birch: 5, cherry: 4 } as Record<string, number>)[sp] || 5;
+  const at = new Date(d.date + 'T12:00').getTime() / 1000;
+  return {
+    ...g, here: false, visit: null, guest: null, asleep: false, hour: 12, grow_light: d.grow_light,
+    weather: { ...g.weather, ...d.weather, is_day: true, wind: 5 },
+    spots: g.spots.map((s, i) => ({ ...s, ...(d.spots[i] || {}), species: d.spots[i]?.species ?? null })),
+    season: d.season, season_progress: d.progress, design: d.design, upkeep: d.upkeep,
+    tree: d.tree ? { ...d.tree, size: Math.min(1, Math.max(0, (at - d.tree.planted) / (years(d.tree.species) * 365 * 86400))), note: '' } : null,
+    pond: g.pond ? { ...g.pond, ice: d.pond_ice } : g.pond, cat: { ...g.cat, here: false },
+    room: g.room ? { ...g.room, desk: false, therapy: false } : g.room,
+  };
+}
+
+const CHORE_WORDS: Record<string, string> = { path_weeds: 'weeds in the path', lawn: 'long grass', leaves: 'fallen leaves', windows: 'grimy windows',
+  dust: 'dust in his study', house_paint: 'house paint wear', fence_paint: 'fence paint wear', snow_path: 'snow on the path' };
+
+function WorldSections({ g, units }: { g: Garden; units: string }) {
+  const deg = (c: number) => (units === 'metric' ? `${Math.round(c)}°C` : `${Math.round(c * 9 / 5 + 32)}°F`);
+  const chores = Object.entries(g.chores || {}).filter(([k]) => CHORE_WORDS[k]);
+  const weeds = Object.entries(g.upkeep?.weeds || {}).filter(([, v]) => v > 0.1);
+  const d = g.design || {};
+  const bar = (v: number) => (
+    <span className="inline-block w-16 h-1 bg-white/10 rounded-sm overflow-hidden align-middle ml-1">
+      <span className="block h-full" style={{ width: `${Math.round(v * 100)}%`, background: v > 0.7 ? '#f87171' : v > 0.4 ? '#f59e0b' : '#4ade80' }} />
+    </span>
+  );
+  return (<>
+    <section className="space-y-1">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">THE YEAR</h3>
+      <p className="text-xs text-gray-300">
+        {g.season ? `${(g.season_progress ?? 0) < 0.34 ? 'Early' : (g.season_progress ?? 0) < 0.67 ? 'Mid' : 'Late'} ${g.season}` : ''}
+        {g.year?.first_frost ? ` · first frost ${g.year.first_frost}` : ' · no frost yet this season'}
+        {g.year?.first_snow ? ` · first snow ${g.year.first_snow}` : ''}
+        {g.weather.low_tonight != null ? ` · tonight's low ${deg(g.weather.low_tonight)}` : ''}
+        {(g.weather.snow_tomorrow || 0) >= 1 ? ` · snow tomorrow` : ''}
+      </p>
+    </section>
+    <section className="space-y-1">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">KEEPING IT UP <span className="text-gray-500 normal-case tracking-normal">· left alone, it goes wild</span></h3>
+      <ul className="text-[11px] text-gray-400 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        {chores.map(([k, v]) => <li key={k} className="flex justify-between"><span>{CHORE_WORDS[k]}</span>{bar(v)}</li>)}
+        {weeds.map(([k, v]) => <li key={`w${k}`} className="flex justify-between"><span>weeds in bed {Number(k) + 1}</span>{bar(v)}</li>)}
+      </ul>
+    </section>
+    <section className="space-y-1">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HOW DELAMAIN HAS MADE IT LOOK</h3>
+      <p className="text-[11px] text-gray-400">
+        House {d.house_wall} with a {d.roof} roof and {d.trim} curtains · {d.path} path · fence {d.fence}
+        {d.lights && d.lights !== 'none' ? ` · ${d.lights} string lights` : ''}{d.feeder === 'yes' ? ' · a bird feeder' : ''}{d.bench === 'yes' ? ' · a bench by the pond' : ''}
+        {' · '}study walls {d.room_wall}, {d.rug} rug, {d.blanket} blanket
+        {d.sign ? <> · the sign reads <b className="text-gray-200">{d.sign}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
+      </p>
+      <p className="text-[11px] text-gray-400">
+        {g.tree ? <>His {g.tree.species} tree{g.tree.name ? ` (${g.tree.name})` : ''}: planted {Math.round((Date.now() / 1000 - g.tree.planted) / 86400)} days ago, {g.tree.size < 0.2 ? 'a sapling' : g.tree.size < 0.7 ? 'growing' : 'well grown'}; {g.tree.note}.</> : 'No tree yet; he can plant one.'}
+        {g.seeds && Object.keys(g.seeds).length > 0 && <> · Saved: {Object.entries(g.seeds).map(([k, v]) => `${k} ×${v.n} (${v.cutting ? 'cuttings' : `gen ${v.gen}`})`).join(', ')}</>}
+      </p>
+    </section>
+    {g.room && (
+      <section className="space-y-1">
+        <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS STUDY <span className="text-gray-500 normal-case tracking-normal">· {g.room.desk ? 'at his desk, writing' : g.room.therapy ? 'in a session with the other Delamain' : 'the room on the left of the house'}</span></h3>
+        <p className="text-[11px] text-gray-400">{g.room.books.length} books on the shelf, one for each thing he studied{g.room.books.length ? `, the newest: ${g.room.books.slice(-3).map(b => b.title).reverse().join('; ')}` : ''}.</p>
+        {g.room.pins.length > 0 && <p className="text-[11px] text-gray-400">Pinned up: {g.room.pins.slice(-4).map(p => p.title).reverse().join('; ')}.</p>}
+        {g.postcards && g.postcards.length > 0 && <p className="text-[11px] text-gray-500">Postcards from the garden are kept each evening in <span className="font-mono">Delamain/Garden/Postcards/</span>.</p>}
+      </section>
+    )}
+  </>);
 }

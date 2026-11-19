@@ -293,6 +293,32 @@ def get_calendar(start_date: str = "", days: int = 1, query: str = "") -> str:
     return "\n".join(lines) + more + f"\n(Times are {datetime.now(tz):%Z}. Use the [E#] reference to move or remove an event.)"
 
 
+def upcoming(within_minutes: int = 60) -> list[dict]:
+    """Timed events starting in the next `within_minutes`, across the passenger's calendars, as data (for him
+    to give a heads-up before a meeting). Empty when Google is not connected."""
+    if not status().get("connected"):
+        return []
+    tz = _tz()
+    t0 = datetime.now(tz)
+    t1 = t0 + timedelta(minutes=within_minutes)
+    out = []
+    for c in calendars():
+        params = {"timeMin": t0.isoformat(), "timeMax": t1.isoformat(), "singleEvents": "true", "orderBy": "startTime",
+                  "maxResults": 10}
+        for ev in _api("GET", f"/calendars/{urllib.parse.quote(c['id'], safe='')}/events", params=params).get("items", []):
+            s = ev.get("start", {})
+            if ev.get("status") == "cancelled" or "dateTime" not in s:
+                continue
+            start = _parse_when(s["dateTime"], tz)
+            if start < t0:
+                continue
+            out.append({"id": ev.get("id"), "title": ev.get("summary") or "(no title)", "start": start.isoformat(),
+                        "at": _fmt_time(start), "minutes": int((start - t0).total_seconds() // 60),
+                        "location": (ev.get("location") or "")[:120], "people": len(ev.get("attendees") or []),
+                        "description": (ev.get("description") or "")[:400]})
+    return sorted(out, key=lambda e: e["start"])
+
+
 def _pick_calendar(name: str) -> dict:
     cals = calendars()
     if name:

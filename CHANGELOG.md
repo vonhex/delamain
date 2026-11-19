@@ -4,6 +4,20 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.7.0] — 2026-11-18 — A place of his own
+
+### Added
+- **The garden's year**: seasons where it is (grass, the treeline, falling leaves), the first frost and first snow of each season as events (backfilled from the weather history), and the forecast on each visit (tonight's low, and which tender plants outside it would kill).
+- **Upkeep and neglect**: weeds in the beds (they choke what grows there), in the path, long grass, fallen leaves, grimy windows and glass (less light), dust and cobwebs in his study, wearing paint, snow on the path. He weeds, mows, rakes, cleans, tidies, shovels and repaints when he cares to, and the scene shows all of it.
+- **His to design**: the house's walls, roof and curtains, the path, the fence, his study's walls, rug and blanket, a desk lamp, string lights, a bird feeder, a bench by the pond, a sign with a name for the garden, the art over his desk; a tree he plants that grows for years (apple, maple, birch or cherry) and changes with the seasons; seeds he saves and sows, generation after generation (cuttings from houseplants); names for record fish, which he can catch again.
+- **His study**: a room built on to the house with a bookshelf (a book for each subject he studied), a pinboard of the pictures he looked at, and a desk where he writes his journal at night; therapy sessions shown on the rug with the other Delamain.
+- **Garden tab**: a history slider (a page of the diary each day, up to a year; `GET /api/garden/history`), sound made in the browser (wind, rain, birds, crickets, the pond), evening postcards in `Delamain/Garden/Postcards/`, a fishing journal, and sections for the year, upkeep, his design, his study.
+- **Visitors** know of each other and the local news, and sometimes come in twos and talk with each other too.
+- **Reaching out first** (`reach.py`, `DELAMAIN_REACH_OUT`): a few times a day at most, never while he sleeps or you are talking, he tells you something that matters: from his garden, a frost warning, his answer to your message, a new visitor, therapy, his study, or a heads-up before a meeting on your calendar. Kept for when you next open the app if nobody is there.
+- More animation: weeding, mowing, raking, cleaning, tidying, shovelling, painting, writing at his desk.
+
+---
+
 ## [3.6.1] — 2026-11-18
 
 ### Fixed
