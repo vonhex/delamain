@@ -187,10 +187,17 @@ on the Android Auto screen. The full guide, Docker volumes and every setting are
 <img src="Screenshots/brain.png" alt="Delamain's brain: remembering, feeling fascination, and answering" />
 <sub>See him think: every part lights up as he listens, remembers, feels and answers, with his thought stream beside it</sub>
 
+<img src="Screenshots/garden.png" alt="Delamain's house, garden and field at sunset, talking with a visitor" />
+<sub>A window into his life: a summer evening, alpenglow on the Front Range, his corn tasselling behind the house, and Delamain talking with a neighbour who came up the lane. Inside: his study, the attic office, the aquarium, the grow-light shelf and the windowsill</sub>
+
 <table>
   <tr>
-    <td><img src="Screenshots/garden.png" alt="Delamain's garden at golden hour" /><br><sub>Delamain's garden at golden hour: real plants on the windowsill, under the grow light, in the greenhouse and outdoors, under the real sky</sub></td>
-    <td><img src="Screenshots/garden-night.png" alt="Delamain's garden on a frosty night" /><br><sub>The same garden on a frosty night: moonlight, the lantern and the lamp post, the cat asleep on the bench</sub></td>
+    <td><img src="Screenshots/garden-harvest.png" alt="Bringing in the winter wheat with a scythe" /><br><sub>Bringing in the winter wheat he sowed last autumn</sub></td>
+    <td><img src="Screenshots/garden-autumn.png" alt="Flying a kite over the pumpkin field in the wind" /><br><sub>Autumn: pumpkins ripe in the field, and a kite in the real wind</sub></td>
+  </tr>
+  <tr>
+    <td><img src="Screenshots/garden-night.png" alt="A snowy winter night with the telescope" /><br><sub>A clear winter night: snow on the ground, the stove lit, out with his telescope</sub></td>
+    <td><img src="Screenshots/garden-home.png" alt="An autumn evening at home, playing guitar" /><br><sub>An evening at home: his guitar in the armchair, the lamp on, the cat curled up</sub></td>
   </tr>
 </table>
 
