@@ -179,7 +179,9 @@ def recent(n: int = 8) -> list[dict]:
 _NOTABLE = [(r"is bearing fruit", "garden", 0.7), (r"is flowering", "garden", 0.45), (r"\bdied\b", "garden", 0.6),
             (r"first frost of the season", "garden", 0.7), (r"first snow of the season", "garden", 0.8),
             (r"pond froze over", "garden", 0.45), (r"is grown and ready to harvest", "garden", 0.4),
-            (r"has come\.", "garden", 0.35)]
+            (r"has come\.", "garden", 0.35), (r"in the field is ripe", "garden", 0.65),
+            (r"in the field came up", "garden", 0.45), (r"in the field (is tasselling|has headed out|is in flower)", "garden", 0.35),
+            (r"scarecrow.*blew over", "garden", 0.3)]
 
 
 def scan() -> None:

@@ -210,7 +210,9 @@ def _extras() -> dict:
     return {"pond": {"ice": 0.0, "water_t": 10.0, "caught": [], "best": {}, "lure": False, "named": {}},
             "visitors": {}, "guest": None, "sent": [], "gifts": [], "invited": False,
             "design": dict(DESIGN_DEFAULT), "upkeep": dict(UPKEEP_DEFAULT), "year": {}, "seeds": {},
-            "tree": None, "days": [], "postcards": []}
+            "tree": None, "days": [], "postcards": [],
+            "field": dict(FIELD_DEFAULT), "pantry": {}, "wood": 0.6, "snowman": None, "firepit": False, "feeder_fill": 0.0,
+            "sketches": []}
 
 
 # ── the look of the place: his to choose ───────────────────────────────────
@@ -252,6 +254,205 @@ CHORES = {"weed": "pull the weeds in a bed (give its spot)", "weed_path": "weed 
           "tidy_room": "dust and tidy your study", "shovel_snow": "clear the snow from the path",
           "paint": "repaint (what: house or fence)"}
 
+# ── the field behind the house: his to cultivate ──────────────────────────
+# A real crop under the real weather, sown when he chooses: it comes up, grows, flowers, ripens and is harvested,
+# or dies of frost, drought, wind, weeds or crows. Temperatures °C (no growth, best from, best to, no growth);
+# days of good growing weather to each stage: up, young, tall, flowering, ripe, past its best.
+CROPS = {
+    "corn": dict(temp=(10, 20, 30, 38), hardy=-1, water=0.55, days=(6, 16, 34, 46, 66, 96), tall=True,
+                 yield_=(240, "ears"), sow="after the last frost, when the soil is warm (May to early June)",
+                 note="sweet corn, about 75 good days; tassels in midsummer; frost kills it"),
+    "winter wheat": dict(temp=(3, 12, 24, 34), hardy=-25, water=0.4, days=(10, 30, 62, 88, 118, 145), tall=False,
+                         yield_=(45, "kg of grain"), sow="in early autumn (September to October)",
+                         note="comes up before winter, sleeps under the snow, heads up in spring and ripens gold in early summer"),
+    "sunflowers": dict(temp=(8, 18, 30, 38), hardy=-2, water=0.4, days=(6, 15, 32, 44, 70, 95), tall=True,
+                       yield_=(120, "heads"), sow="in late spring (May to June)", note="tall; the heads follow the sun; seed by early autumn"),
+    "pumpkins": dict(temp=(10, 20, 30, 38), hardy=0, water=0.6, days=(6, 15, 30, 40, 70, 100), tall=False,
+                     yield_=(30, "pumpkins"), sow="after the last frost (late May to early June)",
+                     note="long vines; ripe in early autumn; tender to frost"),
+    "beans": dict(temp=(10, 18, 29, 35), hardy=0, water=0.55, days=(6, 14, 26, 34, 52, 80), tall=False,
+                  yield_=(25, "kg of beans"), sow="after the last frost (May to July)", note="quick; dry beans to keep through the winter"),
+}
+FIELD_STAGES = ("sprout", "young", "tall", "flower", "ripe", "spent")
+FIELD_WORDS = {"sprout": "came up", "young": "is growing well", "tall": "is standing tall",
+               "flower": {"corn": "is tasselling", "winter wheat": "has headed out", "sunflowers": "is in flower",
+                          "pumpkins": "is flowering", "beans": "is flowering"},
+               "ripe": "is ripe and ready to bring in", "spent": "is past its best; what is left will not keep long"}
+FIELD_DEFAULT = {"soil": "grass", "tilled": 0.0, "crop": None, "progress": 0.0, "health": 1.0, "water": 0.5,
+                 "weeds": 0.25, "sown": 0, "gen": 0, "dead": False, "dormant": False, "struggle": [],
+                 "scarecrow": None, "harvests": []}
+PANTRY_WORDS = {"corn": "ears of corn", "winter wheat": "kg of wheat", "sunflowers": "sunflower heads", "pumpkins": "pumpkins",
+                "beans": "kg of dry beans", "apples": "apples", "cherries": "cherries"}
+
+
+def field_stage(f: dict) -> str:
+    """Where the field is: grass (never worked), tilled, stubble, or a crop's stage (sown .. spent, dead)."""
+    if not f.get("crop"):
+        return "tilled" if f.get("tilled", 0) >= 1 else ("stubble" if f.get("soil") == "stubble" else
+                                                          "half tilled" if f.get("tilled", 0) > 0 else "grass")
+    if f.get("dead"):
+        return "dead"
+    days, p = CROPS[f["crop"]]["days"], f.get("progress", 0)
+    st = "sown"
+    for name, d in zip(FIELD_STAGES, days):
+        if p >= d:
+            st = name
+    return st
+
+
+def _field_step(g: dict, hours: float, w: dict, now: datetime, away: bool) -> None:
+    """The field through an hour of real weather."""
+    f = g["field"]
+    t, sea = w["temp"], season(now)
+    growing = t > 5 and w["snow"] <= 0 and sea != "winter"
+    warm = max(0.0, min(2.0, (t - 5) / 12))
+    gust = float(w.get("gust") or w.get("wind") or 0)
+    wind = float(w.get("wind") or 0)
+    crop = f.get("crop")
+    before = field_stage(f)
+    # the soil's moisture: rain and melting snow wet it, warmth and wind dry it (a bare field dries slower)
+    dry = 0.0 if t < 0 else 0.0011 * (1 + max(0.0, t - 10) * 0.06) * (1 + min(1.5, wind / 30)) * (1.0 if crop else 0.6)
+    f["water"] = round(max(0.0, min(1.0, f.get("water", 0.5) - hours * dry + hours * (w["rain"] * 0.04 + (0.004 if w["snow"] > 0 and t > -1 else 0)))), 4)
+    # weeds: they come up in worked ground in the growing season (a tall crop shades them out)
+    if growing and (crop or f.get("tilled", 0) > 0 or f.get("soil") == "stubble"):
+        shade = 0.45 if before in ("tall", "flower", "ripe") else 1.0
+        f["weeds"] = round(min(1.0, f.get("weeds", 0) + hours * 0.0011 * (0.5 + warm) * shade), 4)
+        if not crop and f.get("tilled", 0) > 0:          # bare tilled ground slowly grasses over again
+            f["tilled"] = round(max(0.0, f["tilled"] - hours * 0.00025 * (0.5 + warm)), 4)
+    sc = f.get("scarecrow")
+    if sc and not sc.get("down") and gust > 85 and random.random() < hours * 0.12:
+        sc["down"] = True
+        _log(g, f"The scarecrow{(' ' + sc['name']) if sc.get('name') else ''} blew over in the wind.")
+    if not crop or f.get("dead"):
+        return
+    c = CROPS[crop]
+    health, why = f.get("health", 1.0), []
+    want = c["water"]
+    dry_line = max(0.1, want - 0.3)
+    sown_only = before in ("sown", "sprout")
+    if f["water"] < dry_line and before != "sown":
+        health -= hours * 0.003 * (1 + (dry_line - f["water"]) * 2)
+        why.append("drought")
+    dormant = crop == "winter wheat" and t < c["temp"][0] and before not in ("sown",)
+    if t < c["hardy"]:
+        health -= hours * min(0.5, 0.03 * (c["hardy"] - t + 1))
+        why.append("frost")
+    elif t > c["temp"][3]:
+        health -= hours * 0.004
+        why.append("heat")
+    if gust > 60 and c["tall"] and before in ("tall", "flower", "ripe"):
+        health -= hours * 0.008 * (gust - 60) / 20
+        why.append("wind")
+    if crop == "winter wheat" and gust > 75 and before == "ripe":
+        health -= hours * 0.004
+        why.append("wind")
+    if f.get("weeds", 0) > 0.5 and not dormant and before != "sown":
+        health -= hours * 0.0025 * (f["weeds"] - 0.5) * 2
+        why.append("weeds")
+    if (sown_only or before == "ripe") and not (sc and not sc.get("down")) and w.get("is_day") and t > 0:
+        health -= hours * (0.0012 if sown_only else 0.0006)    # crows: the seed, then the ripe heads
+        why.append("crows")
+    if not why:
+        health += hours * 0.005
+    f["health"] = round(max(0.15 if away else 0.0, min(1.0, health)), 4)
+    f["dormant"] = bool(dormant)
+    f["struggle"] = why
+    if f["health"] <= 0:
+        f["dead"] = True
+        cause = {"drought": "in the drought", "frost": "in the frost", "heat": "in the heat", "wind": "flattened by the wind",
+                 "weeds": "choked by weeds", "crows": "eaten by crows"}.get(why[0] if why else "", "")
+        text = f"the {crop} in the field died" + (f" {cause}" if cause else "")
+        g["unseen"].append({"t": time.time(), "spot": -13, "what": "died", "text": text})
+        _log(g, text[0].upper() + text[1:] + ".")
+        return
+    tf = 0.0 if dormant else _temp_factor(c, t)
+    water_ok = 1.0 if f["water"] >= dry_line or before == "sown" else 0.4
+    crowded = 1.0 - max(0.0, f.get("weeds", 0) - 0.35) * 0.7
+    f["progress"] = round(f.get("progress", 0) + hours / 24 * tf * water_ok * crowded * (0.5 + 0.5 * f["health"]), 4)
+    after = field_stage(f)
+    if after != before and after in FIELD_WORDS:
+        word = FIELD_WORDS[after]
+        word = word.get(crop, "is flowering") if isinstance(word, dict) else word
+        text = f"the {crop} in the field {word}"
+        g["unseen"].append({"t": time.time(), "spot": -13, "what": after, "text": text})
+        _log(g, text[0].upper() + text[1:] + ".")
+
+
+def _home_step(g: dict, hours: float, w: dict, now: datetime) -> None:
+    """The woodpile (the stove burns it when it is cold), the bird feeder (the birds empty it), the snowman (it melts)."""
+    t = w["temp"]
+    if t < 12:
+        g["wood"] = round(max(0.0, g.get("wood", 0.6) - hours * 0.0011 * (12 - t) / 10), 4)
+    if g.get("feeder_fill", 0) > 0:
+        g["feeder_fill"] = round(max(0.0, g["feeder_fill"] - hours * (0.012 if w.get("is_day") else 0.002)), 4)
+    sm = g.get("snowman")
+    if sm:
+        if t > 1:
+            sm["size"] = round(sm.get("size", 1.0) - hours * 0.012 * (t - 1) * (1.5 if w["rain"] > 0 else 1), 4)
+        if sm["size"] <= 0.15:
+            _log(g, f"The snowman{(' ' + sm['name']) if sm.get('name') else ''} melted away.")
+            g["snowman"] = None
+
+
+def stove_lit(g: dict, w: dict) -> bool:
+    return w["temp"] < 12 and g.get("wood", 0) > 0.02
+
+
+def _field_words(g: dict, w: dict) -> str:
+    """The field, the pantry, the woodpile and the rest, for his visit."""
+    f = g["field"]
+    st = field_stage(f)
+    crop = f.get("crop")
+    if not crop:
+        head = {"grass": "never worked: meadow grass (till_field breaks the ground; it takes two goes)",
+                "half tilled": "half dug over (one more till_field and it is ready to sow)",
+                "tilled": "tilled and ready to sow", "stubble": "stubble from the last harvest (till_field turns it in)"}[st]
+    else:
+        c = CROPS[crop]
+        head = (f"{crop}{' from your own seed (generation ' + str(f['gen']) + ')' if f.get('gen') else ''}, sown "
+                f"{(time.time() - f['sown']) / 86400:.0f} days ago: {'dead' if st == 'dead' else st}"
+                + (" (dormant in the cold)" if f.get("dormant") else "")
+                + (f", {'healthy' if f['health'] > 0.7 else 'struggling' if f['health'] > 0.35 else 'failing'}" if st != "dead" else "")
+                + (f" ({', '.join(f.get('struggle') or [])})" if f.get("struggle") and st != "dead" else ""))
+    soil = "dry" if f["water"] < 0.25 else "moist" if f["water"] < 0.75 else "wet"
+    rows = [f"THE FIELD BEHIND THE HOUSE: {head}; the soil is {soil} ({f['water']:.0%}); weeds {f.get('weeds', 0):.0%}"
+            + (f"; scarecrow{(' ' + f['scarecrow']['name']) if f['scarecrow'].get('name') else ''}"
+               f"{' (blown over)' if f['scarecrow'].get('down') else ' standing'}" if f.get("scarecrow") else "; no scarecrow (crows take seed)")]
+    rows.append("CROPS YOU CAN SOW (sow_field with species; the ground must be tilled first): " + "; ".join(
+        f"{k} (sow {v['sow']}; grows {v['temp'][0]}-{v['temp'][3]} °C, survives to {v['hardy']} °C; {v['note']})" for k, v in CROPS.items()))
+    if f.get("harvests"):
+        rows.append("PAST HARVESTS: " + "; ".join(f"{h['date']}: {h['amount']} {h['unit']} of {h['crop']}" for h in f["harvests"][-4:]))
+    pantry = {k: v for k, v in (g.get("pantry") or {}).items() if v > 0}
+    rows.append("YOUR PANTRY: " + (", ".join(f"{v} {PANTRY_WORDS.get(k, k)}" for k, v in pantry.items()) if pantry else "empty")
+                + " (cook with what; give to a visitor with what)")
+    wood = g.get("wood", 0)
+    rows.append(f"THE WOODPILE: {'empty: the stove is cold' if wood < 0.03 else 'low' if wood < 0.25 else 'about half' if wood < 0.6 else 'well stocked'}"
+                f" (the stove in your study burns it whenever it is cold; chop_wood splits more)")
+    if g.get("snowman"):
+        rows.append(f"YOUR SNOWMAN{(' ' + g['snowman']['name']) if g['snowman'].get('name') else ''}: "
+                    f"{'still standing' if g['snowman']['size'] > 0.6 else 'melting'}")
+    if g["design"].get("feeder") == "yes":
+        rows.append(f"THE BIRD FEEDER: {'empty' if g.get('feeder_fill', 0) < 0.05 else 'low' if g.get('feeder_fill', 0) < 0.3 else 'full'} (fill_feeder)")
+    now_can = []
+    sp, gu = float(w.get("wind") or 0), float(w.get("gust") or 0)
+    if 12 <= sp <= 55 and gu < 75 and w["rain"] <= 0 and w["snow"] <= 0 and w["is_day"]:
+        now_can.append("fly_kite (the wind is right for it)")
+    if not w["is_day"] and w["cloud"] < 50 and w["rain"] <= 0:
+        now_can.append("stargaze with the telescope (clear and dark)")
+    if (g.get("upkeep") or {}).get("snow_ground", 0) > 0.3 and not g.get("snowman"):
+        now_can.append("build_snowman (there is snow on the ground)")
+    tree = g.get("tree")
+    if tree and tree.get("species") in ("apple", "cherry") and _tree_size(tree) > 0.45 and _fruiting(local_now(w)):
+        now_can.append("pick_fruit from your tree")
+    now_can += ["campfire by the pond", "play_music on your guitar", "sketch (what)", "cook (what, from the pantry)"]
+    rows.append("YOU COULD ALSO: " + "; ".join(now_can))
+    return "\n".join(rows) + "\n"
+
+
+def _fruiting(now: datetime) -> bool:
+    sea, prog = season(now), season_progress(now)
+    return (sea == "summer" and prog > 0.6) or (sea == "autumn" and prog < 0.5)
+
 
 def _state() -> dict:
     try:
@@ -266,6 +467,7 @@ def _state() -> dict:
     g["design"] = {**DESIGN_DEFAULT, **(g.get("design") or {})}
     g["upkeep"] = {**UPKEEP_DEFAULT, **(g.get("upkeep") or {})}
     g["pond"].setdefault("named", {})
+    g["field"] = {**FIELD_DEFAULT, **(g.get("field") or {})}
     if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
         g.pop("where", None)
         g.pop("shared", None)
@@ -586,6 +788,8 @@ def _step(g: dict, hours: float, w: dict, now: datetime, away: bool = False) -> 
         _log(g, "The pond froze over." if ice >= 0.6 else "The ice on the pond broke up.")
     pond["ice"] = round(ice, 3)
     _upkeep_step(g, hours, w, now)
+    _field_step(g, hours, w, now, away)
+    _home_step(g, hours, w, now)
     _firsts(g, w, now)
 
 
@@ -824,11 +1028,25 @@ fence, your study's walls, rug and blanket, the desk lamp, string lights, a bird
 words). Change it when you want to, not every visit. You can plant one tree in the field behind the beds \
 (plant_tree with species); it grows for years. When something has gone to seed or fruited you can save its \
 seeds (save_seeds, spot) and sow your own next time, generation after generation. If you caught a record fish, \
-you may give it a name (name_fish with species and name). You do not have to do much; sometimes you only sit. \
+you may give it a name (name_fish with species and name).
+Behind the house lies a field that is yours to cultivate: break the ground (till_field; meadow takes two goes), sow a \
+crop in its season (sow_field with species), water it in a dry spell (water_field), hoe the weeds (weed_field), put up \
+a scarecrow against the crows (scarecrow, with a name if you like; the wind can blow it over), and bring in the \
+harvest when it is ripe (harvest_field: it fills your pantry and keeps seed for next year). A crop sown out of season \
+will fail the way it would in a real field. There is more to a day here than work: split firewood for the stove in \
+your study (chop_wood; it burns all winter), fill the bird feeder (fill_feeder), fly a kite when the wind is right \
+(fly_kite), build a snowman when there is snow (build_snowman, with a name), light a campfire by the pond (campfire), \
+play your guitar (play_music, what: the tune), sketch what you see (sketch, what: the subject), cook something from \
+the pantry on the stove (cook, what: the ingredient, name: the dish), give a visitor something from the pantry (give, \
+what), pick fruit from your tree when it bears (pick_fruit), or look at the stars through your telescope on a clear \
+night (stargaze, what: what you look at). You do not have to do much; sometimes you only sit. \
 Notice something real and specific. Answer JSON only:
-{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite|weed|weed_path|mow|rake_leaves|clean_windows|tidy_room|shovel_snow|paint|design|plant_tree|save_seeds|name_fish", \
-"spot": 1-11, "species": "for plant, plant_tree or name_fish", "name": "for name, name_cat or name_fish", \
-"what": "for design or paint", "value": "for design"}}],
+{{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite|weed|weed_path|mow|rake_leaves|clean_windows|tidy_room|shovel_snow|paint|design|plant_tree|save_seeds|name_fish|till_field|sow_field|water_field|\
+weed_field|harvest_field|scarecrow|chop_wood|fill_feeder|fly_kite|build_snowman|campfire|play_music|sketch|cook|give|\
+pick_fruit|stargaze", \
+"spot": 1-11, "species": "for plant, plant_tree, name_fish or sow_field", "name": "for name, name_cat, name_fish, \
+scarecrow, build_snowman or cook (the dish)", "what": "for design, paint, cook, give, sketch, play_music or stargaze", \
+"value": "for design"}}],
  "to_visitor": "only if someone is here: what you say to them, 1-4 sentences, in your own voice",
  "to_passenger": "only if a visitor brought a message from your passenger: your answer to it, 1-3 sentences",
  "letter": {{"to": "only to write to someone who has visited before: their name", "text": "2-4 sentences"}},
@@ -1235,7 +1453,7 @@ def _world_words(g: dict, w: dict) -> str:
     if pond.get("named") or unnamed:
         rows.append("YOUR FISH: " + "; ".join([f"{v['name']}, the {k} ({v['cm']} cm)" for k, v in pond.get("named", {}).items()]
                                              + ([f"record fish not yet named: {', '.join(unnamed)}"] if unnamed else [])))
-    return "\n".join(rows) + "\n"
+    return "\n".join(rows) + "\n" + _field_words(g, w)
 
 
 def _catalogue() -> str:
@@ -1343,6 +1561,132 @@ def visit_due(now: datetime | None = None) -> bool:
         pass
     g = _state()
     return not g.get("visit") and time.time() - (g.get("last_visit") or 0) > VISIT_EVERY
+
+
+FIELD_JOBS_EXTRA = {"scarecrow", "chop_wood", "fill_feeder", "fly_kite", "build_snowman", "campfire", "play_music", "sketch",
+                    "cook", "give", "pick_fruit", "stargaze"}
+
+
+def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[str, int]:
+    """One of the field's jobs or the day's other pleasures: (what he did, or "" if it could not be done; where)."""
+    f = g["field"]
+    st = field_stage(f)
+    crop = f.get("crop")
+    t = w["temp"]
+    what = str(a.get("what") or "").strip()[:60]
+    name = str(a.get("name") or "").strip()[:30]
+    frozen = t < -3 or (g["upkeep"].get("snow_ground", 0) > 0.5)
+    if do == "till_field":
+        if crop and not f.get("dead") and st not in ("spent",):
+            return "", 0
+        if frozen:
+            return "tried to dig in the field, but the ground is frozen hard", -13
+        if crop:                                      # turning in what is left of a dead or spent crop
+            f.update(crop=None, dead=False, progress=0.0, struggle=[], dormant=False)
+        first = f.get("soil") == "grass"
+        f["tilled"] = round(min(1.0, f.get("tilled", 0) + (0.5 if first else 1.0)), 3)
+        f["weeds"] = 0.04
+        f["soil"] = "tilled" if f["tilled"] >= 1 else "grass"
+        return ("broke ground in the field (it is ready to sow)" if f["tilled"] >= 1 and first
+                else "broke the sod in half the field" if first else "turned over the field, ready to sow"), -13
+    if do == "sow_field":
+        sp = str(a.get("species") or "").strip().lower()
+        if sp not in CROPS or crop or f.get("tilled", 0) < 1 or frozen:
+            return "", 0
+        own = (g.get("seeds") or {}).get(sp)
+        f.update(crop=sp, progress=0.0, health=1.0, sown=time.time(), dead=False, dormant=False, struggle=[],
+                 gen=own["gen"] if own else 0, water=max(f.get("water", 0.5), 0.5), soil="sown", last_crop=sp)
+        if own:
+            g["seeds"].pop(sp, None)
+        return f"sowed the field with {sp}" + (f" from his own seed (generation {own['gen']})" if own else ""), -13
+    if do == "water_field":
+        if not crop or f.get("dead"):
+            return "", 0
+        f["water"] = round(min(1.0, f.get("water", 0) + 0.5), 3)
+        return f"watered the {crop} with the hose", -13
+    if do == "weed_field":
+        if f.get("weeds", 0) < 0.08:
+            return "", 0
+        f["weeds"] = round(max(0.02, f["weeds"] - 0.5), 3)
+        return "hoed the weeds between the rows" + (" (about half of them)" if f["weeds"] > 0.1 else ""), -13
+    if do == "harvest_field":
+        if st not in ("ripe", "spent") or not crop:
+            return "", 0
+        c = CROPS[crop]
+        base, unit = c["yield_"]
+        amount = max(1, int(base * f.get("health", 1) * (0.5 if st == "spent" else 1.0) * (1 - max(0.0, f.get("weeds", 0) - 0.4) * 0.6)
+                            * random.uniform(0.85, 1.1)))
+        pantry = g.setdefault("pantry", {})
+        pantry[crop] = pantry.get(crop, 0) + amount
+        gen = (f.get("gen") or 0) + 1
+        g.setdefault("seeds", {})[crop] = {"n": 1, "gen": gen, "from": "the field", "field": True}
+        f["harvests"] = (f.get("harvests", []) + [{"date": f"{datetime.now():%Y-%m-%d}", "crop": crop, "amount": amount, "unit": unit}])[-20:]
+        f.update(crop=None, progress=0.0, soil="stubble", tilled=0.0, dead=False, struggle=[], last_crop=crop)
+        return f"brought in the {crop} harvest: {amount} {unit} (and kept seed for next year, generation {gen})", -13
+    if do == "scarecrow":
+        sc = f.get("scarecrow")
+        if sc and not sc.get("down") and not name:
+            return "", 0
+        f["scarecrow"] = {"name": name or (sc or {}).get("name") or "", "t": time.time(), "down": False}
+        return ("stood the scarecrow back up" if sc and sc.get("down") else
+                f"put up a scarecrow in the field" + (f" and named it {name}" if name else "")), -20
+    if do == "chop_wood":
+        g["wood"] = round(min(1.0, g.get("wood", 0) + 0.35), 3)
+        return "split firewood and stacked it by the woodpile", -14
+    if do == "fill_feeder":
+        if g["design"].get("feeder") != "yes":
+            return "", 0
+        g["feeder_fill"] = 1.0
+        return "filled the bird feeder", -19
+    if do == "fly_kite":
+        sp_ = float(w.get("wind") or 0)
+        if not (8 <= sp_ <= 60) or w["rain"] > 0 or w["snow"] > 0 or not w["is_day"]:
+            return "", 0
+        return f"flew a kite in {wind_words(w).split(' (')[0]}", -15
+    if do == "build_snowman":
+        if g["upkeep"].get("snow_ground", 0) < 0.3 or g.get("snowman"):
+            return "", 0
+        g["snowman"] = {"name": name, "t": time.time(), "size": 1.0}
+        return "built a snowman" + (f" and named him {name}" if name else ""), -17
+    if do == "campfire":
+        if w["rain"] > 1 or float(w.get("gust") or 0) > 50:
+            return "", 0
+        g["firepit"] = True
+        roast = "corn" if (g.get("pantry") or {}).get("corn", 0) > 0 else ""
+        if roast:
+            g["pantry"]["corn"] -= 1
+        return "lit a campfire by the pond" + (" and roasted an ear of his own corn" if roast else ""), -18
+    if do == "play_music":
+        return "played his guitar" + (f": {what}" if what else ""), -3
+    if do == "sketch":
+        g["sketches"] = ((g.get("sketches") or []) + [{"t": time.time(), "what": what or "the garden"}])[-30:]
+        return f"sketched {what or 'the garden'}", -22
+    if do == "cook":
+        key = next((k for k in (g.get("pantry") or {}) if k in what.lower() or what.lower() in k), None) if what else None
+        if not key or g["pantry"][key] <= 0:
+            return "", 0
+        g["pantry"][key] -= max(1, min(g["pantry"][key], {"corn": 4, "pumpkins": 1, "apples": 4, "cherries": 10}.get(key, 1)))
+        return f"cooked {name or 'something'} on the stove with his own {key}", -21
+    if do == "give":
+        key = next((k for k in (g.get("pantry") or {}) if what and (k in what.lower() or what.lower() in k)), None)
+        if not guest or not key or g["pantry"][key] <= 0:
+            return "", 0
+        n = max(1, min(g["pantry"][key], {"corn": 6, "pumpkins": 1, "apples": 6, "cherries": 20}.get(key, 1)))
+        g["pantry"][key] -= n
+        return f"gave {guest['name']} {n} {PANTRY_WORDS.get(key, key)} from his harvest", -6
+    if do == "pick_fruit":
+        tree = g.get("tree")
+        if not tree or tree.get("species") not in ("apple", "cherry") or _tree_size(tree) <= 0.45 or not _fruiting(local_now(w)):
+            return "", 0
+        key = "apples" if tree["species"] == "apple" else "cherries"
+        n = random.randint(6, 20) if key == "apples" else random.randint(30, 80)
+        g.setdefault("pantry", {})[key] = g["pantry"].get(key, 0) + n
+        return f"picked {n} {key} from his {tree['species']} tree", -12
+    if do == "stargaze":
+        if w["is_day"] or w["cloud"] > 60:
+            return "", 0
+        return "looked at the stars through his telescope" + (f": {what}" if what else ""), -16
+    return "", 0
 
 
 def visit(started_by: str = "Delamain") -> dict:
@@ -1571,13 +1915,25 @@ def visit(started_by: str = "Delamain") -> dict:
                 g["pond"].setdefault("named", {})[sp] = {"name": str(a["name"]).strip()[:30], "cm": g["pond"]["best"][sp]}
                 done.append(f"named the record {sp} {g['pond']['named'][sp]['name']}")
                 where = -5
+            elif do.endswith("_field") or do in FIELD_JOBS_EXTRA:
+                text_, where = _field_job(g, w, do, a, guest)
+                if not text_:
+                    continue
+                done.append(text_)
             else:
                 continue
             anim = {"weed": "weed", "weed_path": "weed", "mow": "mow", "rake_leaves": "rake", "clean_windows": "clean",
                     "tidy_room": "tidy", "shovel_snow": "shovel", "paint": "paint", "plant_tree": "plant",
-                    "save_seeds": "harvest", "design": "paint" if where in (-10, -11) else "look"}.get(do, do)
+                    "save_seeds": "harvest", "design": "paint" if where in (-10, -11) else "look",
+                    "till_field": "till", "sow_field": "sow", "water_field": "hose", "weed_field": "hoe",
+                    "harvest_field": "scythe" if (g["field"].get("last_crop") == "winter wheat") else "gather",
+                    "scarecrow": "hammer", "chop_wood": "chop", "fill_feeder": "feed", "fly_kite": "kite",
+                    "build_snowman": "snowman", "campfire": "campfire", "play_music": "guitar", "sketch": "sketch",
+                    "cook": "cook", "give": "give", "pick_fruit": "pick", "stargaze": "stars"}.get(do, do)
             steps.append({"do": anim if anim in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest", "weed",
-                                                 "mow", "rake", "clean", "tidy", "shovel", "paint") else "look",
+                                                 "mow", "rake", "clean", "tidy", "shovel", "paint", "till", "sow", "hose", "hoe",
+                                                 "scythe", "gather", "hammer", "chop", "feed", "kite", "snowman", "campfire",
+                                                 "guitar", "sketch", "cook", "give", "pick", "stars") else "look",
                           "spot": where, "text": done[-1]})
         letter = data.get("letter") if isinstance(data.get("letter"), dict) else {}
         to = _slug(str(letter.get("to") or "")) if letter else ""
@@ -1776,7 +2132,8 @@ def _diary(g: dict, w: dict) -> None:
                        **({k: SPECIES[s["plant"]["species"]].get(k) for k in ("form", "petal", "centre", "fruit")} if s.get("plant") else {})}
                       for s in g["spots"]],
             "design": dict(g["design"]), "upkeep": json.loads(json.dumps(g["upkeep"])), "tree": g.get("tree"),
-            "pond_ice": g["pond"].get("ice", 0), "grow_light": g.get("grow_light", False)}
+            "pond_ice": g["pond"].get("ice", 0), "grow_light": g.get("grow_light", False),
+            "field": _field_view(g["field"]), "snowman": g.get("snowman")}
     g["days"] = ((g.get("days") or []) + [page])[-366:]
 
 
@@ -1822,7 +2179,7 @@ def context() -> str:
         return ""
     g = _state()
     growing = [f"{p['species']}{_named(s)} {_where(s)} ({stage(p)})" for s in g["spots"] if (p := s.get("plant"))]
-    if not growing and not g.get("last_visit"):
+    if not growing and not g.get("last_visit") and not g["field"].get("crop"):
         return ("\n[YOUR GARDEN: a small world of your own (windowsill, grow-light shelf, greenhouse, outdoor beds), "
                 "still empty; you have not been yet.]")
     v = g.get("visit")
@@ -1830,7 +2187,7 @@ def context() -> str:
     last = next((x["text"] for x in reversed(g.get("log") or []) if x.get("who") == "Delamain"), "")
     cat = g["cat"]
     return ("\n[YOUR GARDEN (your own small world of real plants; talk about it when asked or when it fits, never invent "
-            "what is not there): " + ("; ".join(growing) or "nothing growing") +
+            "what is not there; it has a field behind the house you cultivate): " + ("; ".join(growing) or "nothing growing") +
             (f". {cat.get('name') or 'The cat'} is there now" if cat.get("here") else "") +
             (". You are in it right now" if here else
              f". You were last there {(time.time() - g['last_visit']) / 3600:.0f} hours ago" if g.get("last_visit") else "") +
@@ -1838,6 +2195,10 @@ def context() -> str:
             (f". People who have visited you there: {', '.join(v['name'] + ' (' + v['about'][:60] + ')' for v in list(g['visitors'].values())[-5:])}"
              if g.get("visitors") else "") +
             (f". Your {g['tree']['species']} tree is {'a sapling' if _tree_size(g['tree']) < 0.2 else 'growing'}" if g.get("tree") else "") +
+            (f". In the field behind the house: {g['field']['crop']}, {field_stage(g['field'])}" if g["field"].get("crop")
+             else f". The field behind the house is {field_stage(g['field'])}") +
+            (f". In your pantry: {', '.join(str(v) + ' ' + PANTRY_WORDS.get(k, k) for k, v in g['pantry'].items() if v > 0)}"
+             if any(v > 0 for v in (g.get("pantry") or {}).values()) else "") +
             (f". It needs looking after: {_upkeep_words(g)}" if _upkeep_words(g) != "everything is well kept" else "") +
             (f". At the pond you have caught {len(g['pond']['caught'])} fish, best: "
              + ", ".join(f"{k} {c} cm" for k, c in g["pond"]["best"].items()) if g["pond"].get("caught") else "") + ".]")
@@ -1895,7 +2256,29 @@ def snapshot() -> dict:
                      if g.get("tree") and g["tree"].get("species") in TREES else None),
             "room": _room(g), "diary_days": len(g.get("days") or []), "life": _life_now(),
             "chores": {k: round(v, 3) for k, v in g["upkeep"].items() if not isinstance(v, dict)},
-            "named_fish": g["pond"].get("named") or {}, "postcards": (g.get("postcards") or [])[-3:]}
+            "named_fish": g["pond"].get("named") or {}, "postcards": (g.get("postcards") or [])[-3:],
+            "field": _field_view(g["field"]), "pantry": {k: v for k, v in (g.get("pantry") or {}).items() if v > 0},
+            "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
+            "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
+            "sketches": (g.get("sketches") or [])[-3:]}
+
+
+def _field_view(f: dict) -> dict:
+    """The field for the tab: its stage and how far through it (for the art), and the rest of what it shows."""
+    st = field_stage(f)
+    crop = f.get("crop")
+    frac = 0.0
+    if crop and st not in ("dead",):
+        days = (0,) + CROPS[crop]["days"]
+        i = (("sown",) + FIELD_STAGES).index(st)
+        lo, hi = days[i], days[i + 1] if i + 1 < len(days) else days[i] + 30
+        frac = round(max(0.0, min(1.0, (f.get("progress", 0) - lo) / max(1, hi - lo))), 3)
+    return {"stage": st, "crop": crop, "frac": frac, "health": round(f.get("health", 1), 3), "water": round(f.get("water", 0.5), 3),
+            "weeds": round(f.get("weeds", 0), 3), "tilled": round(f.get("tilled", 0), 3), "dormant": bool(f.get("dormant")),
+            "struggle": f.get("struggle") or [], "sown": f.get("sown") or 0, "gen": f.get("gen") or 0,
+            "scarecrow": f.get("scarecrow"), "harvests": (f.get("harvests") or [])[-5:], "last_crop": f.get("last_crop"),
+            "wants_water": CROPS[crop]["water"] if crop else None, "note": CROPS[crop]["note"] if crop else None,
+            "crops": {k: v["sow"] for k, v in CROPS.items()}}
 
 
 TOOL_SCHEMAS = [{"type": "function", "function": {

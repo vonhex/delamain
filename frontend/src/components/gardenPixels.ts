@@ -29,7 +29,11 @@ export type PWorld = {
   tree?: { species: string; size: number } | null;
   room?: { books: { title: string }[]; pins: { colours: number[][] }[] };
   office?: { screen: string | null };
+  field?: PField | null;
+  wood?: number; stoveLit?: boolean; snowman?: { size: number } | null; firepit?: boolean; feederFill?: number;
 };
+export type PField = { stage: string; crop: string | null; frac: number; health: number; weeds: number; tilled: number;
+  dormant?: boolean; scarecrow?: { name?: string; down?: boolean } | null };
 export type Design = { house_wall: string; roof: string; trim: string; path: string; fence: string; room_wall: string;
   rug: string; blanket: string; lamp: string; lights: string; feeder: string; bench: string; sign: string; art: string };
 export type Upkeep = { weeds: Record<string, number>; path_weeds: number; lawn: number; leaves: number; windows: number;
@@ -481,8 +485,9 @@ const DEL_LEGS: Legs = {
 
 function figure(b: Buf, d: Fig, t: number, S: Spec) {
   const total = S.upper.length + S.legs.stand.length;
-  const pose = d.walking ? 'walk' : ['sit', 'sit_with_cat', 'write', 'therapy', 'study', 'read', 'news', 'type'].includes(d.doing) ? 'sit'
-    : ['plant', 'harvest', 'clear', 'pet_cat', 'weed'].includes(d.doing) ? 'crouch' : 'stand';
+  const stretchDown = d.doing === 'stretch' && Math.floor(t / 2.5) % 2 === 1;
+  const pose = d.walking ? 'walk' : ['sit', 'sit_with_cat', 'write', 'therapy', 'study', 'read', 'news', 'type', 'guitar', 'campfire'].includes(d.doing) ? 'sit'
+    : ['plant', 'harvest', 'clear', 'pet_cat', 'weed', 'snowman', 'gather'].includes(d.doing) || stretchDown ? 'crouch' : 'stand';
   const phase = Math.floor((d.stride ?? t * 8) / 3.2) % 4;        // the stride follows the ground covered
   const rows: string[][] = Array.from({ length: total }, () => [...'.'.repeat(S.w)]);
   const put = (src: string[], at: number) => src.forEach((r, j) => [...r].forEach((ch, i) => { if (ch !== '.' && at + j >= 0 && at + j < total && i < S.w) rows[at + j][i] = ch; }));
@@ -502,6 +507,9 @@ function figure(b: Buf, d: Fig, t: number, S: Spec) {
   else if (d.doing === 'shelf') { clearHand(); H(hc + 1, hr - 7 + (Math.floor(t * 0.8) % 3)); H(hc, hr - 5); }          // reaching along the shelf
   else if (['read', 'news', 'tea', 'study'].includes(d.doing)) { clearHand(); H(hc + 1, hr - 2); }                        // holding it up
   else if (d.doing === 'type') { clearHand(); H(hc + 1 + (Math.floor(t * 8) % 2), hr - 1); }
+  else if (['kite', 'pick', 'feed', 'stars', 'hammer', 'chop'].includes(d.doing)) { clearHand(); H(hc + 1, hr - (d.doing === 'stars' ? 6 : d.doing === 'kite' ? 5 : 4)); }   // hands up
+  else if (d.doing === 'stretch' && !stretchDown) { clearHand(); H(hc, hr - 9); H(hc - 8 < 0 ? 0 : hc - 8, hr - 9); }   // reaching for the sky
+  else if (['sow', 'give', 'sketch', 'hose', 'cook'].includes(d.doing)) { clearHand(); H(hc + 1, hr - 1 - (d.doing === 'sow' ? Math.floor(t * 2) % 2 : 0)); }
   if ((t * 0.45 + d.x * 0.01) % 7 < 0.06) rows.forEach(r => r.forEach((c, i) => { if (c === 'v') r[i] = 'h'; if (c === 'e') r[i] = 'f'; }));   // a blink
   const x0 = Math.round(d.x) - (S.w >> 1), y0 = Math.round(d.y) - total;
   if (S.glow) b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, S.glow, 0.15 * (0.75 + 0.25 * Math.sin(t * 3)));
@@ -582,6 +590,78 @@ function figure(b: Buf, d: Fig, t: number, S: Spec) {
       if (nibble && flying < 0) for (let a = 0; a < 8; a++) b.set(fxp + Math.cos(a / 8 * Math.PI * 2) * 3, fyp + 1 + Math.sin(a / 8 * Math.PI * 2), [255, 255, 255], 0.3);
     }
   }
+  const groundY = Math.round(d.y);
+  if (d.doing === 'till' || d.doing === 'hoe') {          // the hoe chops down and pulls back; soil or weeds fly
+    const up = Math.floor(t * 2.6 + d.x) % 2 === 0, ex = hand.x + dir * (up ? 4 : 7), ey = up ? groundY - 7 : groundY - 1;
+    b.line(hand.x, hand.y - 2, ex, ey, [139, 100, 60]); b.set(ex + dir, ey, [148, 163, 184]); b.set(ex + dir, ey + 1, [148, 163, 184]);
+    if (!up) for (let k = 0; k < 2; k++) b.set(ex + dir * (2 + k), ey - 2 - k, d.doing === 'hoe' ? [96, 156, 50] : [104, 76, 52]);
+  }
+  if (d.doing === 'sow') {                                 // seed scattered from the hand in an arc
+    for (let k = 0; k < 4; k++) { const ph = (t * 1.3 + k / 4) % 1; b.set(hand.x + dir * (1 + ph * 5), hand.y + ph * (groundY - hand.y), [214, 190, 120], 1 - ph * 0.5); }
+    b.rect(hand.x - dir * 3 - 1, hand.y + 1, 3, 3, [196, 170, 120]);                // the seed bag at his hip
+  }
+  if (d.doing === 'hose') {                                // the hose trailing behind, the spray arcing out ahead
+    b.line(hand.x, hand.y, hand.x - dir * 6, groundY, [52, 120, 60]);
+    for (let k = 0; k < 9; k++) { const ph = (t * 1.8 + k / 9) % 1, px = hand.x + dir * (1 + ph * 9), py = hand.y - 2 + ph * ph * (groundY - hand.y + 3) - ph * 3;
+      b.set(px, py, [147, 197, 253], 0.8 - ph * 0.4); }
+  }
+  if (d.doing === 'scythe') {                              // a long sweep low over the stubble; stalks fall
+    const a = Math.sin(t * 2.2) * 0.9, bx = hand.x + dir * Math.round(5 + Math.cos(a) * 3), by = groundY - 2 + Math.round(Math.sin(a));
+    b.line(hand.x, hand.y - 3, bx, by, [139, 100, 60]); b.line(bx, by, bx + dir * 4, by - 1, [203, 213, 225]);
+    if (a > 0.5) b.set(bx + dir * 5, by - 2, [222, 186, 92]);
+  }
+  if (d.doing === 'gather') {                              // a basket at his side, filling
+    b.rect(hand.x - dir * 4 - 1, groundY - 4, 4, 3, [161, 98, 7]); b.set(hand.x - dir * 3, groundY - 5, [234, 200, 100]);
+    if (Math.floor(t * 2) % 2) b.set(hand.x + dir, hand.y + 1, [234, 200, 100]);
+  }
+  if (d.doing === 'pick') {                                // reaching up into the branches, a basket at his feet
+    b.rect(hand.x - dir * 5, groundY - 3, 4, 3, [161, 98, 7]); b.set(hand.x - dir * 4, groundY - 4, [220, 38, 38]); b.set(hand.x - dir * 3, groundY - 4, [220, 38, 38]);
+    if (Math.floor(t * 1.5) % 2) b.set(hand.x + dir, hand.y - 1, [220, 38, 38]);
+  }
+  if (d.doing === 'hammer') {                              // a mallet on the post
+    const up = Math.floor(t * 3) % 2 === 0;
+    b.line(hand.x, hand.y, hand.x + dir * 3, hand.y - (up ? 4 : 0), [139, 100, 60]); b.rect(hand.x + dir * 3 - 1, hand.y - (up ? 5 : 1), 3, 2, [100, 100, 108]);
+  }
+  if (d.doing === 'chop') {                                // the axe up over his head, then down; chips fly off the block
+    const ph = (t * 1.1 + d.x * 0.1) % 1, down = ph > 0.55;
+    const ax = hand.x + dir * (down ? 6 : 1), ay = down ? groundY - 4 : hand.y - 6;
+    b.line(hand.x, hand.y, ax, ay, [139, 100, 60]); b.rect(ax - (dir < 0 ? 2 : 0), ay - 1, 2, 3, [148, 163, 184]);
+    if (down && ph < 0.75) for (let k = 0; k < 3; k++) b.set(ax + dir * (2 + k), ay - 1 - k + ((ph * 20) % 2), [214, 180, 120]);
+  }
+  if (d.doing === 'feed') {                                // seed poured up into the feeder
+    for (let k = 0; k < 3; k++) { const ph = (t * 2 + k / 3) % 1; b.set(hand.x + dir, hand.y - 1 + ph * 3, [234, 200, 120]); }
+  }
+  if (d.doing === 'kite') {                                // the kite, downwind on its string, climbing and diving with the gusts
+    const sgn = WIND >= 0 ? 1 : -1, kx = Math.round(hand.x + sgn * (26 + Math.sin(t * 0.7) * 5 + windyNow() * 6)), ky = Math.round(hand.y - 34 - Math.sin(t * 1.1) * 4 - windyNow() * 6);
+    for (let k = 0; k <= 12; k++) { const f = k / 12; b.set(hand.x + (kx - hand.x) * f, hand.y + (ky - hand.y) * f + Math.sin(f * Math.PI) * 4, [226, 232, 240], 0.5); }
+    for (let j = -2; j <= 2; j++) for (let i = -2 + Math.abs(j); i <= 2 - Math.abs(j); i++) b.set(kx + i, ky + j, i * sgn < 0 ? [220, 38, 38] : [250, 204, 21]);
+    for (let k = 1; k < 7; k++) b.set(kx + sgn * k, ky + 2 + Math.round(Math.sin(t * 6 + k) * 1.2), k % 2 ? [37, 99, 235] : [220, 38, 38]);
+  }
+  if (d.doing === 'snowman') {                             // rolling a ball of snow along
+    const r2 = 2 + Math.floor((t * 0.2) % 3);
+    for (let j = -r2; j <= r2; j++) for (let i = -r2; i <= r2; i++) if (i * i + j * j <= r2 * r2) b.set(hand.x + dir * (r2 + 1) + i, groundY - r2 + j, [244, 246, 250]);
+  }
+  if (d.doing === 'campfire') {                            // a stick held out over the fire
+    b.line(hand.x, hand.y, hand.x + dir * 7, hand.y - 3, [120, 84, 50]); b.set(hand.x + dir * 8, hand.y - 3, [236, 214, 120]);
+  }
+  if (d.doing === 'guitar') {                              // a guitar across his lap, the strumming hand moving; notes float up
+    const gx = hand.x - dir * 2, gy = hand.y + 1;
+    b.rect(Math.min(gx, gx - dir * 3), gy - 1, 4, 3, [161, 98, 7]); b.set(gx - dir, gy, [60, 36, 20]);
+    b.line(gx + dir, gy - 1, gx + dir * 6, gy - 4, [92, 64, 40]);
+    b.set(hand.x, hand.y + (Math.floor(t * 6) % 2), [14, 116, 144]);
+    for (let k = 0; k < 2; k++) { const ph = (t * 0.4 + k / 2) % 1, nx = gx + dir * 2 + Math.round(Math.sin(t + k * 3) * 2), ny = gy - 8 - ph * 12;
+      b.set(nx, ny, [226, 232, 240], 1 - ph); b.set(nx, ny - 1, [226, 232, 240], 1 - ph); b.set(nx + 1, ny - 2, [226, 232, 240], 1 - ph); b.set(nx - 1, ny + 1, [226, 232, 240], 1 - ph); }
+  }
+  if (d.doing === 'sketch') {                              // an easel in front of him, the picture coming along
+    const ex = hand.x + dir * 4;
+    b.line(ex, groundY, ex + dir * 2, hand.y - 8, [139, 100, 60]); b.line(ex + dir * 4, groundY, ex + dir * 2, hand.y - 8, [139, 100, 60]);
+    b.rect(Math.min(ex, ex + dir * 4), hand.y - 8, 5, 6, [241, 237, 226]);
+    const done = Math.floor((t * 0.15) % 8);
+    for (let k = 0; k < done; k++) b.set(Math.min(ex, ex + dir * 4) + 1 + (k % 3), hand.y - 7 + Math.floor(k / 3) * 2, [[74, 140, 52], [96, 165, 250], [214, 190, 90]][k % 3] as RGB);
+    b.set(hand.x + dir, hand.y - 2 - (Math.floor(t * 3) % 3), [30, 41, 59]);
+  }
+  if (d.doing === 'cook') b.set(hand.x + dir * 2, hand.y - 2 + (Math.floor(t * 4) % 2), [180, 140, 90]);   // the spoon going round
+  if (d.doing === 'give') { b.rect(hand.x + dir, hand.y - 1, 2, 2, [236, 214, 120]); }
   if (d.speaking) {                                         // a speech bubble while they talk
     const bx = Math.round(d.x) + dir * 4, by = y0 + upperAt - 8;
     for (let j = 0; j < 5; j++) for (let i = -4; i <= 4; i++) if (!((j === 0 || j === 4) && Math.abs(i) === 4)) b.set(bx + i, by + j, [248, 250, 252], 0.92);
@@ -1081,14 +1161,15 @@ function hisTree(b: Buf, tr: NonNullable<PWorld['tree']>, w: PWorld, night: bool
 const TREE_META: Record<string, { blossom?: string; fruit?: string }> = { apple: { blossom: '#fce7f3', fruit: '#dc2626' },
   cherry: { blossom: '#f9a8d4', fruit: '#9f1239' }, maple: {}, birch: {} };
 
-function feeder(b: Buf, w: PWorld, night: boolean, t: number) {
+function feeder(b: Buf, w: PWorld, night: boolean, t: number, fill = 1) {
   // hung from a low branch of the pine, with birds coming and going by day
   const fx = 241 + Math.round(Math.sin(t * 2.5) * windyNow() * 2 + WIND / 30), fy = 131;
   b.line(241, 124, fx, fy, [200, 200, 200], 0.6);
   b.rect(fx - 3, fy, 7, 1, nightc([150, 40, 30], night)); b.rect(fx - 2, fy + 1, 5, 3, nightc([139, 90, 43], night)); b.rect(fx - 3, fy + 4, 7, 1, nightc([96, 60, 28], night));
   b.set(fx, fy + 2, nightc([214, 190, 120], night));
-  if (!w.isDay || Math.abs(WIND) > 40) return;
-  for (let k = 0; k < 3; k++) {
+  if (fill > 0.05) b.set(fx + 1, fy + 2, nightc([234, 200, 120], night));
+  if (!w.isDay || Math.abs(WIND) > 40 || fill < 0.05) return;
+  for (let k = 0; k < (fill > 0.3 ? 3 : 1); k++) {
     const ph = (t * 0.15 + k * 0.37) % 1;
     if (ph > 0.7) continue;                                  // away for a while
     const bx = fx - 3 + k * 3 + (ph < 0.1 ? (0.1 - ph) * 40 : 0), by = fy + 4 - (Math.floor(t * 3 + k) % 4 === 0 ? 1 : 0) - (ph < 0.1 ? (0.1 - ph) * 20 : 0);
@@ -1130,6 +1211,197 @@ function signBoard(b: Buf, d: Design, night: boolean) {
   text3(b, x0 + 3, y0 + 2, txt, nightc([60, 36, 20], night));
 }
 
+
+// ── the field behind the house: rows running back to the treeline, his crop in them ──
+// Eight rows, the far ones smaller (they are further off). Each crop is drawn by its stage and how far through it.
+const FIELD_X0 = 84, FIELD_X1 = 318;
+export const FIELD_GATE = { x: 262 };               // between the pine and the pond: the way into the field
+const CROP_COL: Record<string, { leaf: RGB; ripe: RGB; dry: RGB; bloom: RGB }> = {
+  corn: { leaf: [74, 140, 52], ripe: [214, 190, 90], dry: [176, 150, 96], bloom: [206, 186, 112] },
+  'winter wheat': { leaf: [96, 150, 60], ripe: [222, 186, 92], dry: [180, 160, 110], bloom: [170, 190, 110] },
+  sunflowers: { leaf: [64, 128, 48], ripe: [120, 84, 40], dry: [140, 110, 70], bloom: [250, 204, 21] },
+  pumpkins: { leaf: [60, 130, 56], ripe: [234, 118, 24], dry: [150, 120, 80], bloom: [252, 211, 77] },
+  beans: { leaf: [80, 146, 60], ripe: [200, 190, 110], dry: [160, 136, 90], bloom: [240, 240, 250] },
+};
+function field(b: Buf, w: PWorld, f: PField, night: boolean, t: number, snowCover: boolean) {
+  const span = FIELD_X1 - FIELD_X0;
+  const worked = f.crop ? 1 : f.stage === 'stubble' ? 1 : Math.min(1, f.tilled);
+  const sun = w.hour < 12 ? -1 : 1;                                       // sunflower heads turn east to west through the day
+  for (let r = 0; r < 8; r++) {
+    const y = 121 + r * 3, sc = 0.45 + 0.55 * (r / 7);
+    // the soil of the row (worked ground left to right as far as he has got)
+    for (let x = FIELD_X0; x < FIELD_X0 + span * worked; x++) {
+      if (snowCover) { if (dith(x, y, 0.25)) b.set(x, y, nightc([200, 196, 190], night, 0.5)); continue; }
+      b.set(x, y, nightc(dith(x, y, 0.5) ? [104, 76, 52] : [86, 60, 40], night, 0.55));
+      if (dith(x, y + 1, 0.4)) b.set(x, y + 1, nightc([120, 90, 62], night, 0.55), 0.7);
+    }
+    if (!worked) continue;
+    const col = f.crop ? CROP_COL[f.crop] || CROP_COL.corn : CROP_COL.corn;
+    const sick = Math.max(0, 0.7 - f.health);
+    const step = f.crop === 'winter wheat' ? 1 : f.crop === 'sunflowers' || f.crop === 'corn' ? 4 : 3;
+    for (let x = FIELD_X0 + (r % 2); x < FIELD_X0 + span * worked; x += step) {
+      const k = hash(x * 3.7 + r * 11);
+      const sway = (z: number, hgt: number) => Math.round((WIND / 28 + Math.sin(t * 2.2 + x * 0.3 + r) * windyNow() * 0.9) * (z / Math.max(1, hgt)) * (1 + hgt / 10));
+      if (f.stage === 'stubble' || (!f.crop && f.stage !== 'grass')) {          // stubble, or weeds in bare ground
+        if (f.stage === 'stubble' && k > 0.35) b.set(x, y - 1, nightc([196, 170, 110], night, 0.55));
+        if (h2(x, r) < f.weeds * 0.5) b.set(x, y - 1 - Math.round(f.weeds * 2), nightc([86, 140, 46], night, 0.55));
+        continue;
+      }
+      if (!f.crop) continue;
+      const st = f.stage, fr = f.frac;
+      if (st === 'sown') { if (k > 0.8 && !snowCover) b.set(x, y - 1, nightc([150, 120, 80], night, 0.55)); continue; }
+      let leaf: RGB = mix(col.leaf, [190, 170, 90], sick);
+      if (st === 'ripe') leaf = mix(leaf, col.ripe, f.crop === 'corn' ? 0.45 : f.crop === 'winter wheat' ? 0.9 : 0.35);
+      if (st === 'spent' || st === 'dead') leaf = col.dry;
+      if (f.dormant) leaf = mix(leaf, [110, 120, 80], 0.4);
+      // the height of this plant (px, at full scale), by crop and stage
+      const H: Record<string, number[]> = {     // sprout, young, tall, flower, ripe, spent
+        corn: [1, 2 + 5 * fr, 8 + 7 * fr, 16, 16, 14], 'winter wheat': [1, 1 + fr, 3 + 2 * fr, 5, 5, 4],
+        sunflowers: [1, 3 + 3 * fr, 7 + 6 * fr, 14, 14, 12], pumpkins: [1, 1 + fr, 2, 2, 2, 1], beans: [1, 2 + fr, 3 + fr, 4, 4, 3] };
+      const idx = ['sprout', 'young', 'tall', 'flower', 'ripe', 'spent', 'dead'].indexOf(st);
+      let hgt = Math.max(1, Math.round((H[f.crop] || H.corn)[Math.min(5, idx)] * sc * (0.85 + k * 0.3)));
+      if (st === 'dead') hgt = Math.max(1, Math.round(hgt * 0.4));
+      if (snowCover && hgt <= 2) continue;                                     // under the snow
+      const c = nightc(leaf, night, 0.55);
+      if (f.crop === 'pumpkins' || f.crop === 'beans') {                       // low and leafy: a mound of leaves
+        for (let j = 0; j < hgt; j++) for (let i = -1; i <= 1; i++) if (h2(x + i, y - j + r) > 0.25 || j === 0) b.set(x + i, y - j, c);
+        if (st === 'flower' && k > 0.6) b.set(x, y - hgt, nightc(col.bloom, night, 0.5));
+        if (f.crop === 'pumpkins' && (st === 'ripe' || st === 'spent' || (st === 'flower' && fr > 0.5)) && k > 0.72) {
+          const pc = nightc(st === 'flower' ? [120, 150, 60] : col.ripe, night, 0.5);
+          b.set(x, y, pc); b.set(x + 1, y, pc); if (sc > 0.7) { b.set(x, y - 1, pc); b.set(x + 1, y - 1, pc); }
+        }
+        if (f.crop === 'beans' && (st === 'ripe' || st === 'spent') && k > 0.5) b.set(x + 1, y - 1, nightc(col.ripe, night, 0.5));
+        continue;
+      }
+      if (f.crop === 'winter wheat') {                                         // a sea of stems; waves run through it in the wind
+        const wave = ((((x - DRIFT * 0.8 + r * 3) % 22) + 22) % 22) < 3 + windyNow() * 4;
+        for (let j = 0; j < hgt; j++) b.set(x + sway(j, hgt), y - j, wave && j === hgt - 1 ? nightc(mix(leaf, [255, 250, 220], 0.35), night, 0.55) : c);
+        if ((st === 'flower' || st === 'ripe' || st === 'spent') && k > 0.4) b.set(x + sway(hgt, hgt), y - hgt, nightc(st === 'flower' ? col.bloom : mix(col.ripe, [255, 255, 255], 0.15), night, 0.55));
+        continue;
+      }
+      // corn and sunflowers: a stalk, leaves arching off it, and what tops it
+      const cd = nightc(mix(leaf, [0, 0, 0], 0.28), night, 0.55);
+      for (let j = 0; j < hgt; j++) {
+        const sx = x + sway(j, hgt);
+        b.set(sx, y - j, j % 2 ? c : cd);
+        if (j > 0 && j < hgt - 1 && (j + r + (x >> 2)) % 3 === 0 && hgt > 3) {
+          const side = (j + (x >> 2)) % 2 ? 1 : -1;
+          b.set(sx + side, y - j, c); if (sc > 0.6 && f.crop === 'corn') b.set(sx + side * 2, y - j + 1, cd);
+        }
+      }
+      const top = x + sway(hgt, hgt);
+      if (f.crop === 'corn') {
+        if ((st === 'flower' || st === 'ripe' || st === 'spent') && (sc > 0.6 || k > 0.6)) b.set(top, y - hgt, nightc(st === 'spent' ? col.dry : col.bloom, night, 0.5));
+        if ((st === 'ripe' || st === 'spent' || (st === 'flower' && fr > 0.4)) && hgt > 6) b.set(x + sway(hgt / 2, hgt) + 1, y - Math.round(hgt / 2), nightc(st === 'flower' ? [150, 190, 90] : [236, 214, 120], night, 0.5));
+      } else if (f.crop === 'sunflowers' && (st === 'flower' || st === 'ripe' || st === 'spent')) {
+        const droop = st !== 'flower';
+        const hx = top + (droop ? 1 : sun), hy = y - hgt + (droop ? 1 : 0);
+        const petal = nightc(st === 'flower' ? col.bloom : col.dry, night, 0.5), mid = nightc([92, 52, 24], night, 0.5);
+        if (sc > 0.65) { b.set(hx - 1, hy, petal); b.set(hx + 1, hy, petal); b.set(hx, hy - 1, petal); b.set(hx, hy + 1, petal); }
+        b.set(hx, hy, st === 'flower' ? mid : petal);
+      }
+    }
+    // weeds coming up between the rows
+    if (f.crop && !snowCover) for (let x = FIELD_X0 + 1; x < FIELD_X1; x += 5) if (h2(x, r * 7) < f.weeds * 0.6) {
+      const wh = 1 + Math.round(f.weeds * 2 * sc);
+      for (let j = 1; j <= wh; j++) b.set(x, y - j, nightc([96, 156, 50], night, 0.55));
+    }
+  }
+  // crows, when there is seed or ripe grain to steal and nothing to scare them off
+  const guarded = f.scarecrow && !f.scarecrow.down;
+  if (f.crop && !guarded && w.isDay && ['sown', 'sprout', 'ripe'].includes(f.stage)) for (let k = 0; k < 3; k++) {
+    const ph = (t * 0.05 + k * 0.33) % 1;
+    const flying = ph > 0.85;
+    const cx = 200 + hash(k + Math.floor(t * 0.05 + k * 0.33)) * 100 + (flying ? (ph - 0.85) * 200 : 0);
+    const cy = 124 + Math.floor(hash(k + 4) * 6) * 3 - (flying ? (ph - 0.85) * 120 : 0);
+    const hop = !flying && Math.floor(t * 3 + k) % 5 === 0 ? 1 : 0;
+    const c: RGB = [24, 24, 30];
+    b.set(cx, cy - 1 - hop, c); b.set(cx + 1, cy - 1 - hop, c); b.set(cx + 1, cy - 2 - hop, c);
+    if (flying) { b.set(cx - 1, cy - 2, c); b.set(cx + 2, cy - 3, c); }
+  }
+}
+
+export const SCARECROW = { x: 300, y: 141 };
+function scarecrow(b: Buf, sc: { name?: string; down?: boolean }, night: boolean, t: number) {
+  const { x, y } = SCARECROW;
+  const pole: RGB = nightc([120, 84, 50], night, 0.5), coat: RGB = nightc([96, 64, 120], night, 0.5), straw: RGB = nightc([226, 196, 110], night, 0.5);
+  const head: RGB = nightc([200, 170, 120], night, 0.5), hat: RGB = nightc([60, 44, 32], night, 0.5);
+  if (sc.down) {                                                            // blown over: lying in the rows
+    b.rect(x - 7, y, 14, 1, pole); b.rect(x - 4, y - 1, 5, 2, coat); b.set(x + 3, y - 1, head); b.set(x + 4, y - 1, hat);
+    return;
+  }
+  const sway = Math.round(Math.sin(t * 1.6) * windyNow() * 1.2 + WIND / 40);
+  b.rect(x, y - 13, 1, 14, pole);
+  for (let i = -5; i <= 5; i++) b.set(x + i + (Math.abs(i) > 3 ? sway : 0), y - 10 + (Math.abs(i) > 4 ? 1 : 0), i === -5 || i === 5 ? straw : coat);
+  b.rect(x - 1, y - 10, 3, 5, coat); b.set(x - 1, y - 6, straw); b.set(x + 1, y - 5, straw);
+  b.rect(x - 1 + sway, y - 14, 3, 3, head); b.set(x + sway, y - 13, nightc([40, 30, 24], night));
+  b.rect(x - 2 + sway, y - 15, 5, 1, hat); b.rect(x - 1 + sway, y - 17, 3, 2, hat);
+}
+
+export const WOODPILE = { x: 256, y: 158 }, CHOP_BLOCK = { x: 264, y: 158 };
+function woodpile(b: Buf, wood: number, night: boolean, chopping: boolean, snowCover: boolean) {
+  const end: RGB = nightc([196, 150, 96], night, 0.5), ring: RGB = nightc([150, 104, 60], night, 0.5), bark: RGB = nightc([96, 64, 40], night, 0.5);
+  const rows = Math.round(Math.max(0, Math.min(1, wood)) * 4);
+  for (let r = 0; r < rows; r++) for (let i = 0; i < 4 - (r > 2 ? 1 : 0); i++) {
+    const lx = WOODPILE.x - 6 + i * 3 + (r % 2), ly = WOODPILE.y - 2 - r * 2;
+    b.set(lx, ly, end); b.set(lx + 1, ly, ring); b.set(lx, ly + 1, ring); b.set(lx + 1, ly + 1, bark);
+  }
+  if (snowCover && rows) b.rect(WOODPILE.x - 6, WOODPILE.y - 2 - rows * 2, 12, 1, [244, 246, 250]);
+  // the chopping block, with the axe left in it when he is not using it
+  b.rect(CHOP_BLOCK.x - 2, CHOP_BLOCK.y - 3, 5, 3, nightc([120, 84, 50], night, 0.5)); b.rect(CHOP_BLOCK.x - 2, CHOP_BLOCK.y - 3, 5, 1, end);
+  if (!chopping) { b.line(CHOP_BLOCK.x + 1, CHOP_BLOCK.y - 4, CHOP_BLOCK.x + 4, CHOP_BLOCK.y - 8, nightc([139, 100, 60], night)); b.set(CHOP_BLOCK.x, CHOP_BLOCK.y - 4, [148, 163, 184]); }
+}
+
+// the stove in his study: it burns whenever it is cold and there is wood
+function stove(b: Buf, lit: boolean, night: boolean, cooking: boolean, t: number) {
+  const iron: RGB = nightc([46, 44, 48], night, 0.3), dk: RGB = [24, 22, 26];
+  b.rect(-27, 143, 6, 6, iron); b.rect(-27, 149, 1, 1, dk); b.rect(-22, 149, 1, 1, dk); b.rect(-28, 142, 8, 1, dk);
+  b.rect(-25, 121, 1, 21, iron);                                            // the stovepipe, up through the roof
+  if (lit) {
+    for (let i = 0; i < 3; i++) b.set(-25 + i, 146, (Math.floor(t * 6) + i) % 3 ? [251, 146, 60] : [253, 224, 71]);
+    b.glow(-24, 146, 9, [251, 146, 60], night ? 0.3 : 0.12);
+  }
+  if (cooking) {                                                            // a pot on top, steaming
+    b.rect(-26, 140, 4, 2, [70, 74, 82]); b.set(-27, 140, [70, 74, 82]); b.set(-22, 140, [70, 74, 82]);
+    for (let k = 0; k < 3; k++) { const ph = (t * 0.7 + k / 3) % 1; b.set(-25 + Math.round(Math.sin(t * 2 + k)), 139 - ph * 6, [230, 230, 235], 0.5 * (1 - ph)); }
+  }
+}
+
+export const SNOWMAN_AT = { x: 180, y: 160 };
+function snowman(b: Buf, size: number, night: boolean) {
+  const s = Math.max(0.2, Math.min(1, size)), { x, y } = SNOWMAN_AT;
+  const white: RGB = nightc([244, 246, 250], night, 0.4), shade: RGB = nightc([200, 210, 225], night, 0.4);
+  const r1 = Math.max(1, Math.round(4 * s)), r2 = Math.max(1, Math.round(3 * s)), r3 = Math.max(1, Math.round(2 * s));
+  const lean = s < 0.6 ? 1 : 0;
+  const ball = (cx: number, cy: number, r: number) => { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r + r * 0.5) b.set(cx + i, cy + j, j > r / 3 || i > r / 2 ? shade : white); };
+  ball(x, y - r1, r1); ball(x + lean, y - 2 * r1 - r2 + 1, r2); ball(x + lean * 2, y - 2 * r1 - 2 * r2 - r3 + 2, r3);
+  const hy = y - 2 * r1 - 2 * r2 - r3 + 2;
+  b.set(x + lean * 2, hy, [20, 20, 24]); b.set(x + lean * 2 + 1, hy + (s > 0.5 ? 1 : 0), [234, 118, 24]);    // an eye, the carrot
+  if (s > 0.5) { const ay = y - 2 * r1 - r2 + 1; b.line(x - r2, ay, x - r2 - 3, ay - 2, [110, 74, 46]); b.line(x + r2 + 1, ay, x + r2 + 4, ay - 3, [110, 74, 46]); }
+}
+
+export const FIRE_AT = { x: 281, y: 159 };
+function firepit(b: Buf, burning: boolean, night: boolean, t: number) {
+  const { x, y } = FIRE_AT, stone: RGB = nightc([120, 116, 110], night, 0.45);
+  for (let i = -4; i <= 4; i++) if (Math.abs(i) > 1 || !burning) b.set(x + i, y, i % 2 ? stone : mix(stone, [0, 0, 0], 0.2));
+  b.set(x - 4, y - 1, stone); b.set(x + 4, y - 1, stone);
+  b.rect(x - 11, y - 1, 5, 2, nightc([110, 74, 46], night, 0.45));             // a log to sit on
+  if (!burning) { b.set(x, y - 1, [60, 56, 52]); return; }
+  for (let k = 0; k < 9; k++) {
+    const fx = x - 2 + (k % 5), hh = 2 + Math.floor((Math.sin(t * 9 + k * 1.7) + 1) * 1.6);
+    for (let j = 0; j < hh; j++) b.set(fx, y - 1 - j, j === hh - 1 ? [253, 224, 71] : j > hh / 2 ? [251, 146, 60] : [220, 38, 38]);
+  }
+  for (let k = 0; k < 4; k++) { const ph = (t * 0.5 + k / 4) % 1; b.set(x + Math.sin(t * 3 + k * 2) * 2 + (WIND / 20) * ph * 4, y - 5 - ph * 14, [253, 186, 116], 1 - ph); }
+  b.glow(x, y - 3, night ? 22 : 8, [251, 146, 60], night ? 0.35 : 0.12);
+}
+
+export const TELESCOPE = { x: 214, y: 160 };
+function telescope(b: Buf, night: boolean) {
+  const { x, y } = TELESCOPE, leg: RGB = nightc([120, 120, 128], night, 0.3), tube: RGB = [226, 232, 240];
+  b.line(x, y - 7, x - 3, y, leg); b.line(x, y - 7, x + 3, y, leg); b.line(x, y - 7, x, y, leg);
+  b.line(x - 5, y - 6, x + 4, y - 12, tube); b.line(x - 5, y - 7, x + 4, y - 13, tube); b.set(x + 5, y - 13, [30, 41, 59]);
+}
+
 // ── the whole frame ────────────────────────────────────────────────────────
 export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const b = new Buf();
@@ -1158,12 +1430,14 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   }
   // wind running through the field: lighter bands of bent grass moving across it
   if (!snowCover && Math.abs(WIND) > 12) {
-    const sp = WIND * 0.6, band = 26;
+    const band = 26;
     for (let y = 118; y < 150; y++) for (let x = X0; x < X1; x++) {
-      const ph = (((x - t * sp + y * 0.8) % band) + band) % band;
+      const ph = (((x - DRIFT * 0.6 + y * 0.8) % band) + band) % band;
       if (ph < 3 + windyNow() * 4 && dith(x, y, 0.5)) b.set(x, y, night ? [60, 70, 90] : sea === 'winter' || sea === 'autumn' ? [196, 180, 120] : [150, 190, 90], 0.25 + windyNow() * 0.25);
     }
   }
+  if (w.field && w.field.stage !== 'grass') field(b, w, w.field, night, t, snowCover);
+  if (w.field?.scarecrow) scarecrow(b, w.field.scarecrow, night, t);
   if (w.tree) hisTree(b, w.tree, w, night, t);
   // a pine, about 3.5 m
   for (let j = 0; j < 44; j++) {
@@ -1173,9 +1447,13 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if ((snowing || snowCover) && j % 7 === 0) for (let i = -half; i <= half; i++) b.set(250 + i + lean, 110 + j, [241, 245, 249]);
   }
   b.rect(249, 154, 3, 4, [87, 60, 36]);
-  if (d.feeder === 'yes') feeder(b, w, night, t);
+  if (d.feeder === 'yes') feeder(b, w, night, t, w.feederFill ?? 1);
   pond(b, w, t);
   if (d.bench === 'yes') benchByPond(b, night);
+  const doingNow = (x: PWorld['delamain'] | undefined | null) => (x && !x.walking ? x.doing : '');
+  const busy = (what: string) => doingNow(w.delamain) === what;
+  woodpile(b, w.wood ?? 0.6, night, busy('chop'), snowCover);
+  if (w.firepit || busy('campfire')) firepit(b, busy('campfire'), night, t);
   path(b, d, u, night, t);
   if (u.snow_path > 0.1 || snowCover) for (const [x0, x1] of PATHS) for (let x = x0; x <= x1; x++) for (let y = 157; y < 160; y++)
     if (h2(x, y) < Math.max(u.snow_path, snowCover ? 0.6 : 0)) b.set(x, y, [244, 246, 250]);
@@ -1195,6 +1473,8 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   // outdoor beds, 25 cm, with whatever weeds have come up in them
   for (let i = 8; i < 11; i++) { bedLow(b, SPOTS[i].x, SPOTS[i].y, 20, w.spots[i]?.water, snowCover); weedsIn(b, SPOTS[i].x, SPOTS[i].y, 10, u.weeds[String(i)] || 0, night, t, sea); }
   lawn(b, w, u, night, t);
+  if (w.snowman) snowman(b, w.snowman.size, night);
+  if (busy('stars')) telescope(b, night);
   // ── the greenhouse: 2.2 m walls, a 3.6 m ridge ──
   const gx0 = 86, gx1 = 168, eaveY = 125, peakY = 108, gcx = (gx0 + gx1) / 2;
   const roofAt = (x: number) => (x < gcx ? eaveY - (x - gx0) / (gcx - gx0) * (eaveY - peakY) : peakY + (x - gcx) / (gx1 - gcx) * (eaveY - peakY));
@@ -1227,11 +1507,12 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   }
   leanTo(b, d, snowCover);
   study(b, w, d, u, night, t);
+  stove(b, !!w.stoveLit, night, busy('cook'), t);
   exteriorWall(b, -48, -45, 119, 160, d, u, night);
   exteriorWall(b, hx1, hx1 + 3, ceil, 160, d, u, night);
   attic(b, w, night, t);
   b.rect(58, 84, 6, 14, [87, 83, 78]); b.rect(57, 83, 8, 2, [68, 64, 60]);       // chimney
-  for (let k = 0; k < 8; k++) {                                                   // and its smoke, drifting
+  if (w.stoveLit ?? true) for (let k = 0; k < 8; k++) {                         // and its smoke, drifting (when the stove burns)
     const age = ((t * 0.18 + k / 8) % 1), r = 1 + age * 3.2;
     const px = 61 + age * (4 + WIND * 0.9) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 81 - age * 30 * (1 - windyNow() * 0.7);
     for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) b.set(px + xx, py + yy, night ? [70, 75, 90] : [226, 232, 240], (1 - age) * 0.32);
@@ -1317,6 +1598,8 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (d.lamp === 'on') { b.glow(-37, 137, 18, [253, 224, 138], 0.28); cone(b, -37, 136, 150, 10, [253, 224, 138], 0.14); }
     if (lightOn) b.glow(16, 130, 18, [232, 121, 249], 0.24);
     cone(b, gcx, peakY + 9, 153, 22, [253, 224, 138], 0.16);            // the lantern's light down through the greenhouse
+    if (busy('campfire')) b.glow(FIRE_AT.x, FIRE_AT.y - 3, 26, [251, 146, 60], 0.4);
+    if (w.stoveLit) b.glow(-24, 146, 10, [251, 146, 60], 0.3);
     b.glow(174, 126, 16, [253, 224, 138], 0.35);
     cone(b, 174, 128, 157, 14, [253, 224, 138], 0.14);                 // the lamp post on the path
     if (d.lights !== 'none') stringLights(b, d, w, t);               // the bulbs shine through the dark

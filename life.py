@@ -27,7 +27,9 @@ WORK_SOURCES = {"report": "writing a report", "meeting": "writing up meeting not
                 "brief": "putting together the morning brief"}
 PLACES = {"sleep": "bed", "garden": "garden", "therapy": "rug", "town": "town", "journal": "study_desk", "study": "study_desk",
           "talk": "office", "work": "office", "news": "armchair", "tea": "window", "read": "armchair", "shelf": "shelf",
-          "cat": "cat", "pinboard": "pinboard"}
+          "cat": "cat", "pinboard": "pinboard", "field": "field_edge", "kite": "kite", "bench": "bench", "stars": "telescope",
+          "woodpile": "woodpile", "guitar": "armchair", "stretch": "rug", "sketch": "easel", "cook": "stove", "letter": "study_desk",
+          "feeder": "feeder", "porch": "porch"}
 
 
 def _mark(what: str, **detail) -> None:
@@ -84,19 +86,66 @@ def _fresh(what: str) -> dict | None:
     return None
 
 
+def _outside() -> dict:
+    """What the day outside and the place allow: the weather, the field, the woodpile, the visitors."""
+    out = {"fine": False, "kite": False, "stars": False, "cold": False, "warm": False, "crop": None, "stage": "", "wood": 1.0,
+           "bench": False, "letters": False, "feeder": False, "day": True}
+    try:
+        import garden as _garden
+        w = _garden.weather()
+        g = _garden._state()
+        sp, gu = float(w.get("wind") or 0), float(w.get("gust") or 0)
+        wet = w["rain"] > 0 or w["snow"] > 0
+        out.update(day=bool(w["is_day"]), fine=not wet and gu < 65 and w["temp"] > -8,
+                   kite=w["is_day"] and not wet and 14 <= sp <= 50 and gu < 70,
+                   stars=not w["is_day"] and w["cloud"] < 40 and not wet and gu < 55, cold=w["temp"] < 8, warm=w["temp"] > 14,
+                   crop=g["field"].get("crop"), stage=_garden.field_stage(g["field"]), wood=g.get("wood", 1.0),
+                   bench=g["design"].get("bench") == "yes", feeder=g["design"].get("feeder") == "yes" and g.get("feeder_fill", 0) > 0.1,
+                   letters=any(not v.get("left") for v in (g.get("visitors") or {}).values()))
+    except Exception:
+        pass
+    return out
+
+
 def _idle(now: datetime, cat_inside: bool) -> tuple[str, str]:
-    """What he does with nothing on, by the time of day: it changes every quarter of an hour or so."""
+    """What he does with nothing on, by the time of day and the weather: it changes every quarter of an hour or so.
+    Some choices count twice, so they come up more often."""
     slot = int(now.timestamp() // 900)
     h = now.hour + now.minute / 60
     pick = (slot * 2654435761) % 1000 / 1000
+    o = _outside()
+    crop = o["crop"]
+    field = (("field", f"walking along the edge of his {crop}" if o["stage"] not in ("dead",) else "looking at what is left of his crop")
+             if crop else ("field", "looking over the field behind the house"))
     if h < 9.5:
-        options = [("tea", "having his tea at the window"), ("read", "reading in the armchair"), ("shelf", "looking along his shelf")]
+        options = [("tea", "having his tea at the window"), ("read", "reading in the armchair"), ("shelf", "looking along his shelf"),
+                   ("stretch", "stretching on the rug")]
+        if o["fine"] and o["day"]:
+            options += [field, field] if crop else [field]
+        if o["cold"] and o["day"] and o["fine"]:
+            options.append(("woodpile", "splitting firewood for the stove"))
     elif h < 17:
         options = [("read", "reading in the armchair"), ("shelf", "looking along his shelf"), ("pinboard", "looking at his pinboard"),
-                   ("tea", "at the window with a cup of tea")]
+                   ("tea", "at the window with a cup of tea"), ("sketch", "sketching the view from the window")]
+        if o["fine"]:
+            options += [field, field] if crop else [field]
+            if o["warm"]:
+                options.append(("bench", "sitting out by the pond") if o["bench"] else ("porch", "sitting out on the step in the sun"))
+            if o["cold"]:
+                options.append(("woodpile", "splitting firewood for the stove"))
+        if o["kite"]:
+            options += [("kite", "flying a kite in the wind"), ("kite", "flying a kite in the wind")]
+        if o["letters"]:
+            options.append(("letter", "writing a letter at his desk"))
     else:
         options = [("read", "reading in the armchair by the lamp"), ("tea", "at the window, watching the evening"),
-                   ("shelf", "choosing a book")]
+                   ("shelf", "choosing a book"), ("guitar", "playing his guitar in the armchair")]
+        if 17.5 <= h < 19.5:
+            options += [("cook", "cooking supper on the stove"), ("cook", "cooking supper on the stove")]
+        if o["stars"] and h >= 18:
+            options += [("stars", "out with his telescope, looking at the stars"), ("stars", "out with his telescope, looking at the stars")]
+        if o["fine"] and o["warm"] and o["day"]:
+            options.append(("bench", "watching the evening from the bench by the pond") if o["bench"] else field)
     if cat_inside:
         options.append(("cat", "sitting with the cat"))
     return options[int(pick * len(options)) % len(options)]
@@ -137,4 +186,6 @@ def current() -> dict:
     except Exception:
         pass
     what, doing = _idle(now, cat_inside)
+    if what == "cook" and _outside()["wood"] < 0.03:
+        what, doing = "tea", "at the window; the stove is cold, the woodpile is empty"
     return {"what": what, "where": PLACES[what], "doing": doing}

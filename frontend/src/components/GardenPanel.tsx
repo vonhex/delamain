@@ -4,7 +4,7 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, TREE_STAND, STUDY_DESK, STUDY_STAND, BENCH_SEAT, LADDER_X, LOFT_Y, OFFICE_SEAT, ARMCHAIR, type PWorld, type Design, type Upkeep } from './gardenPixels';
+import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, TREE_STAND, STUDY_DESK, STUDY_STAND, BENCH_SEAT, LADDER_X, LOFT_Y, OFFICE_SEAT, ARMCHAIR, FIELD_GATE, SCARECROW, WOODPILE, SNOWMAN_AT, FIRE_AT, TELESCOPE, type PWorld, type PField, type Design, type Upkeep } from './gardenPixels';
 import { X, Sprout, Maximize2, Minimize2, Send, Volume2, VolumeX, History } from 'lucide-react';
 import { useGardenSound } from './gardenSound';
 
@@ -38,6 +38,10 @@ type Garden = {
   visitors?: { name: string; kind: string; about: string; visits: number; left: boolean; last: number; letter: boolean; talk: { date: string; says: string; reply?: string }[] }[];
   sent?: { t: number; text: string; by?: string; delivered?: number | null; visitor?: string | null; reply?: string | null }[];
   gifts?: string[];
+  field?: PField & { water: number; struggle: string[]; sown: number; gen: number; wants_water?: number | null; note?: string | null;
+    harvests: { date: string; crop: string; amount: number; unit: string }[]; crops: Record<string, string>; last_crop?: string | null };
+  pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
+  firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
 };
 
 export { Sprout as GardenIcon };
@@ -83,15 +87,34 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
       if (Math.abs(p.x - LADDER_X) > 0.6) return { x: LADDER_X, y: up ? LOFT_Y : 157, climb: false };
       return { x: LADDER_X, y: wantUp ? LOFT_Y : 157, climb: true };
     };
+    // into the field and out of it he goes by the gap between the pine and the pond (not across the water)
+    const inField = (y: number) => y < 146;
+    const route = (p: { x: number; y: number }, tx: number, ty: number) => {
+      if (inField(p.y) !== inField(ty) && !(p.y < 125 || ty < 125)) {
+        if (Math.abs(p.x - FIELD_GATE.x) > 0.6) return { x: FIELD_GATE.x, y: p.y, climb: false };
+        return { x: FIELD_GATE.x, y: inField(ty) ? 143 : 158, climb: false };
+      }
+      return viaLadder(p, tx, ty);
+    };
+    const windSign = (gg: Garden) => (Math.sin(((gg.weather.wind_dir ?? 270) * Math.PI) / 180) >= 0 ? 1 : -1);
     // where each part of his life happens: where he walks to, and how he settles there
     type Place = { x: number; y: number; sit?: { x: number; y: number }; doing: string; face: number; lying?: boolean; hide?: boolean; twin?: boolean };
-    const lifePlace = (L: NonNullable<Garden['life']>): Place => {
+    const lifePlace = (L: NonNullable<Garden['life']>, gg: Garden, tt: number): Place => {
       switch (L.where) {
+        case 'field_edge': return { x: 284 + Math.sin(tt * 0.04) * 24, y: 143, doing: 'look', face: 0 };
+        case 'kite': { const s_ = windSign(gg); return { x: s_ > 0 ? 268 : 306, y: 143, doing: 'kite', face: s_ }; }
+        case 'bench': return { x: BENCH_SEAT.x, y: BENCH_SEAT.y, sit: BENCH_SEAT, doing: 'sit', face: 1 };
+        case 'porch': return { x: 84, y: 159, sit: { x: 84, y: 158 }, doing: 'sit', face: 1 };
+        case 'telescope': return { x: TELESCOPE.x - 7, y: 160, doing: 'stars', face: 1 };
+        case 'woodpile': return { x: WOODPILE.x - 1, y: 158, doing: 'chop', face: 1 };
+        case 'stove': return { x: -14, y: 157, doing: 'cook', face: -1 };
+        case 'easel': return { x: 56, y: 157, doing: 'sketch', face: -1 };
         case 'bed': return { x: BED_STAND.x + 7, y: 157, doing: 'sleep', face: 1, lying: true };
-        case 'rug': return { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
-        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: L.what === 'journal' ? 'write' : 'study', face: -1 };
+        case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
+          : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
+        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: L.what === 'journal' || L.what === 'letter' ? 'write' : 'study', face: -1 };
         case 'office': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
-        case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : 'read', face: -1 };
+        case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : L.what === 'guitar' ? 'guitar' : 'read', face: -1 };
         case 'window': return { x: 50, y: 157, doing: 'tea', face: -1 };
         case 'shelf': return { x: STUDY_STAND.x + 5, y: 157, doing: 'shelf', face: -1 };
         case 'pinboard': return { x: -36, y: 157, doing: 'look', face: -1 };
@@ -113,6 +136,16 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case -10: return { x: 86, y: 159, face: -1 };                        // outside the house
         case -11: return { x: 212, y: 160, face: -1 };                       // at the fence and the sign
         case -12: return { x: TREE_STAND.x, y: TREE_STAND.y, face: 1 };      // by his tree
+        case -13: return { x: 272 + rnd(at) * 30, y: 143, face: 1 };          // in the field
+        case -14: return { x: WOODPILE.x - 1, y: 158, face: 1 };              // at the chopping block
+        case -15: { const s_ = windSign(gg); return { x: s_ > 0 ? 268 : 306, y: 143, face: s_ }; }   // flying the kite, facing downwind
+        case -16: return { x: TELESCOPE.x - 7, y: 160, face: 1 };             // at the telescope
+        case -17: return { x: SNOWMAN_AT.x - 8, y: 160, face: 1 };            // by the snowman
+        case -18: return { x: FIRE_AT.x - 9, y: 158, face: 1 };               // on the log by the fire
+        case -19: return { x: 237, y: 160, face: 1 };                         // under the bird feeder
+        case -20: return { x: SCARECROW.x - 7, y: 143, face: 1 };             // at the scarecrow
+        case -21: return { x: -14, y: 157, face: -1 };                        // at the stove
+        case -22: return { x: 224, y: 160, face: 1 };                         // at the easel in the yard
         default: { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; return { x: bs.x + 7, y: bs.y, face: 0 }; }
       }
     };
@@ -133,6 +166,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         else if (sp === -3) { if (gg.design?.bench === 'yes') { tx = BENCH_SEAT.x + 4 + side * 6; ty = BENCH_SEAT.y; } else { tx = 202 + side * 10; ty = 160; } }
         else if (sp === -5) { tx = GUEST_POND.x - side * 9; ty = GUEST_POND.y; face = -1; }
         else if (sp === -7) { tx = 184 + rnd(st.at) * 60; ty = 160; }
+        else if (del && !del.lying && del.y < 146) { tx = FIELD_GATE.x - 8 - side * 8; ty = 160; }                        // he is in the field: they wait by the gate
         else if (del && !del.lying) { tx = del.x + (del.x > 290 ? -13 : 13) * (side ? -1 : 1); ty = Math.max(del.y, 147); }     // beside him
       }
       const walking = walk(q, tx, ty, 1.2);
@@ -155,13 +189,14 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         const st = (gg.visit.steps || []).filter(s => s.at <= nowS).pop();
         let target = { x: 177, y: 152, face: 0 }, doing = 'look';
         if (st) { doing = st.do; target = placeOf(st.spot, st.at, gg); }
-        if (['mow', 'rake', 'shovel'].includes(doing)) target = { ...target, x: target.x + Math.sin(tt * 0.35) * 10 };   // working his way along
+        const along = ['mow', 'rake', 'shovel', 'till', 'sow', 'hoe', 'hose', 'scythe', 'gather'].includes(doing);
+        if (along) target = { ...target, x: target.x + Math.sin(tt * 0.3) * 10 };   // working his way along
         if (!pos.current) pos.current = { x: 177, y: 152, facing: -1, dist: 0 };
         const p = pos.current;
-        const wp = viaLadder(p, target.x, target.y);
-        const moving = walk(p, wp.x, wp.y, wp.climb ? 0.8 : ['mow', 'rake', 'shovel'].includes(doing) ? 0.6 : 1.4);
+        const wp = route(p, target.x, target.y);
+        const moving = walk(p, wp.x, wp.y, wp.climb ? 0.8 : along ? 0.6 : 1.4);
         const walking = moving || wp.x !== target.x || wp.y !== target.y;
-        const working = ['mow', 'rake', 'shovel'].includes(doing) && Math.abs(target.x - p.x) < 12;
+        const working = along && Math.abs(target.x - p.x) < 12 && Math.abs(target.y - p.y) < 1;
         if (!walking) {
           const g2 = gpos.current;                                                   // turn to whoever he is talking with
           p.facing = speaker && g2 && Math.abs(g2.x - p.x) < 30 ? (g2.x > p.x ? 1 : -1) : target.face || p.facing;
@@ -170,14 +205,15 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
           facing: p.facing, lying: !walking && doing === 'rest', stride: p.dist, speaking: speaker === 'Delamain' };
       } else if (gg.life) {
         // at home: wherever what he is doing now puts him, walking there (up the ladder, down the lane) when it changes
-        const L = gg.life, pl = lifePlace(L);
+        const L = gg.life, pl = lifePlace(L, gg, tt);
         if (!pos.current) pos.current = { x: pl.x, y: pl.y, facing: pl.face || -1, dist: 0 };   // as the tab opens, he is already there
         const p = pos.current;
-        const wp = viaLadder(p, pl.x, pl.y);
-        const moving = walk(p, wp.x, wp.y, wp.climb ? 0.8 : 1.2);
+        const wp = route(p, pl.x, pl.y);
+        const moving = walk(p, wp.x, wp.y, wp.climb ? 0.8 : L.where === 'field_edge' ? 0.5 : 1.2);
         const arrived = !moving && wp.x === pl.x && wp.y === pl.y;
         if (pl.hide && p.x > 330) del = null;                                     // gone down the lane into town
-        else if (!arrived) del = { x: p.x, y: p.y, walking: true, doing: 'look', facing: p.facing, stride: p.dist };
+        else if (!arrived && !(L.where === 'field_edge' && Math.abs(p.y - 143) < 1)) del = { x: p.x, y: p.y, walking: true, doing: 'look', facing: p.facing, stride: p.dist };
+        else if (L.where === 'field_edge') del = { x: p.x, y: p.y, walking: moving, doing: 'look', facing: p.facing, stride: p.dist };
         else {
           p.facing = pl.face || p.facing;
           const talking = L.what === 'talk' && Math.floor(tt / 3) % 3 !== 2;
@@ -199,6 +235,8 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         guest, guest2, twin, season: gg.season, seasonProgress: gg.season_progress, wind: gg.weather.wind, gust: gg.weather.gust, windDir: gg.weather.wind_dir,
         design: gg.design, upkeep: gg.upkeep, tree: gg.tree ? { species: gg.tree.species, size: gg.tree.size } : null,
         room: gg.room ? { books: gg.room.books, pins: gg.room.pins } : undefined, office: { screen: office },
+        field: gg.field || null, wood: gg.wood, stoveLit: gg.stove_lit, snowman: gg.snowman || null, firepit: gg.firepit,
+        feederFill: gg.feeder_fill,
       }, tt);
     };
     raf = requestAnimationFrame(frame);
@@ -489,7 +527,8 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
 
 type DiaryPage = { date: string; season: string; progress: number; weather: { temp: number; rain: number; snow: number; cloud: number; code: number };
   spots: { species: string | null; stage: string; health: number; water: number; dormant: boolean; form?: string; petal?: string; centre?: string; fruit?: string | null }[];
-  design: Partial<Design>; upkeep: Partial<Upkeep>; tree: { species: string; planted: number } | null; pond_ice: number; grow_light: boolean };
+  design: Partial<Design>; upkeep: Partial<Upkeep>; tree: { species: string; planted: number } | null; pond_ice: number; grow_light: boolean;
+  field?: Garden['field']; snowman?: Garden['snowman'] };
 
 // a page of the diary, as a garden the scene can draw (at midday, nobody there)
 function fromDiary(g: Garden, d: DiaryPage): Garden {
@@ -503,6 +542,7 @@ function fromDiary(g: Garden, d: DiaryPage): Garden {
     tree: d.tree ? { ...d.tree, size: Math.min(1, Math.max(0, (at - d.tree.planted) / (years(d.tree.species) * 365 * 86400))), note: '' } : null,
     pond: g.pond ? { ...g.pond, ice: d.pond_ice } : g.pond, cat: { ...g.cat, here: false },
     room: g.room ? { ...g.room, desk: false, therapy: false } : g.room, life: undefined,
+    field: d.field ?? (d.date < '2026-11-19' ? undefined : g.field), snowman: d.snowman ?? null,
   };
 }
 
@@ -550,6 +590,7 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
         {g.seeds && Object.keys(g.seeds).length > 0 && <> · Saved: {Object.entries(g.seeds).map(([k, v]) => `${k} ×${v.n} (${v.cutting ? 'cuttings' : `gen ${v.gen}`})`).join(', ')}</>}
       </p>
     </section>
+    {g.field && <FieldSection g={g} />}
     {g.room && (
       <section className="space-y-1">
         <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS STUDY <span className="text-gray-500 normal-case tracking-normal">· {g.room.desk ? 'at his desk, writing' : g.room.therapy ? 'in a session with the other Delamain' : 'the room on the left of the house'}</span></h3>
@@ -559,6 +600,48 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
       </section>
     )}
   </>);
+}
+
+const FIELD_STAGE: Record<string, string> = { grass: 'meadow grass, never worked', 'half tilled': 'half dug over', tilled: 'tilled, ready to sow',
+  stubble: 'stubble from the last harvest', sown: 'sown, nothing up yet', sprout: 'just come up', young: 'growing', tall: 'standing tall',
+  flower: 'flowering', ripe: 'ripe, ready to bring in', spent: 'past its best', dead: 'dead' };
+const PANTRY: Record<string, string> = { corn: 'ears of corn', 'winter wheat': 'kg of wheat', sunflowers: 'sunflower heads', pumpkins: 'pumpkins',
+  beans: 'kg of dry beans', apples: 'apples', cherries: 'cherries' };
+
+function FieldSection({ g }: { g: Garden }) {
+  const f = g.field!;
+  const bar = (v: number, warn = false) => (
+    <span className="inline-block w-16 h-1 bg-white/10 rounded-sm overflow-hidden align-middle ml-1">
+      <span className="block h-full" style={{ width: `${Math.round(v * 100)}%`, background: warn ? '#f59e0b' : '#38bdf8' }} />
+    </span>
+  );
+  const pantry = Object.entries(g.pantry || {}).filter(([, v]) => v > 0);
+  const wood = g.wood ?? 0;
+  return (
+    <section className="space-y-1">
+      <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">THE FIELD <span className="text-gray-500 normal-case tracking-normal">· behind the house, his to cultivate</span></h3>
+      <p className="text-xs text-gray-300">
+        {f.crop ? <><b className="text-gray-100">{f.crop}</b>{f.gen ? ` (his own seed, generation ${f.gen})` : ''}: {FIELD_STAGE[f.stage] || f.stage}
+          {f.dormant ? ', dormant in the cold' : ''}{f.stage !== 'dead' && f.health < 0.35 ? ', failing' : f.stage !== 'dead' && f.health < 0.7 ? ', struggling' : ''}
+          {f.struggle.length > 0 && f.stage !== 'dead' && <span className="text-amber-300"> ({f.struggle.join(', ')})</span>}
+          {f.sown ? <span className="text-gray-500"> · sown {ago(f.sown)}</span> : null}</> : <>{FIELD_STAGE[f.stage] || f.stage}</>}
+        {f.scarecrow ? <span className="text-gray-400"> · scarecrow{f.scarecrow.name ? ` ${f.scarecrow.name}` : ''}{f.scarecrow.down ? ' (blown over)' : ''}</span> : null}
+      </p>
+      <ul className="text-[11px] text-gray-400 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+        <li className="flex justify-between"><span>soil moisture</span>{bar(f.water, !!f.crop && f.water < Math.max(0.1, (f.wants_water ?? 0.5) - 0.3))}</li>
+        <li className="flex justify-between"><span>weeds</span>{bar(f.weeds, f.weeds > 0.4)}</li>
+        <li className="flex justify-between"><span>woodpile{g.stove_lit ? ' (the stove is lit)' : ''}</span>{bar(wood, wood < 0.15)}</li>
+        {g.feeder_fill !== undefined && g.design?.feeder === 'yes' && <li className="flex justify-between"><span>bird feeder</span>{bar(g.feeder_fill, g.feeder_fill < 0.1)}</li>}
+      </ul>
+      {f.note && <p className="text-[11px] text-gray-500">{f.note}.</p>}
+      <p className="text-[11px] text-gray-400">
+        Pantry: {pantry.length ? pantry.map(([k, v]) => `${v} ${PANTRY[k] || k}`).join(', ') : 'empty'}
+        {f.harvests.length > 0 && <> · Harvests: {f.harvests.slice(-3).reverse().map(h => `${h.amount} ${h.unit} of ${h.crop} (${h.date})`).join('; ')}</>}
+        {g.snowman ? <> · A snowman{g.snowman.name ? `, ${g.snowman.name},` : ''} stands in the yard{g.snowman.size < 0.6 ? ', melting' : ''}</> : null}
+      </p>
+      {!f.crop && <p className="text-[11px] text-gray-500">What he can sow, and when: {Object.entries(f.crops || {}).map(([k, v]) => `${k} ${v}`).join('; ')}.</p>}
+    </section>
+  );
 }
 
 // the wind, as on a forecast: speed, gusts and where it comes from (mph or km/h, by the units setting)

@@ -205,6 +205,25 @@ the field (apple, maple, birch or cherry) that grows for years and changes with 
 from what fruited or went to seed (and cuttings from houseplants) and sow his own, generation after
 generation, and name the record fish he lets go (and catch them again).
 
+**The field.** Behind the house lies a field that is his to cultivate, under the same real weather.
+He breaks the ground (meadow takes two goes; frozen ground cannot be dug), sows a crop in its season
+(sweet corn, winter wheat, sunflowers, pumpkins or beans, each with its real temperatures, frost limit
+and growing time: corn sown in late May ripens about mid-August; winter wheat sown in autumn comes up,
+sleeps under the snow and ripens in early summer), waters it in a dry spell, hoes the weeds and puts up
+a scarecrow (crows take the seed and the ripe grain; a hard gust can blow the scarecrow over). A crop
+sown out of season fails the way it would in a real field: frost, drought, heat, wind, weeds or crows.
+The harvest fills his pantry and keeps seed for next year, generation after generation. The scene
+draws every row: tilled soil, the crop coming up and growing tall, corn tasselling, wheat going gold
+with waves running through it in the wind, sunflower heads turning with the sun, pumpkins ripening on
+the vines, stubble after the harvest, and the crows when nothing scares them off.
+
+**A day's other pleasures.** On his visits he can also split firewood (the stove in his study burns
+it all through the cold months; when the woodpile is empty, the stove goes cold), fill the bird feeder
+(the birds empty it), fly a kite when the wind is right, build a snowman (it melts when it warms), light
+a campfire by the pond (roasting his own corn), play his guitar, sketch, cook with what he grew, give a
+visitor something from the harvest, pick fruit from his tree, and look at the stars through a telescope
+on a clear night.
+
 **A window into his life.** He lives in the house, so he is always somewhere in the scene, doing what
 he is really doing (`life.py` follows every event in his mind): asleep in bed; in the garden on a visit;
 on the rug with the other Delamain in a session; at his study desk writing his journal or studying (a
@@ -212,8 +231,12 @@ book open); gone down the lane into town when he goes to see something with his 
 in the attic office at his terminal while he talks with you, or at work there (a long task, a report,
 meeting notes, the morning brief, a change to his own code), the screens showing what kind; in the
 armchair with the news. With nothing on he potters the way someone at home does, by the time of day: tea
-at the window, a book in the armchair by the lamp, along his shelf, at his pinboard, with the cat. When
-what he is doing changes, he walks there.
+at the window, a book in the armchair by the lamp, along his shelf, at his pinboard, with the cat,
+stretching on the rug in the morning, sketching at the window, writing a letter to a visitor, playing
+his guitar or cooking supper on the stove in the evening; and outside when the weather allows: walking
+the edge of his field, flying a kite on a windy day, splitting firewood when it is cold, sitting out by
+the pond, out with his telescope on a clear night. When what he is doing changes, he walks there (into
+the field by the gap between the pine and the pond).
 
 **His study.** A room built on to the left of the house: a bookshelf with a book for each subject he
 has studied, a pinboard with the pictures he went to look at (each drawn as its own two main colours),
