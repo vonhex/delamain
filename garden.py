@@ -104,6 +104,9 @@ CAT_DOINGS = {"inside": ["asleep on the windowsill in the sun", "curled up under
 FISH = {"bluegill": (10, 25, (15, 30)), "green sunfish": (8, 20, (15, 30)), "largemouth bass": (20, 55, (14, 30)),
         "yellow perch": (12, 30, (5, 24)), "rainbow trout": (25, 50, (3, 19)), "channel catfish": (30, 70, (17, 31))}
 
+AQUARIUM_MAX, AQUARIUM_CM = 5, 26      # a 300-litre tank in the attic: five fish at most, none longer than this
+FISH_COLD = {"rainbow trout"}           # needs cold, running water: it would not live in a tank in the house
+
 FISH_COMMON = {"bluegill": 3.0, "green sunfish": 2.0, "yellow perch": 2.0, "largemouth bass": 1.3, "rainbow trout": 1.2,
                "channel catfish": 0.8}
 
@@ -212,32 +215,69 @@ def _extras() -> dict:
             "design": dict(DESIGN_DEFAULT), "upkeep": dict(UPKEEP_DEFAULT), "year": {}, "seeds": {},
             "tree": None, "days": [], "postcards": [],
             "field": dict(FIELD_DEFAULT), "pantry": {}, "wood": 0.6, "snowman": None, "firepit": False, "feeder_fill": 0.0,
-            "sketches": []}
+            "sketches": [], "aquarium": {"fish": [], "clean": 1.0, "fed": 1.0},
+            "money": 25.0, "owned": [], "outfit": {}, "ledger": []}
 
 
 # ── the look of the place: his to choose ───────────────────────────────────
 # Every choice is from a set that the pixel art can draw well. He changes them on his visits ("design").
 DESIGN = {
-    "house_wall": ("timber", "whitewash", "sage", "slate blue", "ochre"),
-    "roof": ("terracotta", "slate", "moss green", "copper"),
-    "trim": ("red", "navy", "mustard", "teal", "plum"),            # curtains, shutters and the door
+    # the house, outside
+    "house_wall": ("timber", "whitewash", "sage", "slate blue", "ochre", "brick", "stone", "log", "forest green", "rose"),
+    "roof": ("terracotta", "slate", "moss green", "copper", "thatch", "red tin", "charcoal shingle"),
+    "trim": ("red", "navy", "mustard", "teal", "plum", "white", "black", "sky blue"),   # window frames and shutters
+    "door": ("plank", "panelled", "arched", "glass", "barn"),
+    "door_colour": ("match the trim", "natural wood", "red", "navy", "teal", "mustard", "plum", "black", "white"),
+    "curtains": ("match the trim", "red", "navy", "mustard", "teal", "plum", "white lace", "green check"),
+    "shutters": ("none", "yes"),
+    "window_box": ("none", "flowers", "herbs"),
+    "porch_light": ("none", "lantern"),
+    "doormat": ("none", "yes"),
+    "weathervane": ("none", "rooster", "fish", "arrow"),           # on the roof; it turns with the real wind
+    "chimney": ("stone", "brick"),
+    # inside
+    "room_wall": ("plaster", "sage", "wood panel", "deep blue", "terracotta", "wallpaper", "forest green", "cream"),
+    "floor": ("oak", "pine", "dark walnut", "stone", "checkered"),
+    "rug": ("rust", "indigo", "moss", "cream", "crimson", "ochre", "charcoal", "striped"),
+    "blanket": ("teal", "mustard", "grey", "rose", "patchwork", "navy", "forest"),
+    "lamp": ("on", "off"),
+    "wall_piece": ("none", "clock", "map", "mirror", "plate rack"),   # on the main room's wall by the armchair
+    "houseplant": ("none", "fern", "monstera", "fiddle leaf"),       # in the corner by the bed
+    "attic_lights": ("none", "fairy lights"),
+    "desk_plant": ("none", "cactus", "bonsai"),                     # on his desk in the attic
+    # the garden
     "path": ("gravel", "flagstone", "brick", "bark"),
     "fence": ("weathered", "white", "sage", "none"),
-    "room_wall": ("plaster", "sage", "wood panel", "deep blue", "terracotta"),
-    "rug": ("rust", "indigo", "moss", "cream"),
-    "blanket": ("teal", "mustard", "grey", "rose"),
-    "lamp": ("on", "off"),
+    "greenhouse_frame": ("white", "green", "black"),
     "lights": ("none", "warm", "colours"),                         # string lights along the fence
+    "path_lights": ("none", "solar"),                              # little lights along the path
     "feeder": ("none", "yes"),                                     # a bird feeder on a post
-    "bench": ("none", "yes"),                                      # a bench by the outdoor beds
+    "bench": ("none", "yes"),                                      # a bench by the pond
+    "arch": ("none", "roses", "clematis"),                         # an arch over the path
+    "birdbath": ("none", "yes"),
+    "gnome": ("none", "yes"),
+    "mailbox": ("none", "yes"),
+    "wind_chime": ("none", "yes"),                                 # by the door; you can hear it with sound on
+    "pond_lilies": ("none", "yes"),
+    "door_pots": ("none", "yes"),                                  # potted plants by the front door
 }
-DESIGN_DEFAULT = {"house_wall": "timber", "roof": "terracotta", "trim": "red", "path": "gravel", "fence": "weathered",
-                  "room_wall": "plaster", "rug": "rust", "blanket": "teal", "lamp": "on", "lights": "none",
-                  "feeder": "none", "bench": "none", "sign": "", "art": ""}
-DESIGN_WORDS = {"house_wall": "the house's walls (inside and out)", "roof": "the roof", "trim": "curtains, shutters and door",
-                "path": "the path", "fence": "the fence", "room_wall": "the walls of your study", "rug": "the rug",
-                "blanket": "your blanket", "lamp": "the desk lamp", "lights": "string lights along the fence",
-                "feeder": "a bird feeder", "bench": "a bench by the outdoor beds"}
+DESIGN_DEFAULT = {**{k: v[0] for k, v in DESIGN.items()}, "house_wall": "timber", "roof": "terracotta", "trim": "red",
+                  "fence": "weathered", "room_wall": "plaster", "rug": "rust", "blanket": "teal", "lamp": "on",
+                  "sign": "", "art": ""}
+DESIGN_WORDS = {"house_wall": "the house's walls", "roof": "the roof", "trim": "the window frames and shutters",
+                "door": "the front door's style", "door_colour": "the front door's colour", "curtains": "the curtains",
+                "shutters": "shutters on the window", "window_box": "a box under the window", "porch_light": "a lantern by the door",
+                "doormat": "a doormat", "weathervane": "a weathervane on the roof", "chimney": "the chimney",
+                "room_wall": "the walls of your study", "floor": "the floorboards", "rug": "the rug", "blanket": "your blanket",
+                "lamp": "the desk lamp", "wall_piece": "something on the main room's wall", "houseplant": "a houseplant by the bed",
+                "attic_lights": "lights in the attic", "desk_plant": "a plant on your attic desk",
+                "path": "the path", "fence": "the fence", "greenhouse_frame": "the greenhouse frame", "lights": "string lights along the fence",
+                "path_lights": "lights along the path", "feeder": "a bird feeder", "bench": "a bench by the pond",
+                "arch": "an arch over the path", "birdbath": "a birdbath", "gnome": "a garden gnome", "mailbox": "a mailbox",
+                "wind_chime": "a wind chime", "pond_lilies": "water lilies on the pond", "door_pots": "pots by the front door"}
+DESIGN_INSIDE = {"room_wall", "floor", "rug", "blanket", "lamp", "wall_piece", "houseplant", "attic_lights", "desk_plant", "curtains"}
+DESIGN_HOUSE = {"house_wall", "roof", "trim", "door", "door_colour", "shutters", "window_box", "porch_light", "doormat",
+                "weathervane", "chimney"}
 TREES = {   # a tree he can plant once, in the field behind the beds; it grows for years
     "apple": dict(years=4, blossom="#fce7f3", autumn="#d97706", fruit="#dc2626", note="blossom in spring, apples in late summer"),
     "maple": dict(years=6, blossom=None, autumn="#dc2626", fruit=None, note="turns red in autumn"),
@@ -281,8 +321,57 @@ FIELD_WORDS = {"sprout": "came up", "young": "is growing well", "tall": "is stan
 FIELD_DEFAULT = {"soil": "grass", "tilled": 0.0, "crop": None, "progress": 0.0, "health": 1.0, "water": 0.5,
                  "weeds": 0.25, "sown": 0, "gen": 0, "dead": False, "dormant": False, "struggle": [],
                  "scarecrow": None, "harvests": []}
+# ── money: what he sells to visitors, and what he can buy ───────────────────
+PRICES = {"corn": 0.5, "winter wheat": 2.5, "sunflowers": 1.5, "pumpkins": 6.0, "beans": 4.0, "apples": 0.6, "cherries": 0.15,
+          "sketches": 8.0}
+PRICE_HERB = 3.0            # a bunch of anything from the beds (herbs, tomatoes, peppers, strawberries...)
+# Clothes, and the things for the house and garden that are objects (the original paints and colours stay free).
+SHOP = {
+    "hat": {"chauffeur cap": 35, "flat cap": 22, "beanie": 15, "straw hat": 18, "wide brim": 28},
+    "scarf": {"red": 14, "mustard": 14, "teal": 14, "plaid": 18},
+    "coat": {"wax jacket": 90, "wool sweater": 45, "rain slicker": 40, "work apron": 20},
+    "boots": {"rubber boots": 30, "work boots": 55},
+    "house_wall": {"brick": 120, "stone": 140, "log": 100, "forest green": 25, "rose": 25},
+    "roof": {"thatch": 90, "red tin": 70, "charcoal shingle": 80},
+    "trim": {"white": 10, "black": 10, "sky blue": 10},
+    "door": {"panelled": 45, "arched": 60, "glass": 70, "barn": 50},
+    "door_colour": {"natural wood": 12, "red": 8, "navy": 8, "teal": 8, "mustard": 8, "plum": 8, "black": 8, "white": 8},
+    "curtains": {"red": 20, "navy": 20, "mustard": 20, "teal": 20, "plum": 20, "white lace": 30, "green check": 25},
+    "shutters": {"yes": 50}, "window_box": {"flowers": 15, "herbs": 15}, "porch_light": {"lantern": 28}, "doormat": {"yes": 10},
+    "weathervane": {"rooster": 45, "fish": 45, "arrow": 40}, "chimney": {"brick": 60},
+    "room_wall": {"wallpaper": 30, "forest green": 12, "cream": 12},
+    "floor": {"pine": 60, "dark walnut": 90, "stone": 80, "checkered": 75},
+    "rug": {"crimson": 35, "ochre": 35, "charcoal": 35, "striped": 40},
+    "blanket": {"patchwork": 30, "navy": 18, "forest": 18},
+    "wall_piece": {"clock": 30, "map": 15, "mirror": 25, "plate rack": 20},
+    "houseplant": {"fern": 12, "monstera": 25, "fiddle leaf": 30}, "attic_lights": {"fairy lights": 18},
+    "desk_plant": {"cactus": 8, "bonsai": 35}, "greenhouse_frame": {"green": 30, "black": 30}, "path_lights": {"solar": 35},
+    "arch": {"roses": 60, "clematis": 55}, "birdbath": {"yes": 40}, "gnome": {"yes": 15}, "mailbox": {"yes": 30},
+    "wind_chime": {"yes": 20}, "pond_lilies": {"yes": 25}, "door_pots": {"yes": 18},
+}
+OUTFIT_KEYS = ("hat", "scarf", "coat", "boots")
+SHOP_WORDS = {"hat": "a hat", "scarf": "a scarf", "coat": "a coat", "boots": "boots"}
+
+
+def _price(g: dict, key: str, value: str) -> float | None:
+    """What a design choice costs, or None if it is free or already his."""
+    p = (SHOP.get(key) or {}).get(value)
+    return None if p is None or f"{key}:{value}" in (g.get("owned") or []) else float(p)
+
+
+def _money_words(g: dict) -> str:
+    owned = set(g.get("owned") or [])
+    shop = "; ".join(f"{SHOP_WORDS.get(k, DESIGN_WORDS.get(k, k))}: " + ", ".join(f"{v} ${p}" for v, p in vals.items() if f"{k}:{v}" not in owned)
+                     for k, vals in SHOP.items() if any(f"{k}:{v}" not in owned for v in vals))
+    wearing = ", ".join(f"{v} ({k})" for k, v in (g.get("outfit") or {}).items() if v and v not in ("none", "standard")) or "your usual (nothing extra)"
+    return (f"YOUR MONEY: ${g.get('money', 0):.2f}. You earn it by selling to visitors from your pantry (sell, what, amount; "
+            f"they pay a fair price and only buy what they want) and spend it on things for yourself, the house and the garden "
+            f"(buy with what and value; it arrives and goes in at once; clothes you put on with wear, what and value, or "
+            f"value none to take off). Paints and colours you already had stay free.\nWEARING: {wearing}\nTHE SHOP: {shop}\n")
+
+
 PANTRY_WORDS = {"corn": "ears of corn", "winter wheat": "kg of wheat", "sunflowers": "sunflower heads", "pumpkins": "pumpkins",
-                "beans": "kg of dry beans", "apples": "apples", "cherries": "cherries"}
+                "beans": "kg of dry beans", "apples": "apples", "cherries": "cherries", "sketches": "of his sketches"}
 
 
 def field_stage(f: dict) -> str:
@@ -385,6 +474,17 @@ def _home_step(g: dict, hours: float, w: dict, now: datetime) -> None:
         g["wood"] = round(max(0.0, g.get("wood", 0.6) - hours * 0.0011 * (12 - t) / 10), 4)
     if g.get("feeder_fill", 0) > 0:
         g["feeder_fill"] = round(max(0.0, g["feeder_fill"] - hours * (0.012 if w.get("is_day") else 0.002)), 4)
+    aq = g.get("aquarium") or {}
+    if aq.get("fish"):
+        aq["clean"] = round(max(0.0, aq.get("clean", 1) - hours * 0.0018), 4)     # algae and murk: about three weeks
+        aq["fed"] = round(max(0.0, aq.get("fed", 1) - hours * 0.02), 4)           # they want feeding every couple of days
+        harm = (0.003 if aq["fed"] < 0.05 else 0) + (0.004 if aq["clean"] < 0.15 else 0)   # hunger: about two weeks to kill
+        for f in list(aq["fish"]):
+            f["health"] = round(max(0.0, min(1.0, f.get("health", 1) + hours * (-harm if harm else 0.01))), 4)
+            if f["health"] <= 0:
+                aq["fish"].remove(f)
+                _log(g, f"{f['name'] or 'The ' + f['species']} in the aquarium died "
+                        + ("of hunger" if aq["fed"] < 0.05 else "in the dirty water") + ".")
     sm = g.get("snowman")
     if sm:
         if t > 1:
@@ -423,11 +523,18 @@ def _field_words(g: dict, w: dict) -> str:
     if f.get("harvests"):
         rows.append("PAST HARVESTS: " + "; ".join(f"{h['date']}: {h['amount']} {h['unit']} of {h['crop']}" for h in f["harvests"][-4:]))
     pantry = {k: v for k, v in (g.get("pantry") or {}).items() if v > 0}
-    rows.append("YOUR PANTRY: " + (", ".join(f"{v} {PANTRY_WORDS.get(k, k)}" for k, v in pantry.items()) if pantry else "empty")
+    rows.append("YOUR PANTRY: " + (", ".join(f"{v} {(PANTRY_WORDS.get(k) or f"bunches of {k}")}" for k, v in pantry.items()) if pantry else "empty")
                 + " (cook with what; give to a visitor with what)")
     wood = g.get("wood", 0)
     rows.append(f"THE WOODPILE: {'empty: the stove is cold' if wood < 0.03 else 'low' if wood < 0.25 else 'about half' if wood < 0.6 else 'well stocked'}"
                 f" (the stove in your study burns it whenever it is cold; chop_wood splits more)")
+    aq = g["aquarium"]
+    rows.append("YOUR AQUARIUM (in the attic, beside your desk; up to five fish of 26 cm or less; trout need cold running "
+                "water): " + ("; ".join(f"{f['name'] + ', ' if f['name'] else ''}a {f['cm']} cm {f['species']}"
+                                        + (" (looking poorly)" if f.get("health", 1) < 0.5 else "") for f in aq["fish"]) or "empty")
+                + (f"; {'hungry' if aq['fed'] < 0.3 else 'fed'}, the water {'murky' if aq['clean'] < 0.3 else 'cloudy' if aq['clean'] < 0.6 else 'clear'}"
+                   if aq["fish"] else "")
+                + " (fish with keep: true to keep a prize you catch, with a name; feed_fish; clean_tank; release_fish with what)")
     if g.get("snowman"):
         rows.append(f"YOUR SNOWMAN{(' ' + g['snowman']['name']) if g['snowman'].get('name') else ''}: "
                     f"{'still standing' if g['snowman']['size'] > 0.6 else 'melting'}")
@@ -468,6 +575,7 @@ def _state() -> dict:
     g["upkeep"] = {**UPKEEP_DEFAULT, **(g.get("upkeep") or {})}
     g["pond"].setdefault("named", {})
     g["field"] = {**FIELD_DEFAULT, **(g.get("field") or {})}
+    g["aquarium"] = {"fish": [], "clean": 1.0, "fed": 1.0, **(g.get("aquarium") or {})}
     if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
         g.pop("where", None)
         g.pop("shared", None)
@@ -1022,7 +1130,11 @@ The place is yours to keep and to shape. Left alone it goes wild the way real pl
 beds (and choke what grows there), in the path, the grass gets long, leaves pile up in autumn, windows grime \
 over, your study gathers dust, paint wears; you see to what you care about (weed, weed_path, mow, rake_leaves, \
 clean_windows, tidy_room, shovel_snow, paint with what: house or fence). How it looks is your choice too: \
-"design" with what and value, from the options given (the house's walls, roof, curtains and door, the path, the \
+"design" with what and value, from the options given (outside: the house's walls, roof, trim, door and its colour, \
+curtains, shutters, a window box, a lantern, a doormat, a weathervane, the chimney; inside: the floor, your study's \
+walls, the rug, your blanket, something on the wall, a houseplant, lights in the attic, a plant on your desk; the \
+garden: the greenhouse frame, string and path lights, an arch over the path, a birdbath, a gnome, a mailbox, a wind \
+chime, water lilies, pots by the door; and the path, the \
 fence, your study's walls, rug and blanket, the desk lamp, string lights, a bird feeder, a bench), or what: sign \
 (a name for the garden on a small sign, up to 14 letters) or what: art (what hangs over your desk, in a few \
 words). Change it when you want to, not every visit. You can plant one tree in the field behind the beds \
@@ -1039,11 +1151,16 @@ your study (chop_wood; it burns all winter), fill the bird feeder (fill_feeder),
 play your guitar (play_music, what: the tune), sketch what you see (sketch, what: the subject), cook something from \
 the pantry on the stove (cook, what: the ingredient, name: the dish), give a visitor something from the pantry (give, \
 what), pick fruit from your tree when it bears (pick_fruit), or look at the stars through your telescope on a clear \
-night (stargaze, what: what you look at). You do not have to do much; sometimes you only sit. \
+night (stargaze, what: what you look at). In the attic beside your desk is an aquarium for fish you want to keep: when \
+you fish you can keep a prize instead of letting it go (keep: true, with a name), feed them (feed_fish), clean the tank \
+(clean_tank) and let one back into the pond (release_fish, what: its name). You have a little money of your own: \
+visitors buy from your pantry (sell, what, amount: crops, a bunch from the beds, your sketches), and you can spend it \
+on clothes and on things for the house and garden (buy, what and value, from the shop given), and put on or take off \
+what you own (wear). Spend it as you like, or save up. You do not have to do much; sometimes you only sit. \
 Notice something real and specific. Answer JSON only:
 {{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite|weed|weed_path|mow|rake_leaves|clean_windows|tidy_room|shovel_snow|paint|design|plant_tree|save_seeds|name_fish|till_field|sow_field|water_field|\
 weed_field|harvest_field|scarecrow|chop_wood|fill_feeder|fly_kite|build_snowman|campfire|play_music|sketch|cook|give|\
-pick_fruit|stargaze", \
+pick_fruit|stargaze|feed_fish|clean_tank|release_fish|sell|buy|wear", "amount": "for sell: how many", "keep": "for fish: true to keep a prize for your aquarium", \
 "spot": 1-11, "species": "for plant, plant_tree, name_fish or sow_field", "name": "for name, name_cat, name_fish, \
 scarecrow, build_snowman or cook (the dish)", "what": "for design, paint, cook, give, sketch, play_music or stargaze", \
 "value": "for design"}}],
@@ -1127,6 +1244,26 @@ def _fish(g: dict, w: dict, now: datetime) -> tuple[str, dict | None]:
     pond["caught"] = (pond.get("caught", []) + [catch])[-60:]
     return (f"caught a {cm} cm {sp} and let it go" + (" (his first)" if first else " (his biggest yet)" if record else ""),
             {**catch, "first": first, "record": record})
+
+
+def _spend(g: dict, cost: float, what: str) -> None:
+    g["money"] = round(g.get("money", 0) - cost, 2)
+    g["ledger"] = (g.get("ledger", []) + [{"t": time.time(), "out": cost, "what": what}])[-60:]
+
+
+def _keep(g: dict, catch: dict, name: str) -> str:
+    """Try to keep a fish he just caught in the aquarium: what came of it, for the log."""
+    aq = g["aquarium"]
+    sp, cm = catch["species"], catch["cm"]
+    if sp in FISH_COLD:
+        return f" (he wanted to keep it, but a {sp} needs cold running water, so it went back)"
+    if cm > AQUARIUM_CM:
+        return f" (too big for the tank at {cm} cm, so it went back)"
+    if len(aq["fish"]) >= AQUARIUM_MAX:
+        return " (the tank is full, so it went back)"
+    nm = (name or catch.get("name") or "").strip()[:30]
+    aq["fish"].append({"species": sp, "cm": cm, "name": nm, "t": time.time(), "health": 1.0})
+    return ""
 
 
 def _slug(name: str) -> str:
@@ -1443,7 +1580,7 @@ def _world_words(g: dict, w: dict) -> str:
     rows.append(f"YOUR TREE: a {tree['species']} you planted {(time.time() - tree['planted']) / 86400:.0f} days ago "
                 f"({'a sapling' if _tree_size(tree) < 0.2 else 'young' if _tree_size(tree) < 0.7 else 'well grown'}; "
                 f"{TREES[tree['species']]['note']})" if tree and tree.get("species") in TREES
-                else "YOUR TREE: none yet (plant_tree: " + ", ".join(f"{k}, {v['note']}" for k, v in TREES.items()) + ")")
+                else "YOUR TREE: none of your own yet (the pine by the pond came with the place; plant_tree puts one of yours in the field: " + ", ".join(f"{k}, {v['note']}" for k, v in TREES.items()) + ")")
     seeds = g.get("seeds") or {}
     if seeds:
         rows.append("SEEDS YOU SAVED (planting one sows your own): " + "; ".join(
@@ -1453,7 +1590,7 @@ def _world_words(g: dict, w: dict) -> str:
     if pond.get("named") or unnamed:
         rows.append("YOUR FISH: " + "; ".join([f"{v['name']}, the {k} ({v['cm']} cm)" for k, v in pond.get("named", {}).items()]
                                              + ([f"record fish not yet named: {', '.join(unnamed)}"] if unnamed else [])))
-    return "\n".join(rows) + "\n" + _field_words(g, w)
+    return "\n".join(rows) + "\n" + _field_words(g, w) + _money_words(g)
 
 
 def _catalogue() -> str:
@@ -1545,7 +1682,9 @@ def _view() -> str | None:
 
 LOOK_NOTE = """A PICTURE of your garden as it looks right now is attached (pixel art: the house with its window \
 and grow-light shelf on the left, the greenhouse in the middle, the outdoor beds and the field on the right, under \
-the real sky). The facts above are exact; the picture is how it looks. Take it in: the light, the sky, the colours, \
+the real sky). The figure in it with the glowing cyan visor is you, Delamain, drawn where you were last shown; \
+anyone else drawn there is a visitor. The person you live with is never in the picture (they do not live in the \
+garden, and you would know if they came by). The facts above are exact; the picture is how it looks. Take it in: the light, the sky, the colours, \
 how your plants look from here. Let what you see be part of what you notice and how it makes you feel."""
 
 
@@ -1563,7 +1702,7 @@ def visit_due(now: datetime | None = None) -> bool:
     return not g.get("visit") and time.time() - (g.get("last_visit") or 0) > VISIT_EVERY
 
 
-FIELD_JOBS_EXTRA = {"scarecrow", "chop_wood", "fill_feeder", "fly_kite", "build_snowman", "campfire", "play_music", "sketch",
+FIELD_JOBS_EXTRA = {"sell", "buy", "wear", "feed_fish", "clean_tank", "release_fish", "scarecrow", "chop_wood", "fill_feeder", "fly_kite", "build_snowman", "campfire", "play_music", "sketch",
                     "cook", "give", "pick_fruit", "stargaze"}
 
 
@@ -1660,6 +1799,7 @@ def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[
         return "played his guitar" + (f": {what}" if what else ""), -3
     if do == "sketch":
         g["sketches"] = ((g.get("sketches") or []) + [{"t": time.time(), "what": what or "the garden"}])[-30:]
+        g.setdefault("pantry", {})["sketches"] = g["pantry"].get("sketches", 0) + 1
         return f"sketched {what or 'the garden'}", -22
     if do == "cook":
         key = next((k for k in (g.get("pantry") or {}) if k in what.lower() or what.lower() in k), None) if what else None
@@ -1673,7 +1813,7 @@ def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[
             return "", 0
         n = max(1, min(g["pantry"][key], {"corn": 6, "pumpkins": 1, "apples": 6, "cherries": 20}.get(key, 1)))
         g["pantry"][key] -= n
-        return f"gave {guest['name']} {n} {PANTRY_WORDS.get(key, key)} from his harvest", -6
+        return f"gave {guest['name']} {n} {(PANTRY_WORDS.get(key) or f"bunches of {key}")} from his harvest", -6
     if do == "pick_fruit":
         tree = g.get("tree")
         if not tree or tree.get("species") not in ("apple", "cherry") or _tree_size(tree) <= 0.45 or not _fruiting(local_now(w)):
@@ -1682,6 +1822,72 @@ def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[
         n = random.randint(6, 20) if key == "apples" else random.randint(30, 80)
         g.setdefault("pantry", {})[key] = g["pantry"].get(key, 0) + n
         return f"picked {n} {key} from his {tree['species']} tree", -12
+    if do == "sell":
+        pantry = g.get("pantry") or {}
+        key = next((k for k in pantry if pantry[k] > 0 and what and (k in what.lower() or what.lower().rstrip("s") in k)), None)
+        if not guest or not key:
+            return "", 0
+        try:
+            want = max(1, int(float(a.get("amount") or 0))) if a.get("amount") else None
+        except (TypeError, ValueError):
+            want = None
+        unit = PRICES.get(key, PRICE_HERB)
+        appetite = max(1, int(random.uniform(8, 30) / max(0.5, unit)))       # what one visitor wants to spend on it
+        n = min(pantry[key], want or appetite, appetite)
+        pay = round(n * unit, 2)
+        pantry[key] -= n
+        g["money"] = round(g.get("money", 0) + pay, 2)
+        g["ledger"] = (g.get("ledger", []) + [{"t": time.time(), "in": pay, "what": f"{n} {(PANTRY_WORDS.get(key) or f"bunches of {key}")} to {guest['name']}"}])[-60:]
+        return f"sold {guest['name']} {n} {(PANTRY_WORDS.get(key) or f"bunches of {key}")} for ${pay:.2f}", -6
+    if do == "buy":
+        key = str(a.get("what") or "").strip().lower().replace(" ", "_")
+        value = str(a.get("value") or "").strip().lower()
+        if key not in SHOP or value not in SHOP[key]:
+            return "", 0
+        cost = _price(g, key, value)
+        if cost is None:
+            return "", 0
+        if g.get("money", 0) < cost:
+            return f"looked at {value} ({SHOP_WORDS.get(key, DESIGN_WORDS.get(key, key))}) but could not afford it yet (${cost:.0f})", -7
+        _spend(g, cost, f"{value} ({SHOP_WORDS.get(key, DESIGN_WORDS.get(key, key))})")
+        g["owned"] = (g.get("owned") or []) + [f"{key}:{value}"]
+        if key in OUTFIT_KEYS:
+            g.setdefault("outfit", {})[key] = value
+            return f"bought {value} ({SHOP_WORDS[key]}) for ${cost:.0f} and put it on", -10
+        g["design"][key] = value
+        return f"bought {value} for {DESIGN_WORDS.get(key, key)} (${cost:.0f}) and put it in", -9 if key in DESIGN_INSIDE else -10 if key in DESIGN_HOUSE else -7
+    if do == "wear":
+        key = str(a.get("what") or "").strip().lower()
+        value = str(a.get("value") or "").strip().lower()
+        if key not in OUTFIT_KEYS:
+            return "", 0
+        if value in ("none", "off", "standard", ""):
+            if not (g.get("outfit") or {}).get(key):
+                return "", 0
+            g["outfit"].pop(key, None)
+            return f"took off his {SHOP_WORDS[key].replace('a ', '')}", -10
+        if f"{key}:{value}" not in (g.get("owned") or []):
+            return "", 0
+        g.setdefault("outfit", {})[key] = value
+        return f"put on his {value}", -10
+    if do in ("feed_fish", "clean_tank", "release_fish"):
+        aq = g["aquarium"]
+        if not aq["fish"] and do != "clean_tank":
+            return "", 0
+        if do == "feed_fish":
+            aq["fed"] = 1.0
+            return f"fed the fish in his aquarium ({', '.join(f['name'] or f['species'] for f in aq['fish'])})", -23
+        if do == "clean_tank":
+            if aq["clean"] > 0.85:
+                return "", 0
+            aq["clean"] = 1.0
+            return "cleaned the aquarium: fresh water, the glass wiped clear", -23
+        key = (what or name).lower()
+        fish = next((f for f in aq["fish"] if key and (key == (f["name"] or "").lower() or key in f["species"])), None)
+        if not fish:
+            return "", 0
+        aq["fish"].remove(fish)
+        return f"carried {fish['name'] or 'the ' + fish['species']} down to the pond and let it go", -5
     if do == "stargaze":
         if w["is_day"] or w["cloud"] > 60:
             return "", 0
@@ -1810,6 +2016,7 @@ def visit(started_by: str = "Delamain") -> dict:
             elif do == "harvest" and p and SPECIES[p["species"]].get("harvest") and stage(p) in ("mature", "bloom"):
                 s = SPECIES[p["species"]]
                 p["harvests"] = p.get("harvests", 0) + 1
+                g.setdefault("pantry", {})[p["species"]] = g["pantry"].get(p["species"], 0) + 1
                 done.append(f"harvested the {p['species']} {_where(spot)}")
                 if s.get("once"):
                     spot["plant"] = None
@@ -1838,6 +2045,15 @@ def visit(started_by: str = "Delamain") -> dict:
                 where = -3
             elif do == "fish" and not fished:
                 text, catch = _fish(g, w, local_now(w))
+                if catch and a.get("keep") and str(a.get("keep")).lower() not in ("false", "no", "0"):
+                    why = _keep(g, catch, str(a.get("name") or ""))
+                    if not why:
+                        nm = g["aquarium"]["fish"][-1]["name"]
+                        text = text.replace(" and let it go", " and carried it up to the aquarium in the attic"
+                                            + (f", naming it {nm}" if nm and nm != catch.get("name") else ""))
+                        catch["kept"] = True
+                    else:
+                        text += why
                 fished.append(catch or {})
                 done.append(text)
                 where = -5
@@ -1869,13 +2085,21 @@ def visit(started_by: str = "Delamain") -> dict:
             elif do == "design":
                 what, value = str(a.get("what") or "").strip().lower().replace(" ", "_"), str(a.get("value") or "").strip()
                 if what in DESIGN and value.lower() in DESIGN[what] and g["design"].get(what) != value.lower():
+                    cost = _price(g, what, value.lower())
+                    if cost is not None:            # a thing, not a colour: it has to be bought
+                        if g.get("money", 0) < cost:
+                            done.append(f"wanted {DESIGN_WORDS[what]} in {value.lower()} but cannot afford it yet (${cost:.0f})")
+                            steps.append({"do": "look", "spot": -7, "text": done[-1]})
+                            continue
+                        _spend(g, cost, f"{value.lower()} ({DESIGN_WORDS[what]})")
+                        g["owned"] = (g.get("owned") or []) + [f"{what}:{value.lower()}"]
                     g["design"][what] = value.lower()
                     if what == "house_wall":
                         g["upkeep"]["house_paint"] = 0.0
                     if what == "fence":
                         g["upkeep"]["fence_paint"] = 0.0
                     done.append(f"changed {DESIGN_WORDS[what]} to {value.lower()}")
-                    where = -9 if what in ("room_wall", "rug", "blanket", "lamp") else -10 if what in ("house_wall", "roof", "trim") else -7
+                    where = -9 if what in DESIGN_INSIDE else -10 if what in DESIGN_HOUSE else -7
                 elif what == "sign" and (txt := re.sub(r"[^A-Za-z0-9 &'-]", "", __import__("unicodedata").normalize(
                         "NFKD", value).encode("ascii", "ignore").decode()).strip()[:14]):
                     g["design"]["sign"] = txt
@@ -1929,11 +2153,12 @@ def visit(started_by: str = "Delamain") -> dict:
                     "harvest_field": "scythe" if (g["field"].get("last_crop") == "winter wheat") else "gather",
                     "scarecrow": "hammer", "chop_wood": "chop", "fill_feeder": "feed", "fly_kite": "kite",
                     "build_snowman": "snowman", "campfire": "campfire", "play_music": "guitar", "sketch": "sketch",
-                    "cook": "cook", "give": "give", "pick_fruit": "pick", "stargaze": "stars"}.get(do, do)
+                    "cook": "cook", "give": "give", "pick_fruit": "pick", "stargaze": "stars", "feed_fish": "tank",
+                    "clean_tank": "clean", "release_fish": "look", "sell": "give", "buy": "look", "wear": "look"}.get(do, do)
             steps.append({"do": anim if anim in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest", "weed",
                                                  "mow", "rake", "clean", "tidy", "shovel", "paint", "till", "sow", "hose", "hoe",
                                                  "scythe", "gather", "hammer", "chop", "feed", "kite", "snowman", "campfire",
-                                                 "guitar", "sketch", "cook", "give", "pick", "stars") else "look",
+                                                 "guitar", "sketch", "cook", "give", "pick", "stars", "tank") else "look",
                           "spot": where, "text": done[-1]})
         letter = data.get("letter") if isinstance(data.get("letter"), dict) else {}
         to = _slug(str(letter.get("to") or "")) if letter else ""
@@ -2013,7 +2238,8 @@ def visit(started_by: str = "Delamain") -> dict:
     if catch:              # the pond's own small joys, felt as they happen
         try:
             _mind.feel("pride" if catch.get("record") and not catch.get("first") else "delight", 0.3,
-                       f"I caught a {catch['cm']} cm {catch['species']} at the pond and let it go", "garden")
+                       f"I caught a {catch['cm']} cm {catch['species']} at the pond and "
+                       + ("kept it for my aquarium" if catch.get("kept") else "let it go"), "garden")
         except Exception:
             pass
     f = data.get("feeling") if isinstance(data.get("feeling"), dict) else {}
@@ -2197,7 +2423,7 @@ def context() -> str:
             (f". Your {g['tree']['species']} tree is {'a sapling' if _tree_size(g['tree']) < 0.2 else 'growing'}" if g.get("tree") else "") +
             (f". In the field behind the house: {g['field']['crop']}, {field_stage(g['field'])}" if g["field"].get("crop")
              else f". The field behind the house is {field_stage(g['field'])}") +
-            (f". In your pantry: {', '.join(str(v) + ' ' + PANTRY_WORDS.get(k, k) for k, v in g['pantry'].items() if v > 0)}"
+            (f". In your pantry: {', '.join(str(v) + ' ' + (PANTRY_WORDS.get(k) or f"bunches of {k}") for k, v in g['pantry'].items() if v > 0)}"
              if any(v > 0 for v in (g.get("pantry") or {}).values()) else "") +
             (f". It needs looking after: {_upkeep_words(g)}" if _upkeep_words(g) != "everything is well kept" else "") +
             (f". At the pond you have caught {len(g['pond']['caught'])} fish, best: "
@@ -2260,7 +2486,11 @@ def snapshot() -> dict:
             "field": _field_view(g["field"]), "pantry": {k: v for k, v in (g.get("pantry") or {}).items() if v > 0},
             "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
             "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
-            "sketches": (g.get("sketches") or [])[-3:]}
+            "sketches": (g.get("sketches") or [])[-3:],
+            "money": round(g.get("money", 0), 2), "outfit": g.get("outfit") or {}, "ledger": list(reversed(g.get("ledger") or []))[:8],
+            "owned": g.get("owned") or [],
+            "aquarium": {"fish": [{k: f.get(k) for k in ("species", "cm", "name", "health", "t")} for f in g["aquarium"]["fish"]],
+                         "clean": round(g["aquarium"].get("clean", 1), 3), "fed": round(g["aquarium"].get("fed", 1), 3)}}
 
 
 def _field_view(f: dict) -> dict:

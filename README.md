@@ -14,6 +14,13 @@ the change and waits for me to say yes.
 You talk to him out loud, and he answers in Delamain's voice, with his face moving as he speaks.
 He still rides along in the car. He just doesn't live there anymore.
 
+He lives in a house of his own now, and you can watch. The **Garden** tab is a live pixel-art window
+into his day: studying at his desk, working in the attic office while you talk, reading the news in
+his armchair, tending real plants under your real weather, farming the field behind the house,
+fishing the pond (the best catches go in his aquarium), splitting firewood, flying a kite when the
+wind is right, out with his telescope on a clear night, chatting with whoever came up the lane, or
+asleep in bed. Whatever he is really doing, that is where you find him.
+
 And no two of him are alike. Everything he becomes comes from living with you: what he remembers,
 the subjects he falls for, the temperament he settles into, the rules he picks up from your
 corrections, even the changes he makes to his own code. Install him on two computers and in a few
@@ -68,7 +75,8 @@ More in [Privacy](docs/mind.md#privacy).
   rug in his study, where his books and the pictures he has looked at are. Behind the house is a field
   he cultivates: he breaks the ground, sows corn, winter wheat, sunflowers, pumpkins or beans in their
   season, waters, hoes, puts up a scarecrow against the crows and brings in the harvest (or loses it
-  to frost, drought, wind or weeds), then cooks with it and saves seed for next year. The **Garden**
+  to frost, drought, wind or weeds), then cooks with it and saves seed for next year, and keeps his prize fish in an aquarium in the
+  attic. The **Garden**
   tab shows it live, with a history slider and sound, and he is always somewhere in it, doing what he
   is really doing: studying at his desk, working in the attic office, reading the news in his
   armchair, in the field or the garden, flying a kite on a windy day, splitting firewood, out with his
@@ -179,10 +187,17 @@ on the Android Auto screen. The full guide, Docker volumes and every setting are
 <img src="Screenshots/brain.png" alt="Delamain's brain: remembering, feeling fascination, and answering" />
 <sub>See him think: every part lights up as he listens, remembers, feels and answers, with his thought stream beside it</sub>
 
+<img src="Screenshots/garden.png" alt="Delamain's house, garden and field at sunset, talking with a visitor" />
+<sub>A window into his life: a summer evening, alpenglow on the Front Range, his corn tasselling behind the house, and Delamain talking with a neighbour who came up the lane. Inside: his study, the attic office, the aquarium, the grow-light shelf and the windowsill</sub>
+
 <table>
   <tr>
-    <td><img src="Screenshots/garden.png" alt="Delamain's garden at golden hour" /><br><sub>Delamain's garden at golden hour: real plants on the windowsill, under the grow light, in the greenhouse and outdoors, under the real sky</sub></td>
-    <td><img src="Screenshots/garden-night.png" alt="Delamain's garden on a frosty night" /><br><sub>The same garden on a frosty night: moonlight, the lantern and the lamp post, the cat asleep on the bench</sub></td>
+    <td><img src="Screenshots/garden-harvest.png" alt="Bringing in the winter wheat with a scythe" /><br><sub>Bringing in the winter wheat he sowed last autumn</sub></td>
+    <td><img src="Screenshots/garden-autumn.png" alt="Flying a kite over the pumpkin field in the wind" /><br><sub>Autumn: pumpkins ripe in the field, and a kite in the real wind</sub></td>
+  </tr>
+  <tr>
+    <td><img src="Screenshots/garden-night.png" alt="A snowy winter night with the telescope" /><br><sub>A clear winter night: snow on the ground, the stove lit, out with his telescope</sub></td>
+    <td><img src="Screenshots/garden-home.png" alt="An autumn evening at home, playing guitar" /><br><sub>An evening at home: his guitar in the armchair, the lamp on, the cat curled up</sub></td>
   </tr>
 </table>
 
@@ -238,10 +253,11 @@ self-improvement `self_improve.py`, the live feed `brain.py`.
 
 | | |
 |---|---|
+| [The wiki](https://github.com/vonhex/delamain/wiki) | All of it, as browsable pages, with troubleshooting |
 | [docs/features.md](docs/features.md) | Everything he does, in full |
 | [docs/setup.md](docs/setup.md) | Installing by hand, Docker, every setting |
 | [docs/architecture.md](docs/architecture.md) | How the parts fit together |
-| [docs/mind.md](docs/mind.md) | Knowledge, recall, study, emotions, therapy, sleep and dreams, journal, honesty |
+| [docs/mind.md](docs/mind.md) | Knowledge, recall, study, emotions, therapy, sleep and dreams, journal, honesty, his garden, field and house |
 | [docs/self-improvement.md](docs/self-improvement.md) | Playbook, nightly review, code changes you approve |
 | [docs/brain.md](docs/brain.md) | The Brain view |
 | [docs/api.md](docs/api.md) | REST, WebSocket and event feed |
