@@ -104,16 +104,27 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         return { ...DOOR_OUT, climb: false };
       }
       if (!pIn && tIn) {                                    // coming in: out of the field, to the door, through it
-        if (inField(p.y)) return route(p, DOOR_OUT.x, DOOR_OUT.y);
-        if (p.x >= DOOR_OUT.x - 0.6 && !at(p, DOOR_OUT)) return { ...DOOR_OUT, climb: false };
+        if (p.x >= DOOR_OUT.x - 0.6 && !at(p, DOOR_OUT)) return outside(p, DOOR_OUT.x, DOOR_OUT.y);   // by the path to the door
         return { ...DOOR_IN, climb: false };
       }
       if (pIn) return viaLadder(p, tx, ty);
-      if (inField(p.y) !== inField(ty)) {                   // outside: into the field by the gap between the pine and the pond
-        if (Math.abs(p.x - FIELD_GATE.x) > 0.6) return { x: FIELD_GATE.x, y: inField(p.y) ? 143 : 158, climb: false };
-        return { x: FIELD_GATE.x, y: inField(ty) ? 143 : 158, climb: false };
+      return outside(p, tx, ty);
+    };
+    // outdoors he keeps to the path along the front of the yard (in front of the beds, the fence, the woodpile),
+    // stepping off it only at the end; into the field by the gap past the chopping block, then along the row
+    const LANE = 160, ROW = 143;
+    const outside = (p: { x: number; y: number }, tx: number, ty: number): { x: number; y: number; climb: boolean } => {
+      const go = (x: number, y: number) => ({ x, y, climb: false });
+      const pF = inField(p.y), tF = inField(ty);
+      if (pF && tF) return Math.abs(p.y - ROW) > 0.6 && Math.abs(p.x - tx) > 3 ? go(p.x, ROW) : go(tx, ty);
+      if (pF) {                                              // out of the field: along the row to the gap, down it, then the path
+        if (Math.abs(p.x - FIELD_GATE.x) > 0.6) return go(FIELD_GATE.x, Math.abs(p.y - ROW) > 0.6 ? p.y : ROW);
+        return go(FIELD_GATE.x, LANE);
       }
-      return { x: tx, y: ty, climb: false };
+      const gx = tF ? FIELD_GATE.x : tx;                     // where along the path he leaves it
+      if (Math.abs(p.x - gx) > 3 && Math.abs(p.y - LANE) > 0.6) return go(p.x, LANE);   // onto the path first
+      if (Math.abs(p.x - gx) > 0.6) return go(gx, LANE);
+      return tF ? (Math.abs(p.y - ROW) > 0.6 && p.y > ROW ? go(FIELD_GATE.x, ROW) : go(tx, ty)) : go(tx, ty);
     };
     const windSign = (gg: Garden) => (Math.sin(((gg.weather.wind_dir ?? 270) * Math.PI) / 180) >= 0 ? 1 : -1);
     // where each part of his life happens: where he walks to, and how he settles there
@@ -190,7 +201,8 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         else if (del && !del.lying && del.y < 146) { tx = FIELD_GATE.x - 8 - side * 8; ty = 160; }                        // he is in the field: they wait by the gate
         else if (del && !del.lying) { tx = del.x + (del.x > 290 ? -13 : 13) * (side ? -1 : 1); ty = Math.max(del.y, 147); }     // beside him
       }
-      const walking = walk(q, tx, ty, 1.2);
+      const wq = outside(q, tx, ty);
+      const walking = walk(q, wq.x, wq.y, 1.2) || wq.x !== tx || wq.y !== ty;
       if (!walking) q.facing = speaker && del && Math.abs(del.x - q.x) < 30 ? (del.x > q.x ? 1 : -1) : face || q.facing;
       if (leaving && q.x > 326) return null;
       return { name: info.name, kind: info.kind, x: q.x, y: q.y, walking, doing: walking ? 'look' : doing, facing: q.facing, stride: q.dist,

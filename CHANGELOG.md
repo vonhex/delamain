@@ -8,6 +8,8 @@ All notable changes to Delamain are documented here.
 
 ### Fixed
 - The chair in his attic office faced the wrong way.
+- **He walks on the path**: outdoors he keeps to the path along the front of the yard and steps off only at the end (to a bed, the jetty, the bench); into the field by a clear gap past the chopping block; visitors too. In the field he is drawn behind the fence, the beds and the pine instead of over them. The mailbox stands at the end of the lane.
+- **The sky behaves**: under full overcast a grey cloud deck with the sun as a soft bright patch; in broken cloud the sun shines at full strength (bloom and rays) until a cloud actually crosses it, so it goes in and out as they drift (before, any cloud cover dimmed the sun everywhere).
 - **Another app could take your name.** A client connecting with a name of its own (a tool, a test, a robot) became who he thought you were. He now always knows you by the name from your own app's Settings; only that app can rename you.
 
 ### Added

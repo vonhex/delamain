@@ -162,6 +162,22 @@ function activeClouds(w: PWorld): CloudPatch[] {
   }
   return out;
 }
+// How much sun gets through: full in a clear sky; in broken cloud, full until a cloud actually crosses in front
+// of it (so it goes in and out as they drift); under an overcast deck only a soft bright patch.
+function sunLight(w: PWorld): { sx: number; sy: number; vis: number; overcast: number } {
+  const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
+  const sx = 60 + st * 220, sy = 90 - Math.sin(st * Math.PI) * 36;
+  if (!w.isDay) return { sx, sy, vis: 0, overcast: 0 };
+  const overcast = Math.max(0, Math.min(1, (w.cloud - 78) / 16));
+  let cover = 0;
+  for (const c of activeClouds(w)) {
+    const dx = Math.abs(sx - (c.cx + 1)) / 12, dy = Math.abs(sy - c.cy) / 6.5;
+    cover = Math.max(cover, Math.max(0, 1 - Math.max(dx, dy)) * 1.6);
+  }
+  cover = Math.min(1, cover);
+  const vis = (1 - overcast * 0.88) * (1 - cover * 0.72) * (1 - 0.12 * Math.min(1, w.cloud / 78)) * (w.rain > 0 || w.snow > 0 ? 0.5 : 1);
+  return { sx, sy, vis: Math.max(0, vis), overcast };
+}
 function cloudShadowStrength(w: PWorld): number {
   if (!w.isDay || w.cloud < 7) return 0;
   const overcastFade = w.cloud <= 74 ? 1 : Math.max(0, 1 - (w.cloud - 74) / 18);
@@ -282,12 +298,26 @@ function sky(b: Buf, w: PWorld, t: number, clouds: CloudPatch[], sunX: number) {
       if (x * x + y * y <= 36 && (x - 3) * (x - 3) + (y + 2) * (y + 2) > 26) b.set(mx + x, my + y, x < -3 ? [226, 232, 240] : [248, 250, 252]);
     }
   } else {
-    const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
-    const sx = 60 + st * 220, sy = 90 - Math.sin(st * Math.PI) * 36;
-    const vis = 1 - w.cloud / 130;
-    b.glow(sx, sy, 16, [255, 240, 180], 0.28 * vis);
-    b.disc(sx, sy, 5, [253, 224, 71], vis);
-    b.disc(sx - 1, sy - 1, 3, [254, 249, 195], vis);
+    const { sx, sy, vis, overcast } = sunLight(w);
+    if (overcast < 0.85) {
+      b.glow(sx, sy, 18, [255, 240, 180], 0.32 * vis);
+      b.disc(sx, sy, 5, [253, 224, 71], Math.min(1, vis * 1.15));
+      b.disc(sx - 1, sy - 1, 3, [254, 249, 195], Math.min(1, vis * 1.15));
+    }
+    // an overcast deck: a grey ceiling of cloud, banded and slowly moving, brighter where the sun is behind it
+    if (overcast > 0) {
+      const deckLo: RGB = mix([206, 212, 220], [232, 214, 196], (w.hour < 8.5 || w.hour > 15.3) ? 0.45 : 0);
+      const deckHi: RGB = mix(deckLo, [120, 130, 146], 0.5);
+      for (let y = YOFF; y < 100; y++) for (let x = X0; x < X1; x++) {
+        const band = Math.sin(x * 0.045 + y * 0.31 - CLOUDS * 0.35) * 0.5 + Math.sin(x * 0.11 - y * 0.17 + CLOUDS * 0.2) * 0.3;
+        const under = (y - YOFF) / 60;                               // the underside darker overhead, paler toward the horizon
+        let c: RGB = mix(deckHi, deckLo, Math.min(1, under * 0.9 + 0.1));
+        if (band > 0.35) c = mix(c, [236, 238, 242], 0.25); else if (band < -0.45) c = mix(c, [100, 110, 126], 0.18);
+        const ds = Math.hypot((x - sx) / 46, (y - sy) / 26), bright = Math.max(0, 1 - ds) * 0.55;   // the sun, diffused
+        if (bright > 0) c = mix(c, [252, 250, 240], bright);
+        b.set(x, y, c, overcast * (y > 90 ? (100 - y) / 10 : 1) * 0.92);
+      }
+    }
   }
   // clouds: pixel blobs, lit from above
   for (const cl of clouds) {
@@ -2616,7 +2646,7 @@ function gnome(b: Buf, snowCover: boolean, night: boolean, sun: SunShadow) {
 }
 
 function mailbox(b: Buf, snowCover: boolean, night: boolean, sun: SunShadow) {
-  const cx = 270, yBase = 157;
+  const cx = 316, yBase = 160;                                              // at the end of the lane, where the post comes
   castSpan(b, cx - 1, cx + 1, yBase, 7, sun);
   b.rect(cx, yBase - 4, 1, 5, nightc([110, 74, 46], night, 0.45));
   b.rect(cx - 1, yBase - 6, 4, 2, nightc([62, 96, 128], night, 0.45));
@@ -2803,7 +2833,7 @@ function signBoard(b: Buf, d: Design, night: boolean, sun: SunShadow) {
 // ── the field behind the house: rows running back to the treeline, his crop in them ──
 // Eight rows, the far ones smaller (they are further off). Each crop is drawn by its stage and how far through it.
 const FIELD_X0 = 84, FIELD_X1 = 318;
-export const FIELD_GATE = { x: 262 };               // between the pine and the pond: the way into the field
+export const FIELD_GATE = { x: 268 };               // past the chopping block, before the pond: the way into the field
 const CROP_COL: Record<string, { leaf: RGB; ripe: RGB; dry: RGB; bloom: RGB }> = {
   corn: { leaf: [74, 140, 52], ripe: [214, 190, 90], dry: [176, 150, 96], bloom: [206, 186, 112] },
   'winter wheat': { leaf: [96, 150, 60], ripe: [222, 186, 92], dry: [180, 160, 110], bloom: [170, 190, 110] },
@@ -3274,7 +3304,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const u: Upkeep = { ...UPKEEP0, ...(w.upkeep || {}), weeds: { ...(w.upkeep?.weeds || {}) } } as Upkeep;
   const sea = w.season || 'summer', prog = w.seasonProgress ?? 0.5;
   const st = Math.max(0, Math.min(1, (w.hour - 6.8) / 10));
-  const sunX = 60 + st * 220, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = w.isDay ? Math.max(0, 1 - w.cloud / 110) : 0;
+  const sunX = 60 + st * 220, sunY = 90 - Math.sin(st * Math.PI) * 36, sunVis = sunLight(w).vis;
   const clouds = activeClouds(w);
   sky(b, w, t, clouds, sunX);
   const skyCopy = b.d.slice();
@@ -3315,6 +3345,11 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   }
   if (w.field && w.field.stage !== 'grass') field(b, w, w.field, night, t, snowCover);
   if (w.field?.scarecrow) scarecrow(b, w.field.scarecrow, night, t, sun);
+  // whoever is out in the field is behind the fence, the beds, the pine and the greenhouse: drawn now, before them
+  const inField = (f: PWorld['delamain'] | undefined | null) => !!f && !f.lying && f.y < 146 && f.x > 84;
+  if (inField(w.guest)) guest(b, w.guest!, t, snowCover, sun);
+  if (inField(w.guest2)) guest(b, w.guest2!, t, snowCover, sun);
+  if (inField(w.delamain)) delamain(b, w.delamain!, t, snowCover, sun, w.outfit);
   if (w.tree) hisTree(b, w.tree, w, night, t, sun);
   castSpan(b, 248, 252, 158, 12, sun, 0.85);
   if (sun.active) {
@@ -3727,10 +3762,10 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
     if (Math.floor(t * 16) % 2 === 0) b.set(dx, dy - 1, [224, 242, 254], 0.75);
   }
   if (w.twin) figure(b, w.twin, t, delamainSpec(t, true), snowCover, sun);
-  if (w.guest) guest(b, w.guest, t, snowCover, sun);
-  if (w.guest2) guest(b, w.guest2, t, snowCover, sun);
+  if (w.guest && !inField(w.guest)) guest(b, w.guest, t, snowCover, sun);
+  if (w.guest2 && !inField(w.guest2)) guest(b, w.guest2, t, snowCover, sun);
   if (w.delamain?.lying) sleeper(b, t, w.delamain.doing === 'sleep', BLANKETS[d.blanket] || BLANKETS.teal, d.blanket === 'patchwork');
-  else if (w.delamain) delamain(b, w.delamain, t, snowCover, sun, w.outfit);
+  else if (w.delamain && !inField(w.delamain)) delamain(b, w.delamain, t, snowCover, sun, w.outfit);
   if (raining || snowing) {
     const n = snowing ? 80 : 56 + Math.min(90, w.rain * 40);
     for (let k = 0; k < n; k++) {
