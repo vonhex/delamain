@@ -10,6 +10,9 @@ All notable changes to Delamain are documented here.
 - The chair in his attic office faced the wrong way.
 - **He walks on the path**: outdoors he keeps to the path along the front of the yard and steps off only at the end (to a bed, the jetty, the bench); into the field by a clear gap past the chopping block; visitors too. In the field he is drawn behind the fence, the beds and the pine instead of over them. The mailbox stands at the end of the lane.
 - **The sky behaves**: under full overcast a grey cloud deck with the sun as a soft bright patch; in broken cloud the sun shines at full strength (bloom and rays) until a cloud actually crosses it, so it goes in and out as they drift (before, any cloud cover dimmed the sun everywhere).
+- **He repeated himself word for word.** The check before he speaks sometimes rewrote a draft into a reply he had already given, so you heard the same paragraph twice. A reply that repeats an earlier one is now caught: he answers afresh, or says the draft without the flagged lines. The check also sees what his tools did a turn or two ago, so a save he really made is not called invented and he stops "correcting" true things; it no longer adds embarrassment to his mood on every reply (at most once an hour).
+- **Long notes were read only in part.** A note longer than the read limit came back cut short and he talked as if he had read it all. He is now told which sections he has not read and can read one by name (`read_note` with `section`).
+- **Speech-to-text slips.** He reads past misheard words and cut-off sentences instead of asking about the spelling, and fixes his own mistakes in a sentence rather than a paragraph.
 - **Another app could take your name.** A client connecting with a name of its own (a tool, a test, a robot) became who he thought you were. He now always knows you by the name from your own app's Settings; only that app can rename you.
 
 ### Added

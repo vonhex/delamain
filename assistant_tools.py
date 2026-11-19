@@ -407,12 +407,36 @@ def list_notes(folder: str = "", limit: int = 50) -> str:
                      for p in notes) or "No notes found."
 
 
-def read_note(path: str) -> str:
+def _note_sections(text: str) -> list[tuple[str, int]]:
+    return [(m.group(2).strip(), m.start()) for m in re.finditer(r"(?m)^(#{1,4})\s+(.+)$", text)]
+
+
+def read_note(path: str, section: str = "") -> str:
     target = _resolve_note(path)
     if not target.is_file():
         return f"Note not found: {path}"
     text = target.read_text(encoding="utf-8", errors="replace")
-    return text if len(text) <= MAX_READ_CHARS else text[:MAX_READ_CHARS] + "\n[... truncated]"
+    heads = _note_sections(text)
+    if section:
+        want = section.strip().lower()
+        for i, (title, start) in enumerate(heads):
+            if want in title.lower():
+                level = len(re.match(r"#+", text[start:]).group(0))
+                end = next((s for t, s in heads[i + 1:] if len(re.match(r"#+", text[s:]).group(0)) <= level), len(text))
+                part = text[start:end]
+                return part if len(part) <= MAX_READ_CHARS else part[:MAX_READ_CHARS] + "\n[... truncated]"
+        return (f"No section matching '{section}' in {path}. Sections: "
+                + "; ".join(t for t, _ in heads) if heads else f"{path} has no sections.")
+    if len(text) <= MAX_READ_CHARS:
+        return text
+    shown = [t for t, s in heads if s < MAX_READ_CHARS]
+    unseen = [t for t, s in heads if s >= MAX_READ_CHARS]
+    tail = (f"\n[... truncated: you have read {MAX_READ_CHARS} of {len(text)} characters"
+            + (f", up to and partly through '{shown[-1]}'" if shown else "")
+            + (". Sections you have NOT read: " + "; ".join(unseen)
+               + ". Call read_note again with section set to one of them to read it" if unseen else "")
+            + ". Do not describe what you have not read.]")
+    return text[:MAX_READ_CHARS] + tail
 
 
 def search_notes(query: str, limit: int = 10) -> str:
@@ -632,8 +656,10 @@ TOOL_SCHEMAS = [
         {"url": {"type": "string"}}, ["url"]),
     _fn("list_notes", "List notes in the passenger's Obsidian vault, newest first.",
         {"folder": {"type": "string", "description": "Optional vault-relative folder, e.g. 'Delamain'."}}, []),
-    _fn("read_note", "Read a note from the vault.",
-        {"path": {"type": "string", "description": "Vault-relative path, e.g. 'Delamain/Shopping list.md'."}}, ["path"]),
+    _fn("read_note", "Read a note from the vault. A long note comes back cut short with a list of its sections; "
+        "read one of them with section.",
+        {"path": {"type": "string", "description": "Vault-relative path, e.g. 'Delamain/Shopping list.md'."},
+         "section": {"type": "string", "description": "Optional: part of a heading, to read only that section."}}, ["path"]),
     _fn("search_memory", "Look back through your own notes (knowledge, studies, news, journal, meetings, tasks) and "
         "your past conversations with the passenger, by meaning as well as words. Use it when they refer to something "
         "earlier ('remember when…', 'what did I say about…', 'last week'), or before answering about the past from memory.",
