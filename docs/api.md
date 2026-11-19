@@ -145,6 +145,7 @@ See [mind.md](mind.md). 404 when `mind.py` could not load.
 | `POST /api/mind/journal` | write tonight's journal now |
 | `GET /api/garden` | his garden now: every spot with its conditions and plant, the grow light, the cat, the weather, whether he is there (with his steps) or asleep, the pond, visitors and the messages you sent |
 | `POST /api/garden/visit` | send him to his garden now |
+| `GET /api/garden/history` | the garden's diary: how it looked each day at noon (up to a year), for the history slider |
 | `POST /api/garden/visitor` | send someone to the garden with a message for him: `{"message": "...", "by": "optional name of a past visitor"}`; at most three on the way at once |
 | `POST /api/mind/twin` | start a therapy session with the other Delamain (runs in the background) |
 

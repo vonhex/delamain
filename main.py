@@ -47,6 +47,18 @@ try:   # his garden: a small world of his own
 except Exception as _e:
     _garden = None
     print(f"[Garden] not loaded: {_e}")
+try:   # a window into his life: where he is in his house and garden, from what he is doing
+    import life as _life
+    _brain.listeners.append(_life.observe)
+except Exception as _e:
+    _life = None
+    print(f"[Life] not loaded: {_e}")
+try:   # reaching out first: now and then he tells you something unprompted
+    import reach as _reach
+except Exception as _e:
+    _reach = None
+    print(f"[Reach] not loaded: {_e}")
+_background: set = set()      # tasks held so they are never garbage-collected
 try:   # his inner life: knowledge notes, study, news, emotions, journal, opinions, the other Delamain
     import mind as _mind
 except Exception as _e:
@@ -150,6 +162,9 @@ async def lifespan(app: FastAPI):
             print(f"[Mind] age not set: {e}")
         asyncio.create_task(_mind_loop())
         asyncio.create_task(_brief_loop())
+        if _reach:
+            _reach.emit = _brain.emit
+            _background.add(asyncio.create_task(_reach_loop()))
     warmup_task = asyncio.create_task(_warmup_tts())
     loop.run_in_executor(None, _download_line_clips)
     reminder_task = asyncio.create_task(_reminder_loop())
@@ -1336,6 +1351,39 @@ def _appraise_quietly(user_text: str, reply: str, recent: str) -> None:
         print(f"[Mind] appraisal skipped: {e}")
 
 
+async def _reach_loop() -> None:
+    """Now and then he tells you something first (reach.py): every few minutes he looks over his life and your
+    day, and when something worth saying is fresh and the day's limits allow, says it in his own words."""
+    loop = asyncio.get_event_loop()
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await loop.run_in_executor(None, _reach.scan)
+            o = await loop.run_in_executor(None, _reach.pick)
+            if o and not (_self and _self._busy):
+                text = await loop.run_in_executor(None, _reach.compose, o)
+                if text:
+                    delivered = await _speak_to_all(text, "reach_out")
+                    await loop.run_in_executor(None, _reach.said, o, text, delivered)
+                    print(f"[Reach] {'said' if delivered else 'kept for later'} ({o['kind']}): {text[:120]}")
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"[Reach] {e}")
+        await asyncio.sleep(300)
+
+
+async def _reach_inbox() -> None:
+    """Someone just opened the app: what he wanted to tell you while nobody was there, he says now."""
+    await asyncio.sleep(6)
+    try:
+        for rec in await asyncio.to_thread(_reach.take_inbox):
+            await _speak_to_all(rec["text"], "reach_out")
+            await asyncio.sleep(8)
+    except Exception as e:
+        print(f"[Reach] inbox: {e}")
+
+
 async def _brief_loop() -> None:
     """The morning brief: from 7am, the first time someone has the app open, written from the
     real weather, calendar, mail, reminders and news (never from memory)."""
@@ -1895,6 +1943,14 @@ async def garden_visit(_=Depends(require_auth)):
     return {"started": await asyncio.to_thread(_garden.start_visit, "the passenger (Garden tab)")}
 
 
+@app.get("/api/garden/history")
+async def garden_history(_=Depends(require_auth)):
+    """The garden's diary: how it looked each day (for the tab's history slider)."""
+    if not _garden:
+        raise HTTPException(status_code=404, detail="Not installed")
+    return {"days": await asyncio.to_thread(_garden.diary_pages)}
+
+
 @app.post("/api/garden/visitor")
 async def garden_send_visitor(request: Request, _=Depends(require_auth)):
     """Send someone to the garden with a message for him (word for word); by: a past visitor to carry it."""
@@ -2107,6 +2163,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 "video_url": line_video(_persona(client_id), greeting),
             })
         _ready_clients.add(client_id)
+        if _reach and config.flag("feature_reach"):
+            _t = asyncio.create_task(_reach_inbox())
+            _background.add(_t)
+            _t.add_done_callback(_background.discard)
         if config.flag("tools_enabled") and _dungeon.active():
             await websocket.send_json({"type": "dungeon", "dungeon": _dungeon.status()})
 
@@ -2124,6 +2184,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if not user_text:
                     continue
                 print(f"[WS] Talk from {client_id}: {user_text}")
+                if _reach:
+                    _reach.note_talk()
                 campaign = _dungeon.active() if config.flag("tools_enabled") else None
                 persona_now = "delamain" if campaign else _persona(client_id)
                 if _self:

@@ -52,6 +52,7 @@ FIELDS: dict[str, tuple[str, str, str]] = {
     "feature_twin": ("DELAMAIN_TWIN", "true", "Evening therapy with the other Delamain"),
     "feature_journal": ("DELAMAIN_JOURNAL", "true", "Nightly journal"),
     "feature_brief": ("DELAMAIN_BRIEF", "true", "Morning brief"),
+    "feature_reach": ("DELAMAIN_REACH_OUT", "true", "Reach out first: a few times a day he tells you something that matters"),
     "feature_self_review": ("DELAMAIN_SELF_REVIEW", "true", "Nightly self-review and code proposals"),
     "google_client_id": ("GOOGLE_CLIENT_ID", "", "Google OAuth client ID (from Google Cloud; see the guide)"),
     "google_client_secret": ("GOOGLE_CLIENT_SECRET", "", "Google OAuth client secret"),

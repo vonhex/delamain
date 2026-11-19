@@ -63,7 +63,18 @@ More in [Privacy](docs/mind.md#privacy).
   and a pansy carries on. He visits a few times a day, tends it, names things (the cat too), and
   feels what happens there. He can fish the pond past the pine and sleeps in a bed in the house.
   People come by now and then, stay a few visits and remember him; send one with a message and
-  they pass it on. The **Garden** tab shows it live, and shows him only while he is in it.
+  they pass it on. It follows the seasons, and left alone it goes wild (weeds, long grass, leaves,
+  grime, dust, peeling paint); how it looks is his to choose, down to a sign, a tree he plants and the
+  rug in his study, where his books and the pictures he has looked at are. Behind the house is a field
+  he cultivates: he breaks the ground, sows corn, winter wheat, sunflowers, pumpkins or beans in their
+  season, waters, hoes, puts up a scarecrow against the crows and brings in the harvest (or loses it
+  to frost, drought, wind or weeds), then cooks with it and saves seed for next year. The **Garden**
+  tab shows it live, with a history slider and sound, and he is always somewhere in it, doing what he
+  is really doing: studying at his desk, working in the attic office, reading the news in his
+  armchair, in the field or the garden, flying a kite on a windy day, splitting firewood, out with his
+  telescope on a clear night, playing his guitar, cooking supper, gone into town, asleep in bed.
+- **He reaches out first.** A few times a day at most he tells you something unprompted: a first
+  frost in his garden, an answer to your message, a heads-up before a meeting on your calendar.
 - **He sleeps.** He has a bedtime. Asleep he does no work, dreams (a short dream from his day,
   kept in your vault) and tidies his memory, merging facts he saved twice. Talk to him at night
   and he wakes up; in the morning he wakes rested.

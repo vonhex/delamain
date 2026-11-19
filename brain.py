@@ -101,11 +101,19 @@ _PHASE = {"heard": "hearing", "think_start": "thinking", "tool_start": "tool", "
           "reflex": "reflex", "spoke": "speaking", "correction": "thinking", "navigate": "tool"}
 
 
+listeners: list = []      # functions(kind, data) told of every event (life.py follows what he is doing)
+
+
 def emit(kind: str, **data) -> None:
     """Record an event and send it to every open Brain view."""
     global _seq
     _seq += 1
     event = {"seq": _seq, "t": round(time.time(), 3), "kind": kind, **data}
+    for fn in listeners:
+        try:
+            fn(kind, data)
+        except Exception:
+            pass
     if kind in _PHASE:
         _state["phase"], _state["since"] = _PHASE[kind], event["t"]
     if kind == "core" and data.get("persona"):

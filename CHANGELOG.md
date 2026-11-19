@@ -4,6 +4,24 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.7.0] — 2026-11-18 — A place of his own
+
+### Added
+- **The garden's year**: seasons where it is (grass, the treeline, falling leaves), the first frost and first snow of each season as events (backfilled from the weather history), and the forecast on each visit (tonight's low, and which tender plants outside it would kill).
+- **Upkeep and neglect**: weeds in the beds (they choke what grows there), in the path, long grass, fallen leaves, grimy windows and glass (less light), dust and cobwebs in his study, wearing paint, snow on the path. He weeds, mows, rakes, cleans, tidies, shovels and repaints when he cares to, and the scene shows all of it.
+- **His to design**: the house's walls, roof and curtains, the path, the fence, his study's walls, rug and blanket, a desk lamp, string lights, a bird feeder, a bench by the pond, a sign with a name for the garden, the art over his desk; a tree he plants that grows for years (apple, maple, birch or cherry) and changes with the seasons; seeds he saves and sows, generation after generation (cuttings from houseplants); names for record fish, which he can catch again.
+- **His study**: a room built on to the house with a bookshelf (a book for each subject he studied), a pinboard of the pictures he looked at, and a desk where he writes his journal at night; therapy sessions shown on the rug with the other Delamain.
+- **Garden tab**: a history slider (a page of the diary each day, up to a year; `GET /api/garden/history`), sound made in the browser (wind, rain, birds, crickets, the pond), evening postcards in `Delamain/Garden/Postcards/`, a fishing journal, and sections for the year, upkeep, his design, his study.
+- **Visitors** know of each other and the local news, and sometimes come in twos and talk with each other too.
+- **Reaching out first** (`reach.py`, `DELAMAIN_REACH_OUT`): a few times a day at most, never while he sleeps or you are talking, he tells you something that matters: from his garden, a frost warning, his answer to your message, a new visitor, therapy, his study, or a heads-up before a meeting on your calendar. Kept for when you next open the app if nobody is there.
+- More animation: weeding, mowing, raking, cleaning, tidying, shovelling, painting, writing at his desk.
+- **A window into his life** (`life.py`): he lives in the house and is always somewhere in the scene, doing what he is really doing: asleep in bed, in the garden, in therapy on the rug, studying or writing his journal at his desk, gone into town to see something, at his terminal in the new attic office while talking with you or working (tasks, reports, meeting notes, the brief, his own code, the screens showing which), in the armchair with the news, or pottering (tea at the window, a book by the lamp, his shelf, the cat). He walks between places, up the ladder and down the lane. A steeper roof makes room for the attic. `brain.listeners` lets modules follow every event.
+- **The field behind the house**: his to cultivate under the real weather. He breaks the ground, sows corn, winter wheat, sunflowers, pumpkins or beans in their season, waters, hoes and puts up a scarecrow; the crop comes up, grows, flowers and ripens by its real needs (or dies of frost, drought, heat, wind, weeds or crows), and the harvest fills his pantry and keeps seed for next year. Every row is drawn by crop and stage.
+- **A day's other pleasures**: chopping firewood (the stove in his study burns it while it is cold), filling the bird feeder, flying a kite, building a snowman that melts, a campfire by the pond, playing guitar, sketching, cooking from the harvest, giving visitors some of it, picking fruit from his tree, stargazing with a telescope. Each has its own animation; at home he also stretches, sketches, writes letters, plays guitar and cooks supper, and goes out to walk the field, fly a kite, split wood or look at the stars when the weather allows.
+- **The real wind**: speed, gusts and direction from Open-Meteo. Everything that moves follows it (clouds, rain and snow, smoke, the pine and his tree, the grass with waves running through the field, falling leaves, grit in a hard wind, the pond's chop, the feeder and the lights, the sound). Wind dries outdoor soil faster, strong gusts batter tall and flowering plants outside, the cat stays in, birds keep away, and a forecast of strong gusts reaches him on his visit and you as a heads-up.
+
+---
+
 ## [3.6.1] — 2026-11-18
 
 ### Fixed
