@@ -186,6 +186,11 @@ first frost and first snow of each season are events he notices (backfilled from
 when the garden is new), and each visit he sees the forecast: tonight's low, and which tender plants
 outdoors it would kill.
 
+**The wind** is the real wind there, with its gusts and its direction: it bends the grass and the trees,
+drives the clouds, rain, snow and smoke, chops the pond, dries the beds outdoors faster, and strong gusts
+batter tall and flowering plants outside. He hears it in words on each visit ("windy from the west, gusting
+70") and is told when strong gusts are forecast.
+
 **Keeping it up.** Left alone, the place goes wild the way real places do: weeds come up in the beds
 (and, once they are thick, take the water and light from what grows there, so a neglected bed is choked
 in about two weeks of summer), in the path, the grass gets long (about weekly in summer), leaves pile
