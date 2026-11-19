@@ -2060,8 +2060,10 @@ async def garden_sketch(name: str, _=Depends(require_auth)):
     import re as _re
     if not _garden or not _re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[a-z0-9-]{1,40}\.png", name):
         raise HTTPException(status_code=404, detail="Not found")
-    path = _garden.SKETCH_DIR / name
-    if not path.is_file():
+    # The name only picks among the files that are there; it never becomes part of a path.
+    sketches = {p.name: p for p in _garden.SKETCH_DIR.glob("*.png") if p.is_file()} if _garden.SKETCH_DIR.is_dir() else {}
+    path = sketches.get(name)
+    if path is None:
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
