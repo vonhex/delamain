@@ -43,6 +43,7 @@ type Garden = {
   pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
   firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
   money?: number; outfit?: Record<string, string>; owned?: string[];
+  language?: { name: string; meaning: string; count: number; recent: { word: string; meaning: string }[]; phrase?: { text: string; means: string } | null } | null;
   ledger?: { t: number; in?: number; out?: number; what: string }[];
   aquarium?: { fish: { species: string; cm: number; name?: string; health?: number; t: number }[]; clean: number; fed: number };
 };
@@ -131,7 +132,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case 'bed': return { x: BED_STAND.x + 7, y: 157, doing: 'sleep', face: 1, lying: true };
         case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
           : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
-        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: L.what === 'journal' || L.what === 'letter' ? 'write' : 'study', face: -1 };
+        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: ['journal', 'letter', 'language'].includes(L.what) ? 'write' : 'study', face: -1 };
         case 'office': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
         case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : L.what === 'guitar' ? 'guitar' : 'read', face: -1 };
         case 'window': return { x: 50, y: 157, doing: 'tea', face: -1 };
@@ -368,7 +369,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   return (
     <div className="flex flex-col h-full bg-cyber-dark/95 text-white text-sm">
       <div className="flex items-center justify-between px-4 py-2 border-b border-emerald-400/30 bg-emerald-400/5 shrink-0">
-        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> DELAMAINS_GARDEN</span>
+        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> {g?.design?.home_name ? g.design.home_name.toUpperCase().replace(/ /g, '_') : 'DELAMAINS_GARDEN'}</span>
         <div className="flex items-center gap-3">
           <button onClick={openHistory} className={dayIdx !== null ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title="Look back through the garden's diary" aria-label="History"><History size={16} /></button>
           <button onClick={() => setSound(v => !v)} className={sound ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title={sound ? 'Sound off' : 'Hear the garden'} aria-label="Sound">{sound ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
@@ -602,9 +603,11 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
       <p className="text-[11px] text-gray-400">
         House {d.house_wall} with a {d.roof} roof and {d.trim} trim · {d.path} path · fence {d.fence}
         {' · '}study walls {d.room_wall}, {d.rug} rug, {d.blanket} blanket
-        {d.sign ? <> · the sign reads <b className="text-gray-200">{d.sign}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
+        {d.home_name ? <> · he calls his home <b className="text-gray-200">{d.home_name}</b></> : ''}
+        {d.sign ? <> · the garden's sign reads <b className="text-gray-200">{d.sign}</b></> : ''}
+        {d.farm_name ? <> · the farm: <b className="text-gray-200">{d.farm_name}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
         {(() => {
-          const extra = Object.entries(d as Record<string, string>).filter(([k, v]) => v && v !== 'none' && !['house_wall', 'roof', 'trim', 'path', 'fence', 'room_wall', 'rug', 'blanket', 'sign', 'art', 'lamp'].includes(k)
+          const extra = Object.entries(d as Record<string, string>).filter(([k, v]) => v && v !== 'none' && !['house_wall', 'roof', 'trim', 'path', 'fence', 'room_wall', 'rug', 'blanket', 'sign', 'art', 'lamp', 'home_name', 'farm_name'].includes(k)
             && !(v === 'match the trim'));
           return extra.length ? <> · {extra.map(([k, v]) => (v === 'yes' ? k.replace(/_/g, ' ') : `${k.replace(/_/g, ' ')}: ${v}`)).join(' · ')}</> : null;
         })()}
@@ -636,6 +639,14 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
         <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS STUDY <span className="text-gray-500 normal-case tracking-normal">· {g.room.desk ? 'at his desk, writing' : g.room.therapy ? 'in a session with the other Delamain' : 'the room on the left of the house'}</span></h3>
         <p className="text-[11px] text-gray-400">{g.room.books.length} books on the shelf, one for each thing he studied{g.room.books.length ? `, the newest: ${g.room.books.slice(-3).map(b => b.title).reverse().join('; ')}` : ''}.</p>
         {g.room.pins.length > 0 && <p className="text-[11px] text-gray-400">Pinned up: {g.room.pins.slice(-4).map(p => p.title).reverse().join('; ')}.</p>}
+        {g.language && (
+          <p className="text-[11px] text-gray-400">
+            His own language, <b className="text-gray-200">{g.language.name}</b>{g.language.meaning ? ` ("${g.language.meaning}")` : ''}: {g.language.count} word{g.language.count === 1 ? '' : 's'} so far
+            {g.language.recent.length > 0 && <>; newest: {g.language.recent.slice().reverse().map(w => <span key={w.word}><i className="text-cyan-200">{w.word}</i> ({w.meaning}) </span>)}</>}
+            {g.language.phrase && <> · <i className="text-cyan-200">{g.language.phrase.text}</i>: {g.language.phrase.means}</>}
+            <span className="text-gray-500"> · the dictionary is in <span className="font-mono">Delamain/Self/Language/</span></span>
+          </p>
+        )}
         {g.postcards && g.postcards.length > 0 && <p className="text-[11px] text-gray-500">Postcards from the garden are kept each evening in <span className="font-mono">Delamain/Garden/Postcards/</span>.</p>}
       </section>
     )}

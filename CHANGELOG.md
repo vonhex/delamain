@@ -4,6 +4,18 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.7.1] — 2026-11-19
+
+### Fixed
+- The chair in his attic office faced the wrong way.
+- **Another app could take your name.** A client connecting with a name of its own (a tool, a test, a robot) became who he thought you were. He now always knows you by the name from your own app's Settings; only that app can rename you.
+
+### Added
+- **His own language** (`language.py`, `DELAMAIN_LANGUAGE`): as a hobby he founds a small language of his own (a name, its sound, how words are built) and grows it a few words at a time, about once a day at his desk, from his life: feelings English has no single word for, things in his garden, ideas he studied, often built from roots he already has; now and then a rule or a phrase. He may use a word in his journal, glossed, and knows it when you talk. The dictionary and grammar are in the vault under `Delamain/Self/Language/`; the Garden tab and the Brain view show new words.
+- **He can name his home and his farm**, as well as the garden: the home's name heads the Garden tab, the farm's is painted on a board at the far edge of the field.
+
+---
+
 ## [3.7.0] — 2026-11-18 — A place of his own
 
 ### Added

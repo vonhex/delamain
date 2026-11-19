@@ -70,7 +70,7 @@ GUARDED = {"learn_rule", "forget_rule", "save_skill", "tune_setting", "propose_i
 # Files he may propose changes to. Not this file, auth.py or config.py.
 EDITABLE_PY = ["main.py", "assistant_tools.py", "lines.py", "personas.py", "speech_text.py", "reports.py",
                "dungeon.py", "meetings.py", "brain.py", "brain_lines.py", "google_api.py", "tts_engine.py", "db.py",
-               "mind.py", "garden.py", "recall.py", "config.py", "reach.py", "life.py"]   # not auth.py or self_improve.py
+               "mind.py", "garden.py", "recall.py", "config.py", "reach.py", "life.py", "language.py"]   # not auth.py or self_improve.py
 EDITABLE_TS_DIR = "frontend/src"
 
 TUNABLES = {

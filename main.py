@@ -53,6 +53,11 @@ try:   # a window into his life: where he is in his house and garden, from what 
 except Exception as _e:
     _life = None
     print(f"[Life] not loaded: {_e}")
+try:   # his own language, a hobby he grows a few words at a time
+    import language as _language
+except Exception as _e:
+    _language = None
+    print(f"[Language] not loaded: {_e}")
 try:   # reaching out first: now and then he tells you something unprompted
     import reach as _reach
 except Exception as _e:
@@ -162,6 +167,8 @@ async def lifespan(app: FastAPI):
             print(f"[Mind] age not set: {e}")
         asyncio.create_task(_mind_loop())
         asyncio.create_task(_brief_loop())
+        if _language:
+            _language.emit = _brain.emit
         if _reach:
             _reach.emit = _brain.emit
             _background.add(asyncio.create_task(_reach_loop()))
@@ -798,12 +805,18 @@ def build_llm_payload(history: list[dict], search_context: str = "", temperature
     if home:
         system += (f"\n[PASSENGER HOME: {home}. 'Home' means this address: use it for 'take me home' "
                    "([NAVIGATE:" + home + "]), the drive time home and the weather at home.]")
-    if _real_name(user_name):
+    # Whoever connects (the app, a robot, a tool) is the person he lives with: the name is the one from their own
+    # app's Settings, never what a client calls itself.
+    known = (_mind.who() if _mind else "") or ""
+    if known and known != "your passenger":
+        user_name = known
+    elif _real_name(user_name):
         if _mind:
             try:
                 _mind.set_passenger(_real_name(user_name))
             except Exception as e:
                 print(f"[Mind] name not set: {e}")
+    if _real_name(user_name):
         system += (f"\n[PASSENGER NAME: {_real_name(user_name)}. Address them by name now and then, as a "
                    "driver who knows a regular passenger would; not in every reply.]")
     if config.flag("tools_enabled"):
@@ -1296,6 +1309,11 @@ async def _mind_loop() -> None:
                 except Exception as e:
                     print(f"[Garden] visit failed: {e}")
                     st = _garden._state(); st["visit"] = None; st["last_visit"] = time.time(); _garden._save(st)
+            elif _language and _language.due():        # a while at his desk with the language he is inventing
+                try:
+                    await loop.run_in_executor(None, _language.session)
+                except Exception as e:
+                    print(f"[Language] session failed: {e}")
             elif config.flag("feature_study") and _mind.study_due():   # free time: study something on his own
                 try:
                     await loop.run_in_executor(None, _mind.study)
@@ -2119,6 +2137,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         return
     await websocket.accept()
     connected_clients[client_id] = websocket
+    if _mind and client_id.startswith("web-") and _real_name(user_name):     # the person's own app may rename them
+        try:
+            _mind.set_passenger(_real_name(user_name), rename=True)
+        except Exception as e:
+            print(f"[Mind] name not set: {e}")
+    if _mind and _mind.who() not in ("", "your passenger"):              # every client is greeted as the person in Settings
+        user_name = _mind.who()
     if persona in PERSONAS:
         _client_persona[client_id] = persona
     # The web page says which mode it is in; other clients (the robot, the car bridge) stay in drive mode.

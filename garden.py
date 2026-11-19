@@ -263,7 +263,7 @@ DESIGN = {
 }
 DESIGN_DEFAULT = {**{k: v[0] for k, v in DESIGN.items()}, "house_wall": "timber", "roof": "terracotta", "trim": "red",
                   "fence": "weathered", "room_wall": "plaster", "rug": "rust", "blanket": "teal", "lamp": "on",
-                  "sign": "", "art": ""}
+                  "sign": "", "art": "", "home_name": "", "farm_name": ""}
 DESIGN_WORDS = {"house_wall": "the house's walls", "roof": "the roof", "trim": "the window frames and shutters",
                 "door": "the front door's style", "door_colour": "the front door's colour", "curtains": "the curtains",
                 "shutters": "shutters on the window", "window_box": "a box under the window", "porch_light": "a lantern by the door",
@@ -1136,7 +1136,9 @@ walls, the rug, your blanket, something on the wall, a houseplant, lights in the
 garden: the greenhouse frame, string and path lights, an arch over the path, a birdbath, a gnome, a mailbox, a wind \
 chime, water lilies, pots by the door; and the path, the \
 fence, your study's walls, rug and blanket, the desk lamp, string lights, a bird feeder, a bench), or what: sign \
-(a name for the garden on a small sign, up to 14 letters) or what: art (what hangs over your desk, in a few \
+(a name for the garden on a small sign, up to 14 letters), what: home_name (a name for your home, the whole \
+place), what: farm_name (a name for the field and its harvests, painted on a board by the field, up to 12 letters) \
+or what: art (what hangs over your desk, in a few \
 words). Change it when you want to, not every visit. You can plant one tree in the field behind the beds \
 (plant_tree with species); it grows for years. When something has gone to seed or fruited you can save its \
 seeds (save_seeds, spot) and sow your own next time, generation after generation. If you caught a record fish, \
@@ -1575,7 +1577,8 @@ def _world_words(g: dict, w: dict) -> str:
     d = g["design"]
     rows.append("HOW IT LOOKS (yours to change with design): " + "; ".join(
         f"{DESIGN_WORDS[k]}: {d[k]} (options: {', '.join(DESIGN[k])})" for k in DESIGN)
-        + f"; the sign: {d.get('sign') or 'none yet'}; over your desk: {d.get('art') or 'nothing yet'}")
+        + f"; the sign (the garden's name): {d.get('sign') or 'none yet'}; your home's name: {d.get('home_name') or 'none yet'}; "
+        f"your farm's name: {d.get('farm_name') or 'none yet'}; over your desk: {d.get('art') or 'nothing yet'}")
     tree = g.get("tree")
     rows.append(f"YOUR TREE: a {tree['species']} you planted {(time.time() - tree['planted']) / 86400:.0f} days ago "
                 f"({'a sapling' if _tree_size(tree) < 0.2 else 'young' if _tree_size(tree) < 0.7 else 'well grown'}; "
@@ -2105,6 +2108,12 @@ def visit(started_by: str = "Delamain") -> dict:
                     g["design"]["sign"] = txt
                     done.append(f"put up a sign: {txt}")
                     where = -11
+                elif what in ("home_name", "farm_name", "home", "farm") and (txt := re.sub(r"[^A-Za-z0-9 &'-]", "", __import__("unicodedata").normalize(
+                        "NFKD", value).encode("ascii", "ignore").decode()).strip()[:24 if what.startswith("home") else 12]):
+                    key = "home_name" if what.startswith("home") else "farm_name"
+                    g["design"][key] = txt
+                    done.append(f"named his home {txt}" if key == "home_name" else f"named his farm {txt} and painted it on a board by the field")
+                    where = -10 if key == "home_name" else -13
                 elif what == "art" and value:
                     g["design"]["art"] = value[:60]
                     done.append(f"hung {value[:60]} over his desk")
@@ -2413,7 +2422,11 @@ def context() -> str:
     last = next((x["text"] for x in reversed(g.get("log") or []) if x.get("who") == "Delamain"), "")
     cat = g["cat"]
     return ("\n[YOUR GARDEN (your own small world of real plants; talk about it when asked or when it fits, never invent "
-            "what is not there; it has a field behind the house you cultivate): " + ("; ".join(growing) or "nothing growing") +
+            "what is not there; it has a field behind the house you cultivate"
+            + (f"; you named your home {g['design']['home_name']}" if g["design"].get("home_name") else "")
+            + (f", the garden {g['design']['sign']}" if g["design"].get("sign") else "")
+            + (f", the farm {g['design']['farm_name']}" if g["design"].get("farm_name") else "") + "): "
+            + ("; ".join(growing) or "nothing growing") +
             (f". {cat.get('name') or 'The cat'} is there now" if cat.get("here") else "") +
             (". You are in it right now" if here else
              f". You were last there {(time.time() - g['last_visit']) / 3600:.0f} hours ago" if g.get("last_visit") else "") +
@@ -2487,10 +2500,20 @@ def snapshot() -> dict:
             "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
             "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
             "sketches": (g.get("sketches") or [])[-3:],
+            "language": _language_summary(),
             "money": round(g.get("money", 0), 2), "outfit": g.get("outfit") or {}, "ledger": list(reversed(g.get("ledger") or []))[:8],
             "owned": g.get("owned") or [],
             "aquarium": {"fish": [{k: f.get(k) for k in ("species", "cm", "name", "health", "t")} for f in g["aquarium"]["fish"]],
                          "clean": round(g["aquarium"].get("clean", 1), 3), "fed": round(g["aquarium"].get("fed", 1), 3)}}
+
+
+def _language_summary() -> dict | None:
+    try:
+        import language as _language
+        s = _language.summary()
+        return s if s.get("name") else None
+    except Exception:
+        return None
 
 
 def _field_view(f: dict) -> dict:

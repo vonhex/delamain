@@ -1020,14 +1020,19 @@ def who(st: dict | None = None) -> str:
     return ((st if st is not None else _state()).get("passenger_name") or "").strip() or "your passenger"
 
 
-def set_passenger(name: str) -> None:
-    """Remember the name set in Settings."""
+def set_passenger(name: str, rename: bool = False) -> None:
+    """Remember the name set in Settings. Once he knows it, only a rename from the person's own app (rename=True)
+    changes it: another client that gives a name of its own (a tool, a robot, a test) never becomes who he
+    thinks the person is."""
     name = (name or "").strip()[:40]
-    if name and _state().get("passenger_name") != name:
-        with _lock:
-            st = _state()
-            st["passenger_name"] = name
-            _save(st)
+    if not name:
+        return
+    with _lock:
+        st = _state()
+        if st.get("passenger_name") == name or (st.get("passenger_name") and not rename):
+            return
+        st["passenger_name"] = name
+        _save(st)
 
 
 def hear(text: str) -> None:
@@ -1297,6 +1302,11 @@ def inner_context() -> str:
     if today:
         text += ("\n[WHAT YOU STUDIED ON YOUR OWN TODAY (in your free time; mention it if relevant or asked): " +
                  "; ".join(f"{x['subject']}: {x.get('summary', '')[:160]}" for x in today[-4:]) + "]")
+    try:
+        import language as _language
+        text += _language.context()
+    except Exception:
+        pass
     return text
 
 
@@ -1341,6 +1351,14 @@ def write_journal(conversations: list[dict], extra: str = "") -> dict:
               f"HOW LONG YOU HAVE BEEN ALIVE: {_age_words(st)}\n"
               f"WHO YOU WERE BEFORE (your own earlier portraits; notice honestly how you have changed, if you have): "
               f"{_past_selves(st) or 'nothing yet: you are new'}")
+    try:                      # his own language: a word or two may find its way into the entry
+        import language as _language
+        lang = _language.context(20)
+        if lang:
+            prompt += ("\n" + lang.strip() + " (If a word of it truly fits tonight, you may use one or two in the entry, "
+                       "each glossed in brackets the first time. Do not force it.)")
+    except Exception:
+        pass
     data = _json(generate(JOURNAL_SYSTEM, prompt, 2500)) or {}
     day = datetime.now().strftime("%Y-%m-%d")
     if data.get("entry"):
