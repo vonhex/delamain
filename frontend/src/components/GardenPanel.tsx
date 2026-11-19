@@ -144,7 +144,8 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
           : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
         case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: ['journal', 'letter', 'language'].includes(L.what) ? 'write' : 'study', face: -1 };
-        case 'office': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
+        case 'office': case 'attic_desk': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
+        case 'skylight': return { x: 28, y: LOFT_Y, doing: 'look', face: -1 };          // under the skylight, looking up
         case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : L.what === 'guitar' ? 'guitar' : 'read', face: -1 };
         case 'window': return { x: 50, y: 157, doing: 'tea', face: -1 };
         case 'shelf': return { x: STUDY_STAND.x + 5, y: 157, doing: 'shelf', face: -1 };
@@ -254,7 +255,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
           else del = { x: pl.sit ? pl.sit.x : p.x, y: pl.sit ? pl.sit.y : p.y, walking: false, doing: pl.doing, facing: p.facing,
             speaking: talking || (pl.twin && Math.floor(tt / 7) % 2 === 0) };
           if (pl.twin) twin = { x: 68, y: 154, walking: false, doing: 'therapy', facing: -1, speaking: Math.floor(tt / 7) % 2 === 1 };
-          if (L.where === 'office') office = L.screen || 'text';
+          if (L.where === 'office' || L.where === 'attic_desk') office = L.screen || 'text';
         }
       } else pos.current = null;
       const guest = gs && gs.since ? moveGuest(gpos, gs, gs.since, gs.until, nowS, gg, del, speaker, 0) : (gpos.current = null);
