@@ -1258,7 +1258,8 @@ SKETCH_DIR = SELF_DIR / "sketches"
 SKETCH_REGIONS = [   # what he names, and where in the scene it is (world x and y; the picture is x -44..320, y 40..160)
     (("pond", "jetty", "fish", "water", "lily", "lilies", "bench", "birdbath"), (236, 320, 116, 160)),
     (("field", "corn", "wheat", "sunflower", "pumpkin", "bean", "crop", "scarecrow", "harvest", "row"), (160, 320, 106, 152)),
-    (("mountain", "peak", "range", "ridge", "snow", "sky", "cloud", "sunset", "sunrise", "light", "horizon"), (-44, 320, 56, 120)),
+    (("mountain", "peak", "range", "ridge", "snow", "sky", "cloud", "sunset", "sunrise", "light", "horizon",
+      "meadow", "landscape", "valley", "view", "hills", "plain"), (40, 320, 44, 152)),
     (("greenhouse", "glass", "tomato", "pepper", "seedling"), (80, 176, 100, 160)),
     (("study", "desk", "book", "shelf", "pinboard", "stove"), (-44, 2, 112, 160)),
     (("house", "home", "window", "roof", "attic", "door", "chimney", "room", "aquarium", "tank"), (-44, 90, 76, 160)),

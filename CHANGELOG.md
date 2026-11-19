@@ -13,6 +13,8 @@ All notable changes to Delamain are documented here.
 - **He repeated himself word for word.** The check before he speaks sometimes rewrote a draft into a reply he had already given, so you heard the same paragraph twice. A reply that repeats an earlier one is now caught: he answers afresh, or says the draft without the flagged lines. The check also sees what his tools did a turn or two ago, so a save he really made is not called invented and he stops "correcting" true things; it no longer adds embarrassment to his mood on every reply (at most once an hour).
 - **Long notes were read only in part.** A note longer than the read limit came back cut short and he talked as if he had read it all. He is now told which sections he has not read and can read one by name (`read_note` with `section`).
 - **Speech-to-text slips.** He reads past misheard words and cut-off sentences instead of asking about the spelling, and fixes his own mistakes in a sentence rather than a paragraph.
+- **Speaking was cut off mid-sentence.** The mic sent what it heard after 1.5 s of quiet, so a pause to think ended it. It now waits 2.2 s, and 4.5 s when the sentence stops on a word like "and", "of" or "I"; a tap on the mic while it listens sends at once.
+- His sketches of the mountains came out as a thin strip; a landscape (the meadow, the peaks, the view) is now drawn as the whole wide scene.
 - **Another app could take your name.** A client connecting with a name of its own (a tool, a test, a robot) became who he thought you were. He now always knows you by the name from your own app's Settings; only that app can rename you.
 
 ### Added

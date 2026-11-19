@@ -79,7 +79,10 @@ const FOLLOW_UP_MS = 7000;
 const DM_FOLLOW_UP_MS = 15000;
 // The mic stays open through pauses in what is said, and closes once nothing new has been
 // heard for this long. Players stop to think mid-sentence, so the game table waits longer.
-const PAUSE_MS = 1500;
+const PAUSE_MS = 2200;
+// A sentence that stops on a word like "and", "of" or "I" is not finished: wait longer.
+const UNFINISHED_MS = 4500;
+const UNFINISHED = /\b(and|but|or|so|because|cause|the|a|an|of|to|for|with|in|on|at|by|i|i'm|im|my|your|you|we|he|she|it's|is|are|was|were|that|which|who|if|then|however|also|like|um|uh|about|than|out|from|into|just|really|very|when|while|what|how|why|where|maybe|think|not|don't|can|could|would|should|will)$/i;
 const DM_PAUSE_MS = 2800;
 // The mic closes by itself when nobody says anything at all.
 const NO_SPEECH_MS = 8000;
@@ -501,6 +504,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
   // question) or the background wake-word listener. Switching waits for the old one to end.
   const recRef = useRef<{ rec: any; mode: 'command' | 'wake' } | null>(null);
   const afterStopRef = useRef<(() => void) | null>(null);
+  const finishRef = useRef<(() => void) | null>(null);   // send what the command has heard, now
   const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wakeBlockedRef = useRef(false);   // the browser refused the mic for background listening
   const [wakeBlocked, setWakeBlocked] = useState(false);   // the same, for the Brain view
@@ -546,6 +550,12 @@ function MainApp({ token, onLogout }: MainAppProps) {
       let rec: any;
       const finish = () => { done = true; clearTimeout(quiet); try { rec.stop(); } catch { /* already ended */ } };
       const closeAfter = (ms: number) => { clearTimeout(quiet); quiet = setTimeout(finish, ms); };
+      // How long to wait after the last word: longer when the sentence is clearly unfinished.
+      const pauseFor = () => {
+        const sofar = [...parts, interim].join(' ').trim();
+        return UNFINISHED.test(sofar) ? Math.max(pauseMs, UNFINISHED_MS) : pauseMs;
+      };
+      finishRef.current = () => { if (heard) finish(); else { rec.cancelled = true; finish(); } };
       // Chrome on Android repeats a growing sentence as new results ("What", "What do",
       // "What do you…"): a phrase that extends the last one replaces it.
       const add = (phrase: string) => {
@@ -568,6 +578,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
           closeAfter(timeoutMs ?? NO_SPEECH_MS);
         };
         rec.onspeechstart = () => { heard = true; clearTimeout(quiet); };
+        // Speech stopped without a result to follow: still close, rather than wait forever.
+        rec.onspeechend = () => { if (!done) closeAfter(pauseFor()); };
         rec.onresult = (e: any) => {
           heard = true;
           interim = '';
@@ -576,7 +588,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             if (e.results[i].isFinal) add(t); else interim += t;
           }
           setHeardLive([...parts, interim].join(' ').replace(/\s+/g, ' ').trim());
-          closeAfter(pauseMs);
+          closeAfter(pauseFor());
         };
         rec.onerror = (e: any) => {
           // No mic, or no recognition service: starting again would only fail again.
@@ -589,6 +601,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             return;
           }
           clearTimeout(quiet);
+          finishRef.current = null;
           setIsListening(false);
           setHeardLive('');
           const said = [...parts, interim].join(' ').replace(/\s+/g, ' ').trim();
@@ -688,6 +701,8 @@ function MainApp({ token, onLogout }: MainAppProps) {
 
   const toggleListening = () => {
     if (isListening) {
+      // A tap while listening sends what was heard so far (or just stops, if nothing was).
+      if (finishRef.current) { finishRef.current(); return; }
       stopRecognizer();
       setIsListening(false);
       return;
@@ -1037,7 +1052,7 @@ function MainApp({ token, onLogout }: MainAppProps) {
             >
               <Mic size={20} className={`shrink-0 transition-colors ${isListening ? 'text-cyber-blue animate-pulse' : 'text-cyber-blue/50'}`} />
               <span className={`text-xs font-bold tracking-[0.35em] uppercase transition-colors ${isListening ? 'text-cyber-blue' : 'text-cyber-blue/40'}`}>
-                {isListening ? 'Listening...' : settings.wakeWord && SpeechRec ? 'Say "Delamain" or tap' : 'Speak to Delamain'}
+                {isListening ? 'Listening · tap to send' : settings.wakeWord && SpeechRec ? 'Say "Delamain" or tap' : 'Speak to Delamain'}
               </span>
               {!isListening && !(window as any).SpeechRecognition && !(window as any).webkitSpeechRecognition && (
                 <span className="text-[9px] text-cyber-blue/25 font-mono ml-1">[type]</span>
