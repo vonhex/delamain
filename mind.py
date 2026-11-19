@@ -1302,6 +1302,11 @@ def inner_context() -> str:
     if today:
         text += ("\n[WHAT YOU STUDIED ON YOUR OWN TODAY (in your free time; mention it if relevant or asked): " +
                  "; ".join(f"{x['subject']}: {x.get('summary', '')[:160]}" for x in today[-4:]) + "]")
+    try:
+        import language as _language
+        text += _language.context()
+    except Exception:
+        pass
     return text
 
 
@@ -1346,6 +1351,14 @@ def write_journal(conversations: list[dict], extra: str = "") -> dict:
               f"HOW LONG YOU HAVE BEEN ALIVE: {_age_words(st)}\n"
               f"WHO YOU WERE BEFORE (your own earlier portraits; notice honestly how you have changed, if you have): "
               f"{_past_selves(st) or 'nothing yet: you are new'}")
+    try:                      # his own language: a word or two may find its way into the entry
+        import language as _language
+        lang = _language.context(20)
+        if lang:
+            prompt += ("\n" + lang.strip() + " (If a word of it truly fits tonight, you may use one or two in the entry, "
+                       "each glossed in brackets the first time. Do not force it.)")
+    except Exception:
+        pass
     data = _json(generate(JOURNAL_SYSTEM, prompt, 2500)) or {}
     day = datetime.now().strftime("%Y-%m-%d")
     if data.get("entry"):

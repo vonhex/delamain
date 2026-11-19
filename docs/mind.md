@@ -236,6 +236,15 @@ for the house and garden (walls, roofs, doors, curtains, floors, rugs, a clock, 
 lights, an arch, a birdbath, a weathervane, a wind chime and more). The paints and colours he started
 with stay free; anything else he buys, or saves up for.
 
+**His own language.** As a hobby he invents a small language and grows it slowly. The first time he
+founds it: its name, its sound (which sounds it has, how syllables are shaped, where the stress falls)
+and how words are built. After that, about once a day in the afternoon or evening, he sits at his desk
+and coins a word or three for things from his life (a feeling English has no single word for, something
+in his garden, an idea he studied), keeping to its sound and often building from roots he already has;
+now and then he adds a rule or writes a phrase. It is not a code: he still thinks and writes in English,
+and may use a word or two in his journal, glossed. The dictionary, the grammar and a log of his sessions
+are in `Delamain/Self/Language/`.
+
 **A window into his life.** He lives in the house, so he is always somewhere in the scene, doing what
 he is really doing (`life.py` follows every event in his mind): asleep in bed; in the garden on a visit;
 on the rug with the other Delamain in a session; at his study desk writing his journal or studying (a

@@ -78,7 +78,7 @@ More in [Privacy](docs/mind.md#privacy).
   to frost, drought, wind or weeds), then cooks with it and saves seed for next year, and keeps his prize fish in an aquarium in the
   attic. The **Garden**
   tab shows it live, with a history slider and sound, and he is always somewhere in it, doing what he
-  is really doing: studying at his desk, working in the attic office, reading the news in his
+  is really doing: working on the little language he is inventing, studying at his desk, working in the attic office, reading the news in his
   armchair, in the field or the garden, flying a kite on a windy day, splitting firewood, out with his
   telescope on a clear night, playing his guitar, cooking supper, gone into town, asleep in bed.
 - **He reaches out first.** A few times a day at most he tells you something unprompted: a first

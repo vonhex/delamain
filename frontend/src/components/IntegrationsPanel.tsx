@@ -27,7 +27,7 @@ export interface IntegrationsHandle {
 
 // Extras that cost model time: turn them off for a small or slow model.
 const FEATURES = ['feature_verify', 'feature_recall', 'feature_feelings', 'feature_self_tools', 'feature_news', 'feature_study', 'feature_vision', 'feature_garden',
-  'feature_twin', 'feature_journal', 'feature_brief', 'feature_reach', 'feature_self_review'];
+  'feature_twin', 'feature_journal', 'feature_brief', 'feature_reach', 'feature_language', 'feature_self_review'];
 const isOn = (v: string | undefined) => !['0', 'false', 'no', 'off'].includes((v ?? '').trim().toLowerCase());
 const isToggle = (f: Field) => f.choices.length === 2 && f.choices.includes('true') && f.choices.includes('false');
 
@@ -51,6 +51,7 @@ const HINT: Record<string, string> = {
   feature_study: 'About an hour of reading on a subject he picks, a few times a day, and the long tasks you give him',
   feature_vision: 'When he wonders what something looks like, he finds pictures of it and looks. Turn off if your model cannot read images',
   garden_visitor_voice: 'Who speaks for the people who come by Delamain\'s garden. "local": his own model. "gemini": Gemini, through the agy CLI on this machine, so visitors are truly another mind (what they see of the garden and what Delamain said to them is sent to Google; your name is not). Falls back to his own model if agy is missing or fails',
+  feature_language: 'As a hobby, Delamain invents a small language of his own and grows it a few words at a time, from his life: feelings English has no word for, things in his garden, ideas he studied. He may use a word now and then, glossed. The dictionary and grammar are in your vault under Delamain/Self/Language',
   feature_reach: 'Now and then (three times a day at most, never while he sleeps or while you are talking) Delamain tells you something first: a first fruit or the first frost in his garden, a frost warning for tender plants, an answer to a message you sent through a visitor, what came of therapy, a heads-up before a meeting on your calendar. If the app is closed, he says it when you next open it',
   feature_garden: 'Delamain\'s own small world of real plants (windowsill, grow-light shelf, greenhouse, outdoor beds) under your real sky. Delamain visits a few times a day, tends it and feels what happens there; watch it in the Garden tab',
   feature_twin: 'An evening session with the other Delamain, who is his therapist: help with his feelings, with notes kept between sessions',

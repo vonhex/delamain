@@ -76,6 +76,9 @@ function describe(ev: BrainEvent): Omit<Line, 'id' | 't'> | null {
       ev.what === 'guest' ? `${tag('imagination')} · ${String(ev.name)} came by the garden: ${quote(ev.says, 400)}` :
       ev.what === 'message_reply' ? `${tag('imagination')} · Answered your message (via ${String(ev.visitor)}): ${quote(ev.reply, 700)}` :
       ev.what === 'looked' ? `${tag('imagination')} · Looked at his garden` : `${tag('imagination')} · In his garden: ${quote((Array.isArray(ev.done) ? ev.done.join('; ') : '') || ev.noticed, 220)}`, color: R.imagination.color };
+    case 'language': return ev.stage === 'start'
+      ? { icon: '🗣', text: `${tag('memory')} · Sitting down with his language${ev.name ? `, ${ev.name}` : ''}`, color: R.memory.color }
+      : { icon: '🗣', text: `${tag('memory')} · ${ev.founded ? `Founded a language of his own: ${ev.name}` : `New in ${ev.name}`}${((ev.words as { word: string; meaning: string }[] | undefined) || []).map(w => `${w.word} (${w.meaning})`).join(', ').replace(/^(.)/, ': $1')}`, color: R.memory.color };
     case 'reach': return { icon: '📨', text: `${tag('memory')} · ${ev.delivered ? 'Told you, unprompted' : 'Wanted to tell you (will say it when you are back)'}: ${quote(ev.text, 400)}`, color: R.memory.color };
     case 'twin_start': return { icon: '🪞', text: `${tag('memory')} · In a session with his therapist, the other Delamain: ${quote(ev.topic, 90)}`, color: R.memory.color };
     case 'twin_say': return { icon: ev.who === 'Delamain' ? '🗨️' : '🪞', text: `${ev.who === 'Delamain' ? 'Delamain' : 'Therapist'}: ${quote(ev.text, 1500)}`, color: R.memory.color };

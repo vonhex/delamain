@@ -2204,7 +2204,7 @@ function frontDoor(b: Buf, d: Design, night: boolean, open: number) {
 function attic(b: Buf, w: PWorld, d: Design, night: boolean, t: number) {
   const wood: RGB = nightc([139, 90, 43], night), dk: RGB = nightc([96, 60, 28], night);
   b.rect(42, 105, 16, 2, wood); b.rect(43, 107, 1, 5, dk); b.rect(55, 107, 1, 5, dk);        // the desk
-  b.rect(35, 106, 5, 1, wood); b.rect(39, 99, 1, 13, dk); b.rect(35, 107, 1, 5, dk);          // the chair (its back to the right)
+  b.rect(34, 106, 6, 1, wood); b.rect(34, 99, 1, 13, dk); b.rect(39, 107, 1, 5, dk);          // the chair: its back behind him, facing the desk
   const screen = w.office?.screen || null;
   for (const [x0, k] of [[44, 0], [49, 1]] as const) {                                         // two screens
     b.rect(x0, 98, 5, 5, [30, 32, 38]); b.set(x0 + 2, 103, [30, 32, 38]); b.rect(x0 + 1, 104, 3, 1, [30, 32, 38]);

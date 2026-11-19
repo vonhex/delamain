@@ -21,7 +21,7 @@ _lock = threading.Lock()
 _last: dict[str, dict] = {}       # kind of activity -> {"t": when last seen, ...detail}
 
 # how long an activity holds after its last sign of life (seconds)
-HOLD = {"talk": 150, "work": 600, "study": 1800, "news": 900, "town": 420, "journal": 900}
+HOLD = {"talk": 150, "work": 600, "study": 1800, "news": 900, "town": 420, "journal": 900, "language": 1200}
 
 WORK_SOURCES = {"report": "writing a report", "meeting": "writing up meeting notes", "scribe": "writing up meeting notes",
                 "brief": "putting together the morning brief"}
@@ -29,7 +29,7 @@ PLACES = {"sleep": "bed", "garden": "garden", "therapy": "rug", "town": "town", 
           "talk": "office", "work": "office", "news": "armchair", "tea": "window", "read": "armchair", "shelf": "shelf",
           "cat": "cat", "pinboard": "pinboard", "field": "field_edge", "kite": "kite", "bench": "bench", "stars": "telescope",
           "woodpile": "woodpile", "guitar": "armchair", "stretch": "rug", "sketch": "easel", "cook": "stove", "letter": "study_desk",
-          "feeder": "feeder", "porch": "porch", "aquarium": "aquarium"}
+          "feeder": "feeder", "porch": "porch", "aquarium": "aquarium", "language": "study_desk"}
 
 
 def _mark(what: str, **detail) -> None:
@@ -72,6 +72,11 @@ def observe(kind: str, data: dict) -> None:
         _mark("news", doing="reading the news")
     elif kind == "news_digested":
         _end("news")
+    elif kind == "language":
+        if data.get("stage") == "start":
+            _mark("language", doing=f"working on his language{(', ' + data['name']) if data.get('name') else ''}")
+        else:
+            _end("language")
     elif kind == "journal":
         _mark("journal", doing="writing his journal")
     elif kind in ("tool_start",) and str(data.get("name") or "").startswith(("self_", "propose")):
@@ -177,7 +182,7 @@ def current() -> dict:
         cat_inside = bool(g["cat"].get("here") and g["cat"].get("where") == "inside")
     except Exception:
         pass
-    for what in ("journal", "town", "talk", "work", "study", "news"):
+    for what in ("journal", "town", "talk", "work", "language", "study", "news"):
         x = _fresh(what)
         if x:
             return {"what": what, "where": PLACES[what], "doing": x.get("doing") or {"talk": "talking with you at his terminal"}.get(what, what),

@@ -2500,10 +2500,20 @@ def snapshot() -> dict:
             "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
             "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
             "sketches": (g.get("sketches") or [])[-3:],
+            "language": _language_summary(),
             "money": round(g.get("money", 0), 2), "outfit": g.get("outfit") or {}, "ledger": list(reversed(g.get("ledger") or []))[:8],
             "owned": g.get("owned") or [],
             "aquarium": {"fish": [{k: f.get(k) for k in ("species", "cm", "name", "health", "t")} for f in g["aquarium"]["fish"]],
                          "clean": round(g["aquarium"].get("clean", 1), 3), "fed": round(g["aquarium"].get("fed", 1), 3)}}
+
+
+def _language_summary() -> dict | None:
+    try:
+        import language as _language
+        s = _language.summary()
+        return s if s.get("name") else None
+    except Exception:
+        return None
 
 
 def _field_view(f: dict) -> dict:

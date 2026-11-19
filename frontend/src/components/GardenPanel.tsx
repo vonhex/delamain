@@ -43,6 +43,7 @@ type Garden = {
   pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
   firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
   money?: number; outfit?: Record<string, string>; owned?: string[];
+  language?: { name: string; meaning: string; count: number; recent: { word: string; meaning: string }[]; phrase?: { text: string; means: string } | null } | null;
   ledger?: { t: number; in?: number; out?: number; what: string }[];
   aquarium?: { fish: { species: string; cm: number; name?: string; health?: number; t: number }[]; clean: number; fed: number };
 };
@@ -131,7 +132,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case 'bed': return { x: BED_STAND.x + 7, y: 157, doing: 'sleep', face: 1, lying: true };
         case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
           : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
-        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: L.what === 'journal' || L.what === 'letter' ? 'write' : 'study', face: -1 };
+        case 'study_desk': return { x: STUDY_DESK.x, y: 157, sit: STUDY_DESK, doing: ['journal', 'letter', 'language'].includes(L.what) ? 'write' : 'study', face: -1 };
         case 'office': return { x: OFFICE_SEAT.x, y: LOFT_Y, sit: OFFICE_SEAT, doing: 'type', face: 1 };
         case 'armchair': return { x: ARMCHAIR.x, y: 157, sit: ARMCHAIR, doing: L.what === 'news' ? 'news' : L.what === 'guitar' ? 'guitar' : 'read', face: -1 };
         case 'window': return { x: 50, y: 157, doing: 'tea', face: -1 };
@@ -638,6 +639,14 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
         <h3 className="font-mono text-[10px] tracking-widest text-emerald-300">HIS STUDY <span className="text-gray-500 normal-case tracking-normal">· {g.room.desk ? 'at his desk, writing' : g.room.therapy ? 'in a session with the other Delamain' : 'the room on the left of the house'}</span></h3>
         <p className="text-[11px] text-gray-400">{g.room.books.length} books on the shelf, one for each thing he studied{g.room.books.length ? `, the newest: ${g.room.books.slice(-3).map(b => b.title).reverse().join('; ')}` : ''}.</p>
         {g.room.pins.length > 0 && <p className="text-[11px] text-gray-400">Pinned up: {g.room.pins.slice(-4).map(p => p.title).reverse().join('; ')}.</p>}
+        {g.language && (
+          <p className="text-[11px] text-gray-400">
+            His own language, <b className="text-gray-200">{g.language.name}</b>{g.language.meaning ? ` ("${g.language.meaning}")` : ''}: {g.language.count} word{g.language.count === 1 ? '' : 's'} so far
+            {g.language.recent.length > 0 && <>; newest: {g.language.recent.slice().reverse().map(w => <span key={w.word}><i className="text-cyan-200">{w.word}</i> ({w.meaning}) </span>)}</>}
+            {g.language.phrase && <> · <i className="text-cyan-200">{g.language.phrase.text}</i>: {g.language.phrase.means}</>}
+            <span className="text-gray-500"> · the dictionary is in <span className="font-mono">Delamain/Self/Language/</span></span>
+          </p>
+        )}
         {g.postcards && g.postcards.length > 0 && <p className="text-[11px] text-gray-500">Postcards from the garden are kept each evening in <span className="font-mono">Delamain/Garden/Postcards/</span>.</p>}
       </section>
     )}
