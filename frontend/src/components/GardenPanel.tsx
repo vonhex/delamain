@@ -4,7 +4,7 @@
 // appears only while he is actually there, walking to whatever he is tending.
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, TREE_STAND, STUDY_DESK, STUDY_STAND, BENCH_SEAT, LADDER_X, LOFT_Y, OFFICE_SEAT, ARMCHAIR, FIELD_GATE, SCARECROW, WOODPILE, SNOWMAN_AT, FIRE_AT, TELESCOPE, type PWorld, type PField, type Design, type Upkeep } from './gardenPixels';
+import { render, W, H, SPOTS, BENCH_STAND, BED_STAND, POND_STAND, TALK_STAND, GUEST_AT, GUEST_POND, TREE_STAND, STUDY_DESK, STUDY_STAND, BENCH_SEAT, LADDER_X, LOFT_Y, OFFICE_SEAT, ARMCHAIR, FIELD_GATE, SCARECROW, WOODPILE, SNOWMAN_AT, FIRE_AT, TELESCOPE, TANK_STAND, type PWorld, type PField, type Design, type Upkeep } from './gardenPixels';
 import { X, Sprout, Maximize2, Minimize2, Send, Volume2, VolumeX, History } from 'lucide-react';
 import { useGardenSound } from './gardenSound';
 
@@ -42,6 +42,7 @@ type Garden = {
     harvests: { date: string; crop: string; amount: number; unit: string }[]; crops: Record<string, string>; last_crop?: string | null };
   pantry?: Record<string, number>; wood?: number; stove_lit?: boolean; snowman?: { size: number; name?: string } | null;
   firepit?: boolean; feeder_fill?: number; sketches?: { t: number; what: string }[];
+  aquarium?: { fish: { species: string; cm: number; name?: string; health?: number; t: number }[]; clean: number; fed: number };
 };
 
 export { Sprout as GardenIcon };
@@ -109,6 +110,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case 'woodpile': return { x: WOODPILE.x - 1, y: 158, doing: 'chop', face: 1 };
         case 'stove': return { x: -14, y: 157, doing: 'cook', face: -1 };
         case 'easel': return { x: 56, y: 157, doing: 'sketch', face: -1 };
+        case 'aquarium': return { x: TANK_STAND.x, y: TANK_STAND.y, doing: 'tank', face: -1 };
         case 'bed': return { x: BED_STAND.x + 7, y: 157, doing: 'sleep', face: 1, lying: true };
         case 'rug': return L.what === 'stretch' ? { x: 54, y: 157, doing: 'stretch', face: 1 }
           : { x: 52, y: 157, sit: { x: 52, y: 154 }, doing: 'therapy', face: 1, twin: true };
@@ -146,6 +148,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         case -20: return { x: SCARECROW.x - 7, y: 143, face: 1 };             // at the scarecrow
         case -21: return { x: -14, y: 157, face: -1 };                        // at the stove
         case -22: return { x: 224, y: 160, face: 1 };                         // at the easel in the yard
+        case -23: return { x: TANK_STAND.x, y: TANK_STAND.y, face: -1 };      // at the aquarium in the attic
         default: { const bs = BENCH_STAND[gg.cat.where || 'inside'] || BENCH_STAND.inside; return { x: bs.x + 7, y: bs.y, face: 0 }; }
       }
     };
@@ -236,7 +239,7 @@ function PixelScene({ g, big = false, capture }: { g: Garden; big?: boolean; cap
         design: gg.design, upkeep: gg.upkeep, tree: gg.tree ? { species: gg.tree.species, size: gg.tree.size } : null,
         room: gg.room ? { books: gg.room.books, pins: gg.room.pins } : undefined, office: { screen: office },
         field: gg.field || null, wood: gg.wood, stoveLit: gg.stove_lit, snowman: gg.snowman || null, firepit: gg.firepit,
-        feederFill: gg.feeder_fill,
+        feederFill: gg.feeder_fill, aquarium: gg.aquarium || null,
       }, tt);
     };
     raf = requestAnimationFrame(frame);
@@ -586,7 +589,7 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
         {d.sign ? <> · the sign reads <b className="text-gray-200">{d.sign}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
       </p>
       <p className="text-[11px] text-gray-400">
-        {g.tree ? <>His {g.tree.species} tree{g.tree.name ? ` (${g.tree.name})` : ''}: planted {Math.round((Date.now() / 1000 - g.tree.planted) / 86400)} days ago, {g.tree.size < 0.2 ? 'a sapling' : g.tree.size < 0.7 ? 'growing' : 'well grown'}; {g.tree.note}.</> : 'No tree yet; he can plant one.'}
+        {g.tree ? <>His {g.tree.species} tree{g.tree.name ? ` (${g.tree.name})` : ''}: planted {Math.round((Date.now() / 1000 - g.tree.planted) / 86400)} days ago, {g.tree.size < 0.2 ? 'a sapling' : g.tree.size < 0.7 ? 'growing' : 'well grown'}; {g.tree.note}.</> : 'The pine by the pond came with the place; he has not planted a tree of his own yet (he can, in the field).'}
         {g.seeds && Object.keys(g.seeds).length > 0 && <> · Saved: {Object.entries(g.seeds).map(([k, v]) => `${k} ×${v.n} (${v.cutting ? 'cuttings' : `gen ${v.gen}`})`).join(', ')}</>}
       </p>
     </section>
@@ -639,6 +642,12 @@ function FieldSection({ g }: { g: Garden }) {
         {f.harvests.length > 0 && <> · Harvests: {f.harvests.slice(-3).reverse().map(h => `${h.amount} ${h.unit} of ${h.crop} (${h.date})`).join('; ')}</>}
         {g.snowman ? <> · A snowman{g.snowman.name ? `, ${g.snowman.name},` : ''} stands in the yard{g.snowman.size < 0.6 ? ', melting' : ''}</> : null}
       </p>
+      {g.aquarium && (
+        <p className="text-[11px] text-gray-400">
+          Aquarium (in the attic): {g.aquarium.fish.length ? g.aquarium.fish.map(x => `${x.name ? `${x.name}, ` : ''}a ${x.cm} cm ${x.species}${(x.health ?? 1) < 0.5 ? ' (poorly)' : ''}`).join(' · ') : 'empty; he can keep a prize fish he catches'}
+          {g.aquarium.fish.length > 0 && <span className="text-gray-500"> · {g.aquarium.fed < 0.3 ? 'hungry' : 'fed'}, water {g.aquarium.clean < 0.3 ? 'murky' : g.aquarium.clean < 0.6 ? 'cloudy' : 'clear'}</span>}
+        </p>
+      )}
       {!f.crop && <p className="text-[11px] text-gray-500">What he can sow, and when: {Object.entries(f.crops || {}).map(([k, v]) => `${k} ${v}`).join('; ')}.</p>}
     </section>
   );

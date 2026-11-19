@@ -68,7 +68,8 @@ More in [Privacy](docs/mind.md#privacy).
   rug in his study, where his books and the pictures he has looked at are. Behind the house is a field
   he cultivates: he breaks the ground, sows corn, winter wheat, sunflowers, pumpkins or beans in their
   season, waters, hoes, puts up a scarecrow against the crows and brings in the harvest (or loses it
-  to frost, drought, wind or weeds), then cooks with it and saves seed for next year. The **Garden**
+  to frost, drought, wind or weeds), then cooks with it and saves seed for next year, and keeps his prize fish in an aquarium in the
+  attic. The **Garden**
   tab shows it live, with a history slider and sound, and he is always somewhere in it, doing what he
   is really doing: studying at his desk, working in the attic office, reading the news in his
   armchair, in the field or the garden, flying a kite on a windy day, splitting firewood, out with his

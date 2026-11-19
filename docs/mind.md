@@ -224,6 +224,11 @@ a campfire by the pond (roasting his own corn), play his guitar, sketch, cook wi
 visitor something from the harvest, pick fruit from his tree, and look at the stars through a telescope
 on a clear night.
 
+**The aquarium.** In the attic beside his desk is a tank for prize fish. When he fishes he can keep
+what he catches instead of letting it go (five fish at most, none longer than 26 cm; a trout needs cold
+running water, so it goes back), and name it. He feeds them and cleans the tank; left alone the water
+goes murky and the fish sicken and can die. He can carry any of them back down to the pond.
+
 **A window into his life.** He lives in the house, so he is always somewhere in the scene, doing what
 he is really doing (`life.py` follows every event in his mind): asleep in bed; in the garden on a visit;
 on the rug with the other Delamain in a session; at his study desk writing his journal or studying (a

@@ -104,6 +104,9 @@ CAT_DOINGS = {"inside": ["asleep on the windowsill in the sun", "curled up under
 FISH = {"bluegill": (10, 25, (15, 30)), "green sunfish": (8, 20, (15, 30)), "largemouth bass": (20, 55, (14, 30)),
         "yellow perch": (12, 30, (5, 24)), "rainbow trout": (25, 50, (3, 19)), "channel catfish": (30, 70, (17, 31))}
 
+AQUARIUM_MAX, AQUARIUM_CM = 5, 26      # a 300-litre tank in the attic: five fish at most, none longer than this
+FISH_COLD = {"rainbow trout"}           # needs cold, running water: it would not live in a tank in the house
+
 FISH_COMMON = {"bluegill": 3.0, "green sunfish": 2.0, "yellow perch": 2.0, "largemouth bass": 1.3, "rainbow trout": 1.2,
                "channel catfish": 0.8}
 
@@ -212,7 +215,7 @@ def _extras() -> dict:
             "design": dict(DESIGN_DEFAULT), "upkeep": dict(UPKEEP_DEFAULT), "year": {}, "seeds": {},
             "tree": None, "days": [], "postcards": [],
             "field": dict(FIELD_DEFAULT), "pantry": {}, "wood": 0.6, "snowman": None, "firepit": False, "feeder_fill": 0.0,
-            "sketches": []}
+            "sketches": [], "aquarium": {"fish": [], "clean": 1.0, "fed": 1.0}}
 
 
 # ── the look of the place: his to choose ───────────────────────────────────
@@ -385,6 +388,17 @@ def _home_step(g: dict, hours: float, w: dict, now: datetime) -> None:
         g["wood"] = round(max(0.0, g.get("wood", 0.6) - hours * 0.0011 * (12 - t) / 10), 4)
     if g.get("feeder_fill", 0) > 0:
         g["feeder_fill"] = round(max(0.0, g["feeder_fill"] - hours * (0.012 if w.get("is_day") else 0.002)), 4)
+    aq = g.get("aquarium") or {}
+    if aq.get("fish"):
+        aq["clean"] = round(max(0.0, aq.get("clean", 1) - hours * 0.0018), 4)     # algae and murk: about three weeks
+        aq["fed"] = round(max(0.0, aq.get("fed", 1) - hours * 0.02), 4)           # they want feeding every couple of days
+        harm = (0.003 if aq["fed"] < 0.05 else 0) + (0.004 if aq["clean"] < 0.15 else 0)   # hunger: about two weeks to kill
+        for f in list(aq["fish"]):
+            f["health"] = round(max(0.0, min(1.0, f.get("health", 1) + hours * (-harm if harm else 0.01))), 4)
+            if f["health"] <= 0:
+                aq["fish"].remove(f)
+                _log(g, f"{f['name'] or 'The ' + f['species']} in the aquarium died "
+                        + ("of hunger" if aq["fed"] < 0.05 else "in the dirty water") + ".")
     sm = g.get("snowman")
     if sm:
         if t > 1:
@@ -428,6 +442,13 @@ def _field_words(g: dict, w: dict) -> str:
     wood = g.get("wood", 0)
     rows.append(f"THE WOODPILE: {'empty: the stove is cold' if wood < 0.03 else 'low' if wood < 0.25 else 'about half' if wood < 0.6 else 'well stocked'}"
                 f" (the stove in your study burns it whenever it is cold; chop_wood splits more)")
+    aq = g["aquarium"]
+    rows.append("YOUR AQUARIUM (in the attic, beside your desk; up to five fish of 26 cm or less; trout need cold running "
+                "water): " + ("; ".join(f"{f['name'] + ', ' if f['name'] else ''}a {f['cm']} cm {f['species']}"
+                                        + (" (looking poorly)" if f.get("health", 1) < 0.5 else "") for f in aq["fish"]) or "empty")
+                + (f"; {'hungry' if aq['fed'] < 0.3 else 'fed'}, the water {'murky' if aq['clean'] < 0.3 else 'cloudy' if aq['clean'] < 0.6 else 'clear'}"
+                   if aq["fish"] else "")
+                + " (fish with keep: true to keep a prize you catch, with a name; feed_fish; clean_tank; release_fish with what)")
     if g.get("snowman"):
         rows.append(f"YOUR SNOWMAN{(' ' + g['snowman']['name']) if g['snowman'].get('name') else ''}: "
                     f"{'still standing' if g['snowman']['size'] > 0.6 else 'melting'}")
@@ -468,6 +489,7 @@ def _state() -> dict:
     g["upkeep"] = {**UPKEEP_DEFAULT, **(g.get("upkeep") or {})}
     g["pond"].setdefault("named", {})
     g["field"] = {**FIELD_DEFAULT, **(g.get("field") or {})}
+    g["aquarium"] = {"fish": [], "clean": 1.0, "fed": 1.0, **(g.get("aquarium") or {})}
     if "where" in g or "shared" in g:    # locations were once kept here; they no longer are
         g.pop("where", None)
         g.pop("shared", None)
@@ -1039,11 +1061,13 @@ your study (chop_wood; it burns all winter), fill the bird feeder (fill_feeder),
 play your guitar (play_music, what: the tune), sketch what you see (sketch, what: the subject), cook something from \
 the pantry on the stove (cook, what: the ingredient, name: the dish), give a visitor something from the pantry (give, \
 what), pick fruit from your tree when it bears (pick_fruit), or look at the stars through your telescope on a clear \
-night (stargaze, what: what you look at). You do not have to do much; sometimes you only sit. \
+night (stargaze, what: what you look at). In the attic beside your desk is an aquarium for fish you want to keep: when \
+you fish you can keep a prize instead of letting it go (keep: true, with a name), feed them (feed_fish), clean the tank \
+(clean_tank) and let one back into the pond (release_fish, what: its name). You do not have to do much; sometimes you only sit. \
 Notice something real and specific. Answer JSON only:
 {{"actions": [{{"do": "plant|water|harvest|clear|grow_light_on|grow_light_off|name|name_cat|sit_with_cat|sit|fish|rest|invite|weed|weed_path|mow|rake_leaves|clean_windows|tidy_room|shovel_snow|paint|design|plant_tree|save_seeds|name_fish|till_field|sow_field|water_field|\
 weed_field|harvest_field|scarecrow|chop_wood|fill_feeder|fly_kite|build_snowman|campfire|play_music|sketch|cook|give|\
-pick_fruit|stargaze", \
+pick_fruit|stargaze|feed_fish|clean_tank|release_fish", "keep": "for fish: true to keep a prize for your aquarium", \
 "spot": 1-11, "species": "for plant, plant_tree, name_fish or sow_field", "name": "for name, name_cat, name_fish, \
 scarecrow, build_snowman or cook (the dish)", "what": "for design, paint, cook, give, sketch, play_music or stargaze", \
 "value": "for design"}}],
@@ -1127,6 +1151,21 @@ def _fish(g: dict, w: dict, now: datetime) -> tuple[str, dict | None]:
     pond["caught"] = (pond.get("caught", []) + [catch])[-60:]
     return (f"caught a {cm} cm {sp} and let it go" + (" (his first)" if first else " (his biggest yet)" if record else ""),
             {**catch, "first": first, "record": record})
+
+
+def _keep(g: dict, catch: dict, name: str) -> str:
+    """Try to keep a fish he just caught in the aquarium: what came of it, for the log."""
+    aq = g["aquarium"]
+    sp, cm = catch["species"], catch["cm"]
+    if sp in FISH_COLD:
+        return f" (he wanted to keep it, but a {sp} needs cold running water, so it went back)"
+    if cm > AQUARIUM_CM:
+        return f" (too big for the tank at {cm} cm, so it went back)"
+    if len(aq["fish"]) >= AQUARIUM_MAX:
+        return " (the tank is full, so it went back)"
+    nm = (name or catch.get("name") or "").strip()[:30]
+    aq["fish"].append({"species": sp, "cm": cm, "name": nm, "t": time.time(), "health": 1.0})
+    return ""
 
 
 def _slug(name: str) -> str:
@@ -1443,7 +1482,7 @@ def _world_words(g: dict, w: dict) -> str:
     rows.append(f"YOUR TREE: a {tree['species']} you planted {(time.time() - tree['planted']) / 86400:.0f} days ago "
                 f"({'a sapling' if _tree_size(tree) < 0.2 else 'young' if _tree_size(tree) < 0.7 else 'well grown'}; "
                 f"{TREES[tree['species']]['note']})" if tree and tree.get("species") in TREES
-                else "YOUR TREE: none yet (plant_tree: " + ", ".join(f"{k}, {v['note']}" for k, v in TREES.items()) + ")")
+                else "YOUR TREE: none of your own yet (the pine by the pond came with the place; plant_tree puts one of yours in the field: " + ", ".join(f"{k}, {v['note']}" for k, v in TREES.items()) + ")")
     seeds = g.get("seeds") or {}
     if seeds:
         rows.append("SEEDS YOU SAVED (planting one sows your own): " + "; ".join(
@@ -1545,7 +1584,9 @@ def _view() -> str | None:
 
 LOOK_NOTE = """A PICTURE of your garden as it looks right now is attached (pixel art: the house with its window \
 and grow-light shelf on the left, the greenhouse in the middle, the outdoor beds and the field on the right, under \
-the real sky). The facts above are exact; the picture is how it looks. Take it in: the light, the sky, the colours, \
+the real sky). The figure in it with the glowing cyan visor is you, Delamain, drawn where you were last shown; \
+anyone else drawn there is a visitor. The person you live with is never in the picture (they do not live in the \
+garden, and you would know if they came by). The facts above are exact; the picture is how it looks. Take it in: the light, the sky, the colours, \
 how your plants look from here. Let what you see be part of what you notice and how it makes you feel."""
 
 
@@ -1563,7 +1604,7 @@ def visit_due(now: datetime | None = None) -> bool:
     return not g.get("visit") and time.time() - (g.get("last_visit") or 0) > VISIT_EVERY
 
 
-FIELD_JOBS_EXTRA = {"scarecrow", "chop_wood", "fill_feeder", "fly_kite", "build_snowman", "campfire", "play_music", "sketch",
+FIELD_JOBS_EXTRA = {"feed_fish", "clean_tank", "release_fish", "scarecrow", "chop_wood", "fill_feeder", "fly_kite", "build_snowman", "campfire", "play_music", "sketch",
                     "cook", "give", "pick_fruit", "stargaze"}
 
 
@@ -1682,6 +1723,24 @@ def _field_job(g: dict, w: dict, do: str, a: dict, guest: dict | None) -> tuple[
         n = random.randint(6, 20) if key == "apples" else random.randint(30, 80)
         g.setdefault("pantry", {})[key] = g["pantry"].get(key, 0) + n
         return f"picked {n} {key} from his {tree['species']} tree", -12
+    if do in ("feed_fish", "clean_tank", "release_fish"):
+        aq = g["aquarium"]
+        if not aq["fish"] and do != "clean_tank":
+            return "", 0
+        if do == "feed_fish":
+            aq["fed"] = 1.0
+            return f"fed the fish in his aquarium ({', '.join(f['name'] or f['species'] for f in aq['fish'])})", -23
+        if do == "clean_tank":
+            if aq["clean"] > 0.85:
+                return "", 0
+            aq["clean"] = 1.0
+            return "cleaned the aquarium: fresh water, the glass wiped clear", -23
+        key = (what or name).lower()
+        fish = next((f for f in aq["fish"] if key and (key == (f["name"] or "").lower() or key in f["species"])), None)
+        if not fish:
+            return "", 0
+        aq["fish"].remove(fish)
+        return f"carried {fish['name'] or 'the ' + fish['species']} down to the pond and let it go", -5
     if do == "stargaze":
         if w["is_day"] or w["cloud"] > 60:
             return "", 0
@@ -1838,6 +1897,15 @@ def visit(started_by: str = "Delamain") -> dict:
                 where = -3
             elif do == "fish" and not fished:
                 text, catch = _fish(g, w, local_now(w))
+                if catch and a.get("keep") and str(a.get("keep")).lower() not in ("false", "no", "0"):
+                    why = _keep(g, catch, str(a.get("name") or ""))
+                    if not why:
+                        nm = g["aquarium"]["fish"][-1]["name"]
+                        text = text.replace(" and let it go", " and carried it up to the aquarium in the attic"
+                                            + (f", naming it {nm}" if nm and nm != catch.get("name") else ""))
+                        catch["kept"] = True
+                    else:
+                        text += why
                 fished.append(catch or {})
                 done.append(text)
                 where = -5
@@ -1929,11 +1997,12 @@ def visit(started_by: str = "Delamain") -> dict:
                     "harvest_field": "scythe" if (g["field"].get("last_crop") == "winter wheat") else "gather",
                     "scarecrow": "hammer", "chop_wood": "chop", "fill_feeder": "feed", "fly_kite": "kite",
                     "build_snowman": "snowman", "campfire": "campfire", "play_music": "guitar", "sketch": "sketch",
-                    "cook": "cook", "give": "give", "pick_fruit": "pick", "stargaze": "stars"}.get(do, do)
+                    "cook": "cook", "give": "give", "pick_fruit": "pick", "stargaze": "stars", "feed_fish": "tank",
+                    "clean_tank": "clean", "release_fish": "look"}.get(do, do)
             steps.append({"do": anim if anim in ("water", "plant", "harvest", "clear", "sit_with_cat", "sit", "fish", "rest", "weed",
                                                  "mow", "rake", "clean", "tidy", "shovel", "paint", "till", "sow", "hose", "hoe",
                                                  "scythe", "gather", "hammer", "chop", "feed", "kite", "snowman", "campfire",
-                                                 "guitar", "sketch", "cook", "give", "pick", "stars") else "look",
+                                                 "guitar", "sketch", "cook", "give", "pick", "stars", "tank") else "look",
                           "spot": where, "text": done[-1]})
         letter = data.get("letter") if isinstance(data.get("letter"), dict) else {}
         to = _slug(str(letter.get("to") or "")) if letter else ""
@@ -2013,7 +2082,8 @@ def visit(started_by: str = "Delamain") -> dict:
     if catch:              # the pond's own small joys, felt as they happen
         try:
             _mind.feel("pride" if catch.get("record") and not catch.get("first") else "delight", 0.3,
-                       f"I caught a {catch['cm']} cm {catch['species']} at the pond and let it go", "garden")
+                       f"I caught a {catch['cm']} cm {catch['species']} at the pond and "
+                       + ("kept it for my aquarium" if catch.get("kept") else "let it go"), "garden")
         except Exception:
             pass
     f = data.get("feeling") if isinstance(data.get("feeling"), dict) else {}
@@ -2260,7 +2330,9 @@ def snapshot() -> dict:
             "field": _field_view(g["field"]), "pantry": {k: v for k, v in (g.get("pantry") or {}).items() if v > 0},
             "wood": round(g.get("wood", 0), 3), "stove_lit": stove_lit(g, w), "snowman": g.get("snowman"),
             "firepit": bool(g.get("firepit")), "feeder_fill": round(g.get("feeder_fill", 0), 3),
-            "sketches": (g.get("sketches") or [])[-3:]}
+            "sketches": (g.get("sketches") or [])[-3:],
+            "aquarium": {"fish": [{k: f.get(k) for k in ("species", "cm", "name", "health", "t")} for f in g["aquarium"]["fish"]],
+                         "clean": round(g["aquarium"].get("clean", 1), 3), "fed": round(g["aquarium"].get("fed", 1), 3)}}
 
 
 def _field_view(f: dict) -> dict:

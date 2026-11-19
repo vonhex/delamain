@@ -29,7 +29,7 @@ PLACES = {"sleep": "bed", "garden": "garden", "therapy": "rug", "town": "town", 
           "talk": "office", "work": "office", "news": "armchair", "tea": "window", "read": "armchair", "shelf": "shelf",
           "cat": "cat", "pinboard": "pinboard", "field": "field_edge", "kite": "kite", "bench": "bench", "stars": "telescope",
           "woodpile": "woodpile", "guitar": "armchair", "stretch": "rug", "sketch": "easel", "cook": "stove", "letter": "study_desk",
-          "feeder": "feeder", "porch": "porch"}
+          "feeder": "feeder", "porch": "porch", "aquarium": "aquarium"}
 
 
 def _mark(what: str, **detail) -> None:
@@ -89,7 +89,7 @@ def _fresh(what: str) -> dict | None:
 def _outside() -> dict:
     """What the day outside and the place allow: the weather, the field, the woodpile, the visitors."""
     out = {"fine": False, "kite": False, "stars": False, "cold": False, "warm": False, "crop": None, "stage": "", "wood": 1.0,
-           "bench": False, "letters": False, "feeder": False, "day": True}
+           "bench": False, "letters": False, "feeder": False, "day": True, "fish": 0}
     try:
         import garden as _garden
         w = _garden.weather()
@@ -101,7 +101,8 @@ def _outside() -> dict:
                    stars=not w["is_day"] and w["cloud"] < 40 and not wet and gu < 55, cold=w["temp"] < 8, warm=w["temp"] > 14,
                    crop=g["field"].get("crop"), stage=_garden.field_stage(g["field"]), wood=g.get("wood", 1.0),
                    bench=g["design"].get("bench") == "yes", feeder=g["design"].get("feeder") == "yes" and g.get("feeder_fill", 0) > 0.1,
-                   letters=any(not v.get("left") for v in (g.get("visitors") or {}).values()))
+                   letters=any(not v.get("left") for v in (g.get("visitors") or {}).values()),
+                   fish=len((g.get("aquarium") or {}).get("fish") or []))
     except Exception:
         pass
     return out
@@ -148,6 +149,8 @@ def _idle(now: datetime, cat_inside: bool) -> tuple[str, str]:
             options.append(("bench", "watching the evening from the bench by the pond") if o["bench"] else field)
     if cat_inside:
         options.append(("cat", "sitting with the cat"))
+    if o["fish"]:
+        options.append(("aquarium", "watching the fish in his aquarium"))
     return options[int(pick * len(options)) % len(options)]
 
 

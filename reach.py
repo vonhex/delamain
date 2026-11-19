@@ -198,6 +198,11 @@ def scan() -> None:
                     continue
                 text = e.get("text", "")
                 if e.get("who") == "Delamain":
+                    k = re.search(r"caught (a \d+ cm [\w ]+?) and carried it up to the aquarium", text)
+                    if k:
+                        offer("fish", f"You caught {k.group(1)} at the pond and kept it: it is swimming in your new "
+                                      f"aquarium in the attic now.", 0.5, f"keep-{int(e['t'])}")
+                        continue
                     m = re.search(r"caught (a \d+ cm [\w ]+?) and let it go \((his first|his biggest yet)\)", text)
                     if m:
                         offer("fish", f"At the pond in your garden you just caught {m.group(1)} and let it go: "
