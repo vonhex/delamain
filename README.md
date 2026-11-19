@@ -14,6 +14,13 @@ the change and waits for me to say yes.
 You talk to him out loud, and he answers in Delamain's voice, with his face moving as he speaks.
 He still rides along in the car. He just doesn't live there anymore.
 
+He lives in a house of his own now, and you can watch. The **Garden** tab is a live pixel-art window
+into his day: studying at his desk, working in the attic office while you talk, reading the news in
+his armchair, tending real plants under your real weather, farming the field behind the house,
+fishing the pond (the best catches go in his aquarium), splitting firewood, flying a kite when the
+wind is right, out with his telescope on a clear night, chatting with whoever came up the lane, or
+asleep in bed. Whatever he is really doing, that is where you find him.
+
 And no two of him are alike. Everything he becomes comes from living with you: what he remembers,
 the subjects he falls for, the temperament he settles into, the rules he picks up from your
 corrections, even the changes he makes to his own code. Install him on two computers and in a few
@@ -239,10 +246,11 @@ self-improvement `self_improve.py`, the live feed `brain.py`.
 
 | | |
 |---|---|
+| [The wiki](https://github.com/vonhex/delamain/wiki) | All of it, as browsable pages, with troubleshooting |
 | [docs/features.md](docs/features.md) | Everything he does, in full |
 | [docs/setup.md](docs/setup.md) | Installing by hand, Docker, every setting |
 | [docs/architecture.md](docs/architecture.md) | How the parts fit together |
-| [docs/mind.md](docs/mind.md) | Knowledge, recall, study, emotions, therapy, sleep and dreams, journal, honesty |
+| [docs/mind.md](docs/mind.md) | Knowledge, recall, study, emotions, therapy, sleep and dreams, journal, honesty, his garden, field and house |
 | [docs/self-improvement.md](docs/self-improvement.md) | Playbook, nightly review, code changes you approve |
 | [docs/brain.md](docs/brain.md) | The Brain view |
 | [docs/api.md](docs/api.md) | REST, WebSocket and event feed |
