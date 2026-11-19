@@ -1843,6 +1843,15 @@ def context() -> str:
              + ", ".join(f"{k} {c} cm" for k, c in g["pond"]["best"].items()) if g["pond"].get("caught") else "") + ".]")
 
 
+def _life_now() -> dict:
+    try:
+        import life as _life
+        return _life.current()
+    except Exception as e:
+        print(f"[Garden] where he is: {e}")
+        return {"what": "read", "where": "armchair", "doing": "at home"}
+
+
 def snapshot() -> dict:
     g = tick() if enabled() else _state()
     w = weather()
@@ -1884,7 +1893,7 @@ def snapshot() -> dict:
             "design": g["design"], "upkeep": g["upkeep"], "seeds": g.get("seeds") or {},
             "tree": ({**g["tree"], "size": _tree_size(g["tree"]), "note": TREES[g["tree"]["species"]]["note"]}
                      if g.get("tree") and g["tree"].get("species") in TREES else None),
-            "room": _room(g), "diary_days": len(g.get("days") or []),
+            "room": _room(g), "diary_days": len(g.get("days") or []), "life": _life_now(),
             "chores": {k: round(v, 3) for k, v in g["upkeep"].items() if not isinstance(v, dict)},
             "named_fish": g["pond"].get("named") or {}, "postcards": (g.get("postcards") or [])[-3:]}
 

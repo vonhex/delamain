@@ -200,6 +200,16 @@ the field (apple, maple, birch or cherry) that grows for years and changes with 
 from what fruited or went to seed (and cuttings from houseplants) and sow his own, generation after
 generation, and name the record fish he lets go (and catch them again).
 
+**A window into his life.** He lives in the house, so he is always somewhere in the scene, doing what
+he is really doing (`life.py` follows every event in his mind): asleep in bed; in the garden on a visit;
+on the rug with the other Delamain in a session; at his study desk writing his journal or studying (a
+book open); gone down the lane into town when he goes to see something with his own eyes; up the ladder
+in the attic office at his terminal while he talks with you, or at work there (a long task, a report,
+meeting notes, the morning brief, a change to his own code), the screens showing what kind; in the
+armchair with the news. With nothing on he potters the way someone at home does, by the time of day: tea
+at the window, a book in the armchair by the lamp, along his shelf, at his pinboard, with the cat. When
+what he is doing changes, he walks there.
+
 **His study.** A room built on to the left of the house: a bookshelf with a book for each subject he
 has studied, a pinboard with the pictures he went to look at (each drawn as its own two main colours),
 and a desk where you see him writing his journal at night. When he is in a session with the other

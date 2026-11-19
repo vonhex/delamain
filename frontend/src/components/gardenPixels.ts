@@ -28,6 +28,7 @@ export type PWorld = {
   upkeep?: Partial<Upkeep>;
   tree?: { species: string; size: number } | null;
   room?: { books: { title: string }[]; pins: { colours: number[][] }[] };
+  office?: { screen: string | null };
 };
 export type Design = { house_wall: string; roof: string; trim: string; path: string; fence: string; room_wall: string;
   rug: string; blanket: string; lamp: string; lights: string; feeder: string; bench: string; sign: string; art: string };
@@ -470,7 +471,7 @@ const DEL_LEGS: Legs = {
 
 function figure(b: Buf, d: Fig, t: number, S: Spec) {
   const total = S.upper.length + S.legs.stand.length;
-  const pose = d.walking ? 'walk' : ['sit', 'sit_with_cat', 'write', 'therapy'].includes(d.doing) ? 'sit'
+  const pose = d.walking ? 'walk' : ['sit', 'sit_with_cat', 'write', 'therapy', 'study', 'read', 'news', 'type'].includes(d.doing) ? 'sit'
     : ['plant', 'harvest', 'clear', 'pet_cat', 'weed'].includes(d.doing) ? 'crouch' : 'stand';
   const phase = Math.floor((d.stride ?? t * 8) / 3.2) % 4;        // the stride follows the ground covered
   const rows: string[][] = Array.from({ length: total }, () => [...'.'.repeat(S.w)]);
@@ -488,6 +489,9 @@ function figure(b: Buf, d: Fig, t: number, S: Spec) {
   else if (d.doing === 'talk' && d.speaking && Math.floor(t * 0.8 + d.x) % 3 === 0) { clearHand(); H(hc + 1, hr - 3); H(hc, hr - 2); }   // a gesture
   else if (pose === 'crouch') { clearHand(); H(hc + 1, hr + 1 + (Math.floor(t * 3) % 2)); }                         // working the soil, stroking the cat
   else if (d.doing === 'sit_with_cat') { clearHand(); H(hc + 1 + (Math.floor(t * 1.2) % 2), hr + 1); }
+  else if (d.doing === 'shelf') { clearHand(); H(hc + 1, hr - 7 + (Math.floor(t * 0.8) % 3)); H(hc, hr - 5); }          // reaching along the shelf
+  else if (['read', 'news', 'tea', 'study'].includes(d.doing)) { clearHand(); H(hc + 1, hr - 2); }                        // holding it up
+  else if (d.doing === 'type') { clearHand(); H(hc + 1 + (Math.floor(t * 8) % 2), hr - 1); }
   if ((t * 0.45 + d.x * 0.01) % 7 < 0.06) rows.forEach(r => r.forEach((c, i) => { if (c === 'v') r[i] = 'h'; if (c === 'e') r[i] = 'f'; }));   // a blink
   const x0 = Math.round(d.x) - (S.w >> 1), y0 = Math.round(d.y) - total;
   if (S.glow) b.glow(Math.round(d.x), y0 + 10 + upperAt, 16, S.glow, 0.15 * (0.75 + 0.25 * Math.sin(t * 3)));
@@ -503,6 +507,25 @@ function figure(b: Buf, d: Fig, t: number, S: Spec) {
     if (tip) for (let k = 0; k < 4; k++) b.set(cx + (dir < 0 ? -2 : 5) + (k % 2) * dir, hand.y + ((t * 18 + k * 3) % 9), [125, 211, 252]);
   }
   if (d.doing === 'harvest') { b.rect(hand.x - (dir < 0 ? 4 : -1), hand.y + 2, 4, 3, [161, 98, 7]); b.set(hand.x + dir, hand.y + 1, [74, 222, 128]); b.set(hand.x + dir * 2, hand.y + 1, [74, 222, 128]); }
+  if (d.doing === 'read') {                                // a book, its pages turning now and then
+    const bx = hand.x + dir, by = hand.y - 4;
+    b.rect(Math.min(bx, bx + dir * 2), by, 3, 4, [127, 29, 29]); b.set(bx + dir, by + 1, [241, 237, 226]);
+    if ((t % 9) < 0.4) b.set(bx + dir * 2, by - 1, [241, 237, 226]);
+  }
+  if (d.doing === 'news') {                                // a broadsheet held open
+    const nx = hand.x + dir * 2, ny = hand.y - 6;
+    for (let j = 0; j < 6; j++) for (let i = -2; i <= 2; i++) b.set(nx + i, ny + j, (j % 2 && i !== 0) ? [150, 146, 136] : [232, 228, 216]);
+    if (Math.floor(t * 0.3) % 5 === 0) b.set(nx + 3 * dir, ny + 1, [232, 228, 216]);
+  }
+  if (d.doing === 'study') {                               // an open book on the desk, and notes beside it
+    const bx = hand.x + dir * 2, by = hand.y - 1;
+    b.rect(Math.min(bx, bx + dir * 3), by, 4, 2, [241, 237, 226]); b.set(bx + dir, by, [100, 100, 110]); b.set(bx + dir * 3, by + 1, [100, 100, 110]);
+    if (Math.floor(t * 0.5) % 6 === 0) b.set(bx + dir * 2, by - 1, [241, 237, 226]);
+  }
+  if (d.doing === 'tea') {                                 // a mug, steaming
+    b.rect(hand.x + dir, hand.y - 3, 2, 2, [241, 237, 226]); b.set(hand.x + dir * 3, hand.y - 2, [241, 237, 226]);
+    for (let k = 0; k < 3; k++) { const ph = (t * 0.6 + k / 3) % 1; b.set(hand.x + dir + Math.round(Math.sin(t * 2 + k) * 1), hand.y - 4 - ph * 5, [230, 230, 235], 0.5 * (1 - ph)); }
+  }
   if (d.doing === 'weed' && Math.floor(t * 2.5) % 2) { b.set(hand.x + dir, hand.y - 1, [86, 140, 46]); b.set(hand.x + dir, hand.y - 2, [110, 160, 60]); }
   if (d.doing === 'write') {                               // pen moving across the page
     const px = hand.x + dir * (1 + (Math.floor(t * 4) % 3)), py = hand.y - 2;
@@ -833,6 +856,49 @@ function text3(b: Buf, x: number, y: number, str: string, c: RGB) {
   });
 }
 
+// the house is tall enough for an attic: the roof rises to a 5 m ridge
+const roofTop = (x: number) => 80 + Math.abs(x - 39) * 0.75;
+export const LADDER_X = 33, LOFT_Y = 112, OFFICE_SEAT = { x: 38, y: 107 };
+export const ARMCHAIR = { x: 67, y: 146 };
+
+// the attic office: his terminal and his work, up the ladder
+function attic(b: Buf, w: PWorld, night: boolean, t: number) {
+  const wood: RGB = nightc([139, 90, 43], night), dk: RGB = nightc([96, 60, 28], night);
+  b.rect(42, 105, 13, 2, wood); b.rect(43, 107, 1, 5, dk); b.rect(53, 107, 1, 5, dk);        // the desk
+  b.rect(35, 106, 5, 1, wood); b.rect(39, 99, 1, 13, dk); b.rect(35, 107, 1, 5, dk);          // the chair (its back to the right)
+  const screen = w.office?.screen || null;
+  for (const [x0, k] of [[44, 0], [49, 1]] as const) {                                         // two screens
+    b.rect(x0, 98, 5, 5, [30, 32, 38]); b.set(x0 + 2, 103, [30, 32, 38]); b.rect(x0 + 1, 104, 3, 1, [30, 32, 38]);
+    const on = !!screen;
+    for (let y = 99; y < 102; y++) for (let x = x0 + 1; x < x0 + 4; x++) {
+      let c: RGB = on ? [20, 40, 50] : [14, 16, 20];
+      if (on && screen === 'charts') { const col = (x - x0 + k * 3 + Math.floor(t)) % 4; c = (y - 99) === col % 3 ? (col % 2 ? [74, 222, 128] : [248, 113, 113]) : [16, 22, 30]; }
+      if (on && screen === 'text') c = (y + Math.floor(t * 2)) % 2 === 0 && hash(x + y + Math.floor(t * 2)) > 0.3 ? [226, 232, 240] : [24, 34, 48];
+      if (on && screen === 'code') c = hash(x * 3 + y + Math.floor(t * 3)) > 0.45 ? [74, 222, 128] : [10, 24, 16];
+      if (on && screen === 'voice') c = Math.abs(y - 100) <= Math.round(Math.abs(Math.sin(t * 6 + x)) * 1.4) ? [34, 211, 238] : [8, 24, 32];
+      b.set(x, y, c);
+    }
+    if (on) b.glow(x0 + 2, 100, 7, screen === 'voice' ? [34, 211, 238] : screen === 'code' ? [74, 222, 128] : [180, 200, 255], night ? 0.25 : 0.1);
+  }
+  b.rect(52, 104, 2, 1, [241, 237, 226]);                                                       // a mug
+}
+
+function ladder(b: Buf, night: boolean) {
+  const c: RGB = nightc([150, 110, 70], night, 0.5);
+  for (let y = 112; y < 150; y++) { b.set(LADDER_X - 2, y, c); b.set(LADDER_X + 1, y, c); if (y % 4 === 0) { b.set(LADDER_X - 1, y, c); b.set(LADDER_X, y, c); } }
+}
+
+function armchair(b: Buf, w: PWorld, night: boolean, reading: boolean) {
+  const c: RGB = nightc([128, 66, 44], night, 0.4), dk: RGB = nightc([92, 44, 30], night, 0.4);
+  b.rect(63, 145, 9, 2, c); b.rect(70, 136, 3, 11, dk); b.rect(63, 142, 2, 3, dk); b.rect(63, 147, 9, 1, dk);
+  b.set(64, 148, dk); b.set(64, 149, dk); b.set(71, 148, dk); b.set(71, 149, dk);
+  b.rect(74, 143, 4, 1, nightc([110, 74, 46], night)); b.rect(75, 144, 1, 6, nightc([84, 56, 34], night));      // a side table
+  const lampOn = reading && (!w.isDay || w.hour > 16.5 || w.cloud > 80);
+  b.set(76, 142, [68, 64, 60]); b.set(76, 141, [68, 64, 60]); b.rect(75, 139, 3, 2, lampOn ? [253, 230, 138] : [150, 130, 100]);
+  if (lampOn) b.glow(76, 141, 14, [253, 224, 138], night ? 0.3 : 0.15);
+  b.rect(74, 142, 1, 1, [241, 237, 226]);
+}
+
 // his study: the room built on to the left of the house, with his desk, his pinboard and his books
 function study(b: Buf, w: PWorld, d: Design, u: Upkeep, night: boolean, _t: number) {
   const sx0 = -44, sx1 = -1, ceil = 121, floor = 150;
@@ -1136,9 +1202,14 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   // the window, grimy if nobody cleans it
   if (u.windows > 0.1) for (let y = 118; y < 135; y++) for (let x = 34; x < 67; x++) if (dith(x, y, 0.3 + u.windows * 0.5)) b.set(x, y, [130, 112, 80], u.windows * 0.4);
   const [rr, rd, re] = ROOFS[d.roof] || ROOFS.terracotta;
-  for (let x = -6; x <= hx1 + 6; x++) {                                // the roof
-    const top = 94 + Math.abs(x - 39) * 0.42;
-    for (let y = Math.floor(top); y < ceil; y++) b.set(x, y, (Math.floor(y) + (((x % 4) + 4) % 4 < 2 ? 0 : 1)) % 3 === 0 ? rd : rr);
+  for (let x = -6; x <= hx1 + 6; x++) {                                // the roof, cut away over the attic
+    const top = roofTop(x);
+    const inside = x > 0 && x < hx1;
+    for (let y = Math.floor(top); y < ceil; y++) {
+      if (inside && y >= top + 3) { b.set(x, y, nightc((y % 5 === 0) ? [58, 42, 32] : [78, 58, 44], night, 0.5)); continue; }   // the attic's boards
+      b.set(x, y, (Math.floor(y) + (((x % 4) + 4) % 4 < 2 ? 0 : 1)) % 3 === 0 ? rd : rr);
+    }
+    if (x >= 21 && x <= 26) for (let y = Math.floor(top); y < top + 3; y++) b.set(x, y, night ? [40, 50, 80] : [170, 210, 240]);   // a skylight
     b.set(x, Math.floor(top), re);
     if (snowCover) { b.set(x, Math.floor(top) - 1, [248, 250, 252]); b.set(x, Math.floor(top), [241, 245, 249]); }
     if (u.leaves > 0.4 && h2(x, 3) < u.leaves * 0.3) b.set(x, Math.floor(top) - 1, [180, 96, 40]);
@@ -1147,10 +1218,11 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   study(b, w, d, u, night, t);
   exteriorWall(b, -48, -45, 119, 160, d, u, night);
   exteriorWall(b, hx1, hx1 + 3, ceil, 160, d, u, night);
-  b.rect(58, 92, 6, 10, [87, 83, 78]); b.rect(57, 91, 8, 2, [68, 64, 60]);       // chimney
+  attic(b, w, night, t);
+  b.rect(58, 84, 6, 14, [87, 83, 78]); b.rect(57, 83, 8, 2, [68, 64, 60]);       // chimney
   for (let k = 0; k < 8; k++) {                                                   // and its smoke, drifting
     const age = ((t * 0.18 + k / 8) % 1), r = 1 + age * 3.2;
-    const px = 61 + age * (4 + WIND * 0.9) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 89 - age * 30 * (1 - windyNow() * 0.7);
+    const px = 61 + age * (4 + WIND * 0.9) + Math.sin(t * 0.9 + k * 2) * 1.5, py = 81 - age * 30 * (1 - windyNow() * 0.7);
     for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) b.set(px + xx, py + yy, night ? [70, 75, 90] : [226, 232, 240], (1 - age) * 0.32);
   }
   b.rect(0, ceil, hx1, 2, [74, 50, 34]);                                          // ceiling beam
@@ -1174,6 +1246,8 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   const [ra, rb, rc] = RUGS[d.rug] || RUGS.rust;
   for (let y = 151; y < 154; y++) for (let x = 44; x < 74; x++) b.set(x, y, nightc((x + y) % 3 === 0 ? rb : (y === 151 || y === 153) ? rc : ra, night, 0.35));
   bedroom(b, night, BLANKETS[d.blanket] || BLANKETS.teal);
+  ladder(b, night);
+  armchair(b, w, night, !!w.delamain && ['read', 'news'].includes(w.delamain.doing));
   // pots and plants
   for (let i = 0; i < 5; i++) pot(b, SPOTS[i].x, SPOTS[i].y, w.spots[i]?.water);
   w.spots.forEach((s, i) => { if (SPOTS[i]) plant(b, s, SPOTS[i].x, SPOTS[i].y - 1, SPOTS[i].pot ? 0.6 : 0.9, t, s.place === 'outdoors'); });
@@ -1226,7 +1300,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   }
   if (w.cat?.here) cat(b, w.cat, t);
   if (night) {
-    for (let y = 0; y < WH; y++) for (let x = X0; x < X1; x++) if (y >= 108 || (x < 84 && y >= 90 + Math.abs(x - 39) * 0.42)) b.set(x, y, [6, 8, 24], 0.42);
+    for (let y = 0; y < WH; y++) for (let x = X0; x < X1; x++) if (y >= 108 || (x < 84 && y >= roofTop(x))) b.set(x, y, [6, 8, 24], 0.42);
     b.glow(gcx, peakY + 9, 20, [253, 224, 138], 0.3);
     b.glow(40, 132, 34, [251, 191, 36], 0.13);
     if (d.lamp === 'on') { b.glow(-37, 137, 18, [253, 224, 138], 0.28); cone(b, -37, 136, 150, 10, [253, 224, 138], 0.14); }

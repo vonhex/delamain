@@ -47,6 +47,12 @@ try:   # his garden: a small world of his own
 except Exception as _e:
     _garden = None
     print(f"[Garden] not loaded: {_e}")
+try:   # a window into his life: where he is in his house and garden, from what he is doing
+    import life as _life
+    _brain.listeners.append(_life.observe)
+except Exception as _e:
+    _life = None
+    print(f"[Life] not loaded: {_e}")
 try:   # reaching out first: now and then he tells you something unprompted
     import reach as _reach
 except Exception as _e:
