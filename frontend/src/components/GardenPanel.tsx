@@ -368,7 +368,7 @@ export function GardenPanel({ token, onClose }: { token: string; onClose: () => 
   return (
     <div className="flex flex-col h-full bg-cyber-dark/95 text-white text-sm">
       <div className="flex items-center justify-between px-4 py-2 border-b border-emerald-400/30 bg-emerald-400/5 shrink-0">
-        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> DELAMAINS_GARDEN</span>
+        <span className="font-mono font-bold text-emerald-300 tracking-widest text-xs flex items-center gap-2"><Sprout size={14} /> {g?.design?.home_name ? g.design.home_name.toUpperCase().replace(/ /g, '_') : 'DELAMAINS_GARDEN'}</span>
         <div className="flex items-center gap-3">
           <button onClick={openHistory} className={dayIdx !== null ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title="Look back through the garden's diary" aria-label="History"><History size={16} /></button>
           <button onClick={() => setSound(v => !v)} className={sound ? 'text-emerald-300' : 'text-gray-400 hover:text-emerald-300'} title={sound ? 'Sound off' : 'Hear the garden'} aria-label="Sound">{sound ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
@@ -602,9 +602,11 @@ function WorldSections({ g, units }: { g: Garden; units: string }) {
       <p className="text-[11px] text-gray-400">
         House {d.house_wall} with a {d.roof} roof and {d.trim} trim · {d.path} path · fence {d.fence}
         {' · '}study walls {d.room_wall}, {d.rug} rug, {d.blanket} blanket
-        {d.sign ? <> · the sign reads <b className="text-gray-200">{d.sign}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
+        {d.home_name ? <> · he calls his home <b className="text-gray-200">{d.home_name}</b></> : ''}
+        {d.sign ? <> · the garden's sign reads <b className="text-gray-200">{d.sign}</b></> : ''}
+        {d.farm_name ? <> · the farm: <b className="text-gray-200">{d.farm_name}</b></> : ''}{d.art ? <> · over his desk: {d.art}</> : ''}
         {(() => {
-          const extra = Object.entries(d as Record<string, string>).filter(([k, v]) => v && v !== 'none' && !['house_wall', 'roof', 'trim', 'path', 'fence', 'room_wall', 'rug', 'blanket', 'sign', 'art', 'lamp'].includes(k)
+          const extra = Object.entries(d as Record<string, string>).filter(([k, v]) => v && v !== 'none' && !['house_wall', 'roof', 'trim', 'path', 'fence', 'room_wall', 'rug', 'blanket', 'sign', 'art', 'lamp', 'home_name', 'farm_name'].includes(k)
             && !(v === 'match the trim'));
           return extra.length ? <> · {extra.map(([k, v]) => (v === 'yes' ? k.replace(/_/g, ' ') : `${k.replace(/_/g, ' ')}: ${v}`)).join(' · ')}</> : null;
         })()}

@@ -4,6 +4,16 @@ All notable changes to Delamain are documented here.
 
 ---
 
+## [3.7.1] — 2026-11-19
+
+### Fixed
+- **Another app could take your name.** A client connecting with a name of its own (a tool, a test, a robot) became who he thought you were. He now always knows you by the name from your own app's Settings; only that app can rename you.
+
+### Added
+- **He can name his home and his farm**, as well as the garden: the home's name heads the Garden tab, the farm's is painted on a board at the far edge of the field.
+
+---
+
 ## [3.7.0] — 2026-11-18 — A place of his own
 
 ### Added

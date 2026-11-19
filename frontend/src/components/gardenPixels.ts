@@ -44,6 +44,7 @@ export type Design = {
   path: string; fence: string; greenhouse_frame: string; lights: string; path_lights: string;
   feeder: string; bench: string; arch: string; birdbath: string; gnome: string; mailbox: string;
   wind_chime: string; pond_lilies: string; door_pots: string; sign: string; art: string;
+  home_name?: string; farm_name?: string;
 };
 export type Upkeep = { weeds: Record<string, number>; path_weeds: number; lawn: number; leaves: number; windows: number;
   dust: number; house_paint: number; fence_paint: number; snow_path: number; snow_ground: number };
@@ -2116,7 +2117,7 @@ const FONT: Record<string, string> = {
   F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010',
   K: '101110100110101', L: '100100100100111', M: '101111111101101', N: '101111111111101', O: '010101101101010',
   P: '110101110100100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
-  U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010',
+  U: '101101101101111', V: '101101101101010', W: '101101101111101', X: '101101010101101', Y: '101101010010010',
   Z: '111001010100111', '0': '111101101101111', '1': '010110010010111', '2': '110001010100111', '3': '110001010001110',
   '4': '101101111001001', '5': '111100110001110', '6': '011100111101111', '7': '111001010010010', '8': '111101111101111',
   '9': '111101111001110', '&': '010101010101011', "'": '010010000000000', '-': '000000111000000', ' ': '000000000000000',
@@ -2777,6 +2778,17 @@ function stringLights(b: Buf, d: Design, w: PWorld, t: number) {
   }
 }
 
+// the farm's name, painted on a board at the far edge of the field (over the treeline, behind the scarecrow)
+function farmBoard(b: Buf, d: Design, night: boolean, t: number) {
+  const txt = (d.farm_name || '').slice(0, 12);
+  if (!txt) return;
+  const wdt = txt.length * 4 + 5, x0 = Math.min(317 - wdt, Math.round(290 - wdt / 2)), y0 = 113;
+  const sway = Math.round(Math.sin(t * 1.3) * windyNow() * 0.6);
+  b.rect(x0 + 2, y0 + 9, 1, 4, nightc([96, 60, 28], night)); b.rect(x0 + wdt - 3, y0 + 9, 1, 4, nightc([96, 60, 28], night));
+  b.rect(x0 + sway, y0, wdt, 9, nightc([92, 60, 36], night)); b.rect(x0 + 1 + sway, y0 + 1, wdt - 2, 7, nightc([226, 214, 186], night));
+  text3(b, x0 + 3 + sway, y0 + 2, txt, nightc([120, 40, 28], night));
+}
+
 function signBoard(b: Buf, d: Design, night: boolean, sun: SunShadow) {
   const txt = (d.sign || '').slice(0, 14);
   if (!txt) return;
@@ -3391,6 +3403,7 @@ export function render(ctx: CanvasRenderingContext2D, w: PWorld, t: number) {
   b.rect(170, 147, 6, 1, [61, 50, 40]);
   b.rect(258 - 84, 127, 1, 30, [55, 55, 60]); b.rect(257 - 84, 125, 3, 3, night ? [253, 230, 138] : [120, 120, 125]); b.rect(256 - 84, 124, 5, 1, [55, 55, 60]);
   signBoard(b, d, night, sun);
+  farmBoard(b, d, night, t);
   // fence, about 1.1 m, in the colour he chose, worn where the paint has gone
   if (d.fence !== 'none') {
     for (let x = 178; x < 246; x += 8) castSpan(b, x, x + 1, 157, 15, sun, 0.72);
